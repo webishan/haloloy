@@ -61,7 +61,7 @@ export default function Home() {
                   asChild 
                   variant="outline" 
                   size="lg" 
-                  className="border-2 border-white text-white hover:bg-white hover:text-blue-700 text-xl font-bold py-8 px-12 rounded-2xl backdrop-blur-sm transform hover:scale-105 transition-all duration-300"
+                  className="border-2 border-white bg-white/10 text-white hover:bg-white hover:text-blue-700 text-xl font-bold py-8 px-12 rounded-2xl backdrop-blur-sm transform hover:scale-105 transition-all duration-300"
                 >
                   <Link href="/register?role=merchant">
                     <Store className="w-6 h-6 mr-3" />

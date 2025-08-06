@@ -418,78 +418,215 @@ export default function AdminDashboard() {
             </div>
           </TabsContent>
 
-          <TabsContent value="analytics">
-            <div className="space-y-6">
-              <div className="grid lg:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <TrendingUp className="w-5 h-5" />
-                      <span>Revenue Growth</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">This Month</span>
-                        <span className="text-2xl font-bold text-green-600">$2.8M</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Last Month</span>
-                        <span className="text-gray-600">$2.4M</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Growth Rate</span>
-                        <span className="text-green-600 font-semibold">+16.7%</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Target className="w-5 h-5" />
-                      <span>Key Metrics</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Conversion Rate</span>
-                        <span className="text-2xl font-bold text-blue-600">3.2%</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Customer Retention</span>
-                        <span className="text-2xl font-bold text-purple-600">89%</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">NPS Score</span>
-                        <span className="text-2xl font-bold text-green-600">72</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+          <TabsContent value="analytics" className="space-y-6">
+            {/* Time Period Selector */}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Analytics & Reporting Dashboard</h2>
+              <div className="flex space-x-2">
+                <Button variant="outline" size="sm">Daily</Button>
+                <Button variant="default" size="sm">Weekly</Button>
+                <Button variant="outline" size="sm">Monthly</Button>
+                <Button variant="outline" size="sm">Yearly</Button>
               </div>
+            </div>
 
-              <Card>
+            {/* Global Admin Metrics based on Document Requirements */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-blue-800">Global Sales</p>
+                      <p className="text-3xl font-bold text-blue-900">$2.8M</p>
+                      <p className="text-sm text-green-600">+15.7% vs last period</p>
+                    </div>
+                    <div className="p-3 bg-blue-200 rounded-xl">
+                      <DollarSign className="w-8 h-8 text-blue-700" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-green-800">Points Distributed</p>
+                      <p className="text-3xl font-bold text-green-900">1.2M</p>
+                      <p className="text-sm text-green-600">+22.3% vs last period</p>
+                    </div>
+                    <div className="p-3 bg-green-200 rounded-xl">
+                      <Coins className="w-8 h-8 text-green-700" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-2 border-purple-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-purple-800">Global Serial Numbers</p>
+                      <p className="text-3xl font-bold text-purple-900">8,456</p>
+                      <p className="text-sm text-green-600">+18.2% vs last period</p>
+                    </div>
+                    <div className="p-3 bg-purple-200 rounded-xl">
+                      <Award className="w-8 h-8 text-purple-700" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-orange-800">VAT & Service</p>
+                      <p className="text-3xl font-bold text-orange-900">$156K</p>
+                      <p className="text-sm text-green-600">+12.8% vs last period</p>
+                    </div>
+                    <div className="p-3 bg-orange-200 rounded-xl">
+                      <TrendingUp className="w-8 h-8 text-orange-700" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Charts Section - Based on Document Analytics Requirements */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Global Sales Performance Chart */}
+              <Card className="bg-white/80 backdrop-blur-sm border-2 border-blue-200 shadow-xl">
                 <CardHeader>
-                  <CardTitle>Platform Health</CardTitle>
+                  <CardTitle className="text-xl font-bold text-gray-800">Global Sales Performance</CardTitle>
+                  <p className="text-sm text-gray-600">Total sales to all merchants by period</p>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid md:grid-cols-3 gap-6">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-green-600 mb-2">99.9%</div>
-                      <p className="text-gray-600">Uptime</p>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={[
+                      { period: 'Jul', globalSales: 45000, distributedPoints: 25000 },
+                      { period: 'Aug', globalSales: 52000, distributedPoints: 28000 },
+                      { period: 'Sep', globalSales: 48000, distributedPoints: 26000 },
+                      { period: 'Oct', globalSales: 61000, distributedPoints: 32000 },
+                      { period: 'Nov', globalSales: 55000, distributedPoints: 30000 },
+                      { period: 'Dec', globalSales: 67000, distributedPoints: 38000 }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
+                      <XAxis dataKey="period" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="globalSales" stroke="#3b82f6" strokeWidth={3} name="Global Sales ($)" />
+                      <Line type="monotone" dataKey="distributedPoints" stroke="#10b981" strokeWidth={2} name="Points Distributed" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Merchant Tier Distribution */}
+              <Card className="bg-white/80 backdrop-blur-sm border-2 border-blue-200 shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-xl font-bold text-gray-800">Merchant Tier Distribution</CardTitle>
+                  <p className="text-sm text-gray-600">Star, Double Star, Triple Star, Executive</p>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <RechartsBar data={[
+                      { tier: 'Regular', count: 45, percentage: 62 },
+                      { tier: '⭐ Star', count: 18, percentage: 25 },
+                      { tier: '⭐⭐ Double', count: 7, percentage: 10 },
+                      { tier: '⭐⭐⭐ Triple', count: 2, percentage: 3 },
+                      { tier: '👑 Executive', count: 1, percentage: 1 }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
+                      <XAxis dataKey="tier" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#3b82f6" name="Merchant Count" />
+                    </RechartsBar>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Additional Analytics Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+              {/* Withdrawal Analytics */}
+              <Card className="bg-gradient-to-br from-red-50 to-pink-50 border-2 border-red-200">
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold text-red-800">Total Withdrawal Amount</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-red-700 font-medium">Total Withdrawals</span>
+                      <span className="text-2xl font-bold text-red-800">$425K</span>
                     </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-blue-600 mb-2">1.2s</div>
-                      <p className="text-gray-600">Avg. Response Time</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-red-600">Merchants</span>
+                      <span className="font-semibold text-red-700">$285K</span>
                     </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-purple-600 mb-2">0.1%</div>
-                      <p className="text-gray-600">Error Rate</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-red-600">Customers</span>
+                      <span className="font-semibold text-red-700">$140K</span>
                     </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-red-600">Withdrawable but not withdrawn</span>
+                      <span className="font-semibold text-red-700">$89K</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Customer Acquisition Sources */}
+              <Card className="bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-200">
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold text-indigo-800">Customer Acquisition</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-2 bg-indigo-100 rounded-lg">
+                      <span className="font-medium text-indigo-800">Customer Referral</span>
+                      <span className="font-bold text-indigo-900">2,345</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-indigo-100 rounded-lg">
+                      <span className="font-medium text-indigo-800">Merchant Signup</span>
+                      <span className="font-bold text-indigo-900">1,892</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-indigo-100 rounded-lg">
+                      <span className="font-medium text-indigo-800">E-merchant Signup</span>
+                      <span className="font-bold text-indigo-900">756</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-indigo-100 rounded-lg">
+                      <span className="font-medium text-indigo-800">Self Signup</span>
+                      <span className="font-bold text-indigo-900">1,234</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Top Customers by Serial Number */}
+              <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-200">
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold text-amber-800">Top 10 Customers by SN</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {[
+                      { name: 'Sarah Johnson', sn: 'SN-001', points: 45620, rank: 1 },
+                      { name: 'Mike Chen', sn: 'SN-003', points: 38950, rank: 2 },
+                      { name: 'Emma Wilson', sn: 'SN-007', points: 34210, rank: 3 }
+                    ].map((customer) => (
+                      <div key={customer.sn} className="flex items-center justify-between p-2 bg-amber-100 rounded-lg">
+                        <div>
+                          <div className="font-semibold text-amber-800">#{customer.rank} {customer.name}</div>
+                          <div className="text-sm text-amber-600">{customer.sn}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-amber-800">{customer.points.toLocaleString()}</div>
+                          <div className="text-sm text-amber-600">points</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>

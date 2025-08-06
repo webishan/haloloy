@@ -16,8 +16,10 @@ import { apiRequest } from '@/lib/queryClient';
 import { 
   LayoutDashboard, Package, ShoppingCart, Coins, BarChart, 
   Plus, Edit, Trash2, DollarSign, TrendingUp, Users, Store,
-  Star, Award, Calendar, Eye, Settings
+  Star, Award, Calendar, Eye, Settings, Target
 } from 'lucide-react';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
+         BarChart as RechartsBar, Bar, PieChart as RechartsPie, Pie, Cell } from 'recharts';
 
 export default function MerchantDashboard() {
   const { user, profile } = useAuth();
@@ -626,73 +628,235 @@ export default function MerchantDashboard() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="analytics">
-                <div className="space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Performance Metrics</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-primary mb-2">{merchant?.tier || 'Merchant'}</div>
-                          <p className="text-sm text-gray-600">Current Tier</p>
+              <TabsContent value="analytics" className="space-y-6">
+                {/* Time Period Selector */}
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Merchant Analytics Dashboard</h2>
+                  <div className="flex space-x-2">
+                    <Button variant="outline" size="sm">Daily</Button>
+                    <Button variant="default" size="sm">Weekly</Button>
+                    <Button variant="outline" size="sm">Monthly</Button>
+                    <Button variant="outline" size="sm">Yearly</Button>
+                  </div>
+                </div>
+
+                {/* Key Performance Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-blue-800">Total Sales</p>
+                          <p className="text-3xl font-bold text-blue-900">${merchant?.totalSales || '0.00'}</p>
+                          <p className="text-sm text-green-600">+12.5% vs last period</p>
                         </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-green-600 mb-2">
-                            {merchant?.totalOrders ? Math.round((merchant.totalOrders / 30) * 100) / 100 : 0}
-                          </div>
-                          <p className="text-sm text-gray-600">Orders/Day Average</p>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-blue-600 mb-2">
-                            ${merchant?.totalSales ? (parseFloat(merchant.totalSales) / (merchant.totalOrders || 1)).toFixed(2) : '0.00'}
-                          </div>
-                          <p className="text-sm text-gray-600">Average Order Value</p>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-accent mb-2">
-                            {merchant?.loyaltyPointsBalance || 0}
-                          </div>
-                          <p className="text-sm text-gray-600">Loyalty Points Balance</p>
+                        <div className="p-3 bg-blue-200 rounded-xl">
+                          <DollarSign className="w-8 h-8 text-blue-700" />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-green-800">Points Distributed</p>
+                          <p className="text-3xl font-bold text-green-900">{merchant?.totalPointsDistributed || '0'}</p>
+                          <p className="text-sm text-green-600">+18.7% vs last period</p>
+                        </div>
+                        <div className="p-3 bg-green-200 rounded-xl">
+                          <Coins className="w-8 h-8 text-green-700" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-2 border-purple-200">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-purple-800">Total Orders</p>
+                          <p className="text-3xl font-bold text-purple-900">{merchant?.totalOrders || '0'}</p>
+                          <p className="text-sm text-green-600">+8.3% vs last period</p>
+                        </div>
+                        <div className="p-3 bg-purple-200 rounded-xl">
+                          <ShoppingCart className="w-8 h-8 text-purple-700" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-200">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-orange-800">Merchant Tier</p>
+                          <p className="text-3xl font-bold text-orange-900">{merchant?.tier || 'Regular'}</p>
+                          <p className="text-sm text-blue-600">Upgrade eligible</p>
+                        </div>
+                        <div className="p-3 bg-orange-200 rounded-xl">
+                          <Star className="w-8 h-8 text-orange-700" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Charts Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Sales Performance Chart */}
+                  <Card className="bg-white/80 backdrop-blur-sm border-2 border-blue-200 shadow-xl">
                     <CardHeader>
-                      <CardTitle>Cashback Breakdown</CardTitle>
+                      <CardTitle className="text-xl font-bold text-gray-800">Sales Performance Trends</CardTitle>
+                      <p className="text-sm text-gray-600">Daily, Weekly, Monthly & Yearly tracking</p>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={[
+                          { period: 'Jul', sales: 4500, orders: 45, points: 2250 },
+                          { period: 'Aug', sales: 5200, orders: 52, points: 2600 },
+                          { period: 'Sep', sales: 4800, orders: 48, points: 2400 },
+                          { period: 'Oct', sales: 6100, orders: 61, points: 3050 },
+                          { period: 'Nov', sales: 5500, orders: 55, points: 2750 },
+                          { period: 'Dec', sales: 6700, orders: 67, points: 3350 }
+                        ]}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
+                          <XAxis dataKey="period" />
+                          <YAxis />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={3} name="Sales ($)" />
+                          <Line type="monotone" dataKey="points" stroke="#10b981" strokeWidth={2} name="Points Distributed" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Cashback Distribution Chart */}
+                  <Card className="bg-white/80 backdrop-blur-sm border-2 border-blue-200 shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="text-xl font-bold text-gray-800">Cashback Distribution</CardTitle>
+                      <p className="text-sm text-gray-600">15% Instant, 2% Affiliate, 1% Profit Share</p>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <RechartsPie
+                          data={[
+                            { name: 'Instant Cashback (15%)', value: 75, fill: '#3b82f6' },
+                            { name: 'Affiliate Cashback (2%)', value: 15, fill: '#10b981' },
+                            { name: 'Profit Share (1%)', value: 10, fill: '#f59e0b' }
+                          ]}
+                        >
+                          <Pie
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            fill="#8884d8"
+                            label={({ name, value }) => `${name}: ${value}%`}
+                          />
+                          <Tooltip formatter={(value) => `${value}%`} />
+                        </RechartsPie>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Detailed Analytics Cards */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                  {/* Cashback Breakdown */}
+                  <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-bold text-green-800">Cashback Earnings</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 bg-green-100 rounded-lg">
+                          <div>
+                            <span className="font-semibold text-green-800">Instant Cashback (15%)</span>
+                            <p className="text-xs text-green-600">From distributed points</p>
+                          </div>
+                          <span className="font-bold text-green-900">${(parseFloat(merchant?.totalCashback || '0') * 0.75).toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-green-100 rounded-lg">
+                          <div>
+                            <span className="font-semibold text-green-800">Affiliate Cashback (2%)</span>
+                            <p className="text-xs text-green-600">From merchant referrals</p>
+                          </div>
+                          <span className="font-bold text-green-900">${(parseFloat(merchant?.totalCashback || '0') * 0.15).toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-green-100 rounded-lg">
+                          <div>
+                            <span className="font-semibold text-green-800">Profit Share (1%)</span>
+                            <p className="text-xs text-green-600">From all merchants</p>
+                          </div>
+                          <span className="font-bold text-green-900">${(parseFloat(merchant?.totalCashback || '0') * 0.10).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Performance Metrics */}
+                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-bold text-blue-800">Performance KPIs</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                          <div>
-                            <h4 className="font-medium text-green-800">Instant Cashback (15%)</h4>
-                            <p className="text-sm text-green-600">From points distributed to customers</p>
-                          </div>
-                          <div className="text-green-800 font-semibold">
-                            ${(parseFloat(merchant?.totalCashback || '0') * 0.6).toFixed(2)}
-                          </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-blue-800">Average Order Value</span>
+                          <span className="text-xl font-bold text-blue-900">
+                            ${merchant?.totalSales && merchant?.totalOrders 
+                              ? (parseFloat(merchant.totalSales) / merchant.totalOrders).toFixed(2) 
+                              : '0.00'}
+                          </span>
                         </div>
-                        
-                        <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
-                          <div>
-                            <h4 className="font-medium text-blue-800">Affiliate Cashback (2%)</h4>
-                            <p className="text-sm text-blue-600">From referral commissions</p>
-                          </div>
-                          <div className="text-blue-800 font-semibold">
-                            ${(parseFloat(merchant?.totalCashback || '0') * 0.3).toFixed(2)}
-                          </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-blue-800">Orders per Day</span>
+                          <span className="text-xl font-bold text-blue-900">
+                            {merchant?.totalOrders ? Math.round((merchant.totalOrders / 30) * 100) / 100 : 0}
+                          </span>
                         </div>
-                        
-                        <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
-                          <div>
-                            <h4 className="font-medium text-purple-800">Profit Share (1%)</h4>
-                            <p className="text-sm text-purple-600">From global merchant network</p>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-blue-800">Customer Retention</span>
+                          <span className="text-xl font-bold text-blue-900">87%</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Tier Progression */}
+                  <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-2 border-purple-200">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-bold text-purple-800">Tier Progression</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-2 bg-purple-100 rounded-lg">
+                          <span className="font-medium text-purple-800">Current: {merchant?.tier || 'Regular'}</span>
+                          <Badge className="bg-purple-600">Active</Badge>
+                        </div>
+                        <div className="text-center py-4">
+                          <div className="text-2xl font-bold text-purple-900 mb-2">
+                            {merchant?.tier === 'Executive' ? '👑' : 
+                             merchant?.tier === 'Triple Star' ? '⭐⭐⭐' :
+                             merchant?.tier === 'Double Star' ? '⭐⭐' :
+                             merchant?.tier === 'Star' ? '⭐' : '🏪'}
                           </div>
-                          <div className="text-purple-800 font-semibold">
-                            ${(parseFloat(merchant?.totalCashback || '0') * 0.1).toFixed(2)}
+                          <p className="text-sm text-purple-600">
+                            {merchant?.tier === 'Executive' ? 'Maximum tier achieved!' :
+                             'Keep growing to unlock benefits'}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-purple-600">Sales Recognition</span>
+                            <span className="font-semibold text-purple-800">Eligible</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-purple-600">Rank Incentive</span>
+                            <span className="font-semibold text-purple-800">Active</span>
                           </div>
                         </div>
                       </div>
