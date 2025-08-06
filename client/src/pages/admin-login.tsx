@@ -21,11 +21,31 @@ export default function AdminLogin() {
 
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      const response = await apiRequest('POST', '/api/auth/login', { email, password });
-      return response.json();
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.text();
+          throw new Error(errorData || 'Login failed');
+        }
+
+        return await response.json();
+      } catch (error) {
+        console.error('Login error:', error);
+        throw error;
+      }
     },
     onSuccess: (data) => {
-      if (data.user.role !== 'admin') {
+      console.log('Login success:', data);
+      
+      if (!data.user || data.user.role !== 'admin') {
         toast({
           title: "Access Denied",
           description: "This login is only for administrators.",
@@ -42,6 +62,7 @@ export default function AdminLogin() {
       setLocation('/admin-dashboard');
     },
     onError: (error: any) => {
+      console.error('Login mutation error:', error);
       toast({
         title: "Login Failed", 
         description: error.message || "Invalid admin credentials",
@@ -141,6 +162,17 @@ export default function AdminLogin() {
                   <p><strong>Email:</strong> admin@komarce.com</p>
                   <p><strong>Password:</strong> admin123</p>
                 </div>
+                <Button 
+                  onClick={() => {
+                    setEmail('admin@komarce.com');
+                    setPassword('admin123');
+                  }}
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full mt-2"
+                >
+                  Use Default Credentials
+                </Button>
               </div>
 
               <div className="text-center">
