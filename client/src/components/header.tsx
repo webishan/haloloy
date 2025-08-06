@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { 
   Menu, X, ShoppingCart, User, LogOut, LayoutDashboard,
-  Store, Users, Search
+  Store, Users, Search, Shield
 } from 'lucide-react';
 
 export default function Header() {
@@ -68,13 +68,33 @@ export default function Header() {
                 Marketplace
               </span>
             </Link>
-            <Link href="/admin-login">
-              <span className={`text-sm font-medium transition-colors hover:text-primary ${
-                location === '/admin-login' ? 'text-primary' : 'text-gray-600'
-              }`}>
-                Admin
-              </span>
-            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-sm font-medium text-gray-600 hover:text-primary">
+                  Login Portal
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link href="/customer-login" className="flex items-center space-x-2">
+                    <User className="w-4 h-4 text-green-600" />
+                    <span>Customer Login</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/merchant-login" className="flex items-center space-x-2">
+                    <Store className="w-4 h-4 text-orange-600" />
+                    <span>Merchant Portal</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/admin-login" className="flex items-center space-x-2">
+                    <Shield className="w-4 h-4 text-blue-600" />
+                    <span>Admin Access</span>
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {user && (
               <Link href={getDashboardPath()}>
                 <span className={`text-sm font-medium transition-colors hover:text-primary ${
