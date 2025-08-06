@@ -12,6 +12,7 @@ import {
   LayoutDashboard, ShoppingBag, Coins, Heart, Settings, 
   Package, DollarSign, Award, TrendingUp, Star, Calendar
 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 export default function CustomerDashboard() {
   const { user, profile } = useAuth();
@@ -402,11 +403,16 @@ export default function CustomerDashboard() {
                       </div>
                       <div>
                         <label className="text-sm font-semibold text-gray-700 mb-2 block">Country</label>
-                        <input 
-                          type="text" 
+                        <select 
                           defaultValue={user?.country} 
                           className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
-                        />
+                        >
+                          <option value="">Select Country</option>
+                          <option value="BD">🇧🇩 Bangladesh</option>
+                          <option value="MY">🇲🇾 Malaysia</option>
+                          <option value="AE">🇦🇪 UAE</option>
+                          <option value="PH">🇵🇭 Philippines</option>
+                        </select>
                       </div>
                       <div>
                         <label className="text-sm font-semibold text-gray-700 mb-2 block">Phone Number</label>

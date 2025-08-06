@@ -11,6 +11,7 @@ import {
   BarChart, Globe, MapPin, Award, UserPlus, ShoppingCart, Calendar,
   Settings, PieChart, Activity, Target, Star
 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart as RechartsBar, Bar, PieChart as RechartsPie, Pie, Cell } from 'recharts';
 
 export default function AdminDashboard() {
   const { user } = useAuth();

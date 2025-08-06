@@ -45,10 +45,10 @@ export default function Header() {
           {/* Logo */}
           <Link href="/">
             <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
                 <span className="text-white font-bold text-lg">K</span>
               </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">KOMARCE</span>
+              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">KOMARCE</span>
             </div>
           </Link>
 
@@ -83,15 +83,7 @@ export default function Header() {
               </span>
             </Link>
 
-            {user && (
-              <Link href={getDashboardPath()}>
-                <span className={`text-sm font-medium transition-colors hover:text-primary ${
-                  location.includes('dashboard') ? 'text-primary' : 'text-gray-600'
-                }`}>
-                  Dashboard
-                </span>
-              </Link>
-            )}
+
           </nav>
 
           {/* Right Side Actions */}
@@ -127,13 +119,13 @@ export default function Header() {
                   <DropdownMenuItem asChild>
                     <Link href={getDashboardPath()} className="flex items-center space-x-2">
                       {user.role === 'admin' ? (
-                        <Users className="w-4 h-4" />
+                        <Shield className="w-4 h-4" />
                       ) : user.role === 'merchant' ? (
                         <Store className="w-4 h-4" />
                       ) : (
-                        <LayoutDashboard className="w-4 h-4" />
+                        <User className="w-4 h-4" />
                       )}
-                      <span>Dashboard</span>
+                      <span>{user.role === 'admin' ? 'Admin Panel' : user.role === 'merchant' ? 'Merchant Hub' : 'My Account'}</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout} className="flex items-center space-x-2">

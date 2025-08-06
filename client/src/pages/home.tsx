@@ -171,15 +171,26 @@ export default function Home() {
               <Link
                 key={brand.id}
                 href={`/marketplace?brand=${brand.slug}`}
-                className="bg-gray-50 rounded-xl p-6 text-center hover:shadow-lg transition-shadow cursor-pointer"
+                className="group bg-white rounded-2xl p-6 text-center hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50 transition-all duration-300 border-2 border-gray-100 hover:border-blue-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-2 hover:scale-105 cursor-pointer"
               >
-                <div className="w-16 h-16 mx-auto mb-4 bg-white rounded-lg flex items-center justify-center">
-                  <span className="text-2xl font-bold text-gray-800">
+                <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl flex items-center justify-center border-2 border-blue-200 shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:rotate-6">
+                  <img 
+                    src={`https://logo.clearbit.com/${brand.name.toLowerCase().replace(/\s+/g, '')}.com`}
+                    alt={brand.name}
+                    className="w-12 h-12 object-contain"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'block';
+                    }}
+                  />
+                  <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent hidden">
                     {brand.name.charAt(0)}
                   </span>
                 </div>
-                <h3 className="font-semibold text-gray-800">{brand.name}</h3>
-                <p className="text-sm text-gray-600">Various Products</p>
+                <h3 className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors text-lg mb-1">{brand.name}</h3>
+                <p className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors">Various Products</p>
               </Link>
             ))}
           </div>
@@ -238,13 +249,11 @@ export default function Home() {
             <Card className="bg-gray-50">
               <CardContent className="p-6">
                 <div className="flex items-center mb-4">
-                  <img 
-                    src="https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150" 
-                    alt="Customer testimonial"
-                    className="w-12 h-12 rounded-full object-cover mr-4"
-                  />
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg mr-4">
+                    SJ
+                  </div>
                   <div>
-                    <h4 className="font-semibold">Sarah Johnson</h4>
+                    <h4 className="font-bold text-gray-800">Sarah Johnson</h4>
                     <div className="flex text-yellow-400">
                       {[...Array(5)].map((_, i) => (
                         <Star key={i} className="w-4 h-4 fill-current" />
@@ -252,9 +261,9 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-                <p className="text-gray-600">
+                <p className="text-gray-600 leading-relaxed">
                   "KOMARCE has completely changed how I shop. The reward system is amazing 
-                  and I love contributing to sustainability while saving money!"
+                  and I love contributing to sustainability while earning points on every purchase!"
                 </p>
               </CardContent>
             </Card>
