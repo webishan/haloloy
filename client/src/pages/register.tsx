@@ -108,16 +108,16 @@ export default function Register() {
   };
 
   return (
-    <div className="pt-32 min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
+    <div className="pt-32 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
-          <Link href="/" className="text-3xl font-bold text-primary">
+          <Link href="/" className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             KOMARCE
           </Link>
-          <p className="mt-2 text-gray-600">Create your account</p>
+          <p className="mt-2 text-gray-600 font-medium">Create your account</p>
         </div>
 
-        <Card>
+        <Card className="border-0 shadow-xl bg-white/95 backdrop-blur-sm">
           <CardHeader>
             <CardTitle>Sign Up</CardTitle>
             <CardDescription>
@@ -126,9 +126,13 @@ export default function Register() {
           </CardHeader>
           <CardContent>
             <Tabs value={formData.role} onValueChange={(value) => handleChange('role', value)}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="customer">Customer</TabsTrigger>
-                <TabsTrigger value="merchant">Merchant</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 bg-gray-100">
+                <TabsTrigger value="customer" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white font-semibold">
+                  🛍️ Customer
+                </TabsTrigger>
+                <TabsTrigger value="merchant" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white font-semibold">
+                  🏪 Become a Merchant
+                </TabsTrigger>
               </TabsList>
 
               <form onSubmit={handleSubmit} className="space-y-4 mt-6">

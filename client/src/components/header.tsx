@@ -39,33 +39,47 @@ export default function Header() {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-b border-gray-100 shadow-sm">
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link href="/">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">K</span>
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-lg">K</span>
               </div>
-              <span className="text-xl font-bold text-gray-900">KOMARCE</span>
+              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">KOMARCE</span>
             </div>
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             <Link href="/">
-              <span className={`text-sm font-medium transition-colors hover:text-primary ${
-                location === '/' ? 'text-primary' : 'text-gray-600'
+              <span className={`text-sm font-semibold transition-colors hover:text-blue-600 ${
+                location === '/' ? 'text-blue-600' : 'text-gray-700'
               }`}>
                 Home
               </span>
             </Link>
             <Link href="/marketplace">
-              <span className={`text-sm font-medium transition-colors hover:text-primary ${
-                location === '/marketplace' ? 'text-primary' : 'text-gray-600'
+              <span className={`text-sm font-semibold transition-colors hover:text-blue-600 ${
+                location === '/marketplace' ? 'text-blue-600' : 'text-gray-700'
               }`}>
                 Marketplace
+              </span>
+            </Link>
+            <Link href="/about">
+              <span className={`text-sm font-semibold transition-colors hover:text-blue-600 ${
+                location === '/about' ? 'text-blue-600' : 'text-gray-700'
+              }`}>
+                About Us
+              </span>
+            </Link>
+            <Link href="/contact">
+              <span className={`text-sm font-semibold transition-colors hover:text-blue-600 ${
+                location === '/contact' ? 'text-blue-600' : 'text-gray-700'
+              }`}>
+                Contact Us
               </span>
             </Link>
             <DropdownMenu>
@@ -156,11 +170,37 @@ export default function Header() {
               </DropdownMenu>
             ) : (
               <div className="flex items-center space-x-2">
-                <Link href="/login">
-                  <Button variant="ghost" size="sm">Login</Button>
-                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="default" size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium">
+                      Login Portal
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem asChild>
+                      <Link href="/customer-login" className="flex items-center space-x-2">
+                        <User className="w-4 h-4 text-green-600" />
+                        <span>Customer Login</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/merchant-login" className="flex items-center space-x-2">
+                        <Store className="w-4 h-4 text-orange-600" />
+                        <span>Merchant Portal</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin-login" className="flex items-center space-x-2">
+                        <Shield className="w-4 h-4 text-blue-600" />
+                        <span>Admin Access</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Link href="/register">
-                  <Button size="sm">Sign Up</Button>
+                  <Button size="sm" variant="outline" className="border-2 border-purple-200 text-purple-700 hover:bg-purple-50">
+                    Sign Up
+                  </Button>
                 </Link>
               </div>
             )}

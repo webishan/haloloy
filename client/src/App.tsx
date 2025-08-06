@@ -21,6 +21,8 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import Header from "@/components/header";
 import Footer from "@/components/footer";
 import AuthGuard from "@/components/auth-guard";
+import About from "@/pages/about";
+import Contact from "@/pages/contact";
 
 function Router() {
   return (
@@ -55,6 +57,8 @@ function Router() {
             </AuthGuard>
           </Route>
           <Route path="/marketplace" component={Marketplace} />
+          <Route path="/about" component={About} />
+          <Route path="/contact" component={Contact} />
           <Route path="/product/:slug" component={ProductDetail} />
           <Route path="/cart" component={Cart} />
           <Route path="/checkout" component={Checkout} />
