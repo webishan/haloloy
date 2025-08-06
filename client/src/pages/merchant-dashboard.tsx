@@ -16,7 +16,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { 
   LayoutDashboard, Package, ShoppingCart, Coins, BarChart, 
   Plus, Edit, Trash2, DollarSign, TrendingUp, Users, Store,
-  Star, Award, Calendar, Eye
+  Star, Award, Calendar, Eye, Settings
 } from 'lucide-react';
 
 export default function MerchantDashboard() {
@@ -435,11 +435,11 @@ export default function MerchantDashboard() {
                                     <SelectValue placeholder="Select category" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {categories?.map((category: any) => (
+                                    {Array.isArray(categories) ? categories.map((category: any) => (
                                       <SelectItem key={category.id} value={category.id}>
                                         {category.name}
                                       </SelectItem>
-                                    ))}
+                                    )) : null}
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -450,11 +450,11 @@ export default function MerchantDashboard() {
                                     <SelectValue placeholder="Select brand" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {brands?.map((brand: any) => (
+                                    {Array.isArray(brands) ? brands.map((brand: any) => (
                                       <SelectItem key={brand.id} value={brand.id}>
                                         {brand.name}
                                       </SelectItem>
-                                    ))}
+                                    )) : null}
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -594,7 +594,7 @@ export default function MerchantDashboard() {
                     <CardTitle>Order Management</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {recentOrders.length > 0 ? (
+                    {Array.isArray(recentOrders) && recentOrders.length > 0 ? (
                       <div className="space-y-4">
                         {recentOrders.map((order: any) => (
                           <div key={order.id} className="border rounded-lg p-4">
