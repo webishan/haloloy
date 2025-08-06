@@ -125,7 +125,7 @@ export default function Marketplace() {
                 <SelectContent>
                   <SelectItem value="all" key="all-categories">All Categories</SelectItem>
                   {categories.map((category: any) => (
-                    <SelectItem key={category.id} value={category.slug}>
+                    <SelectItem key={category.id} value={category.slug || category.id || 'unknown'}>
                       {category.name}
                     </SelectItem>
                   ))}
@@ -139,7 +139,7 @@ export default function Marketplace() {
                 <SelectContent>
                   <SelectItem value="all" key="all-brands">All Brands</SelectItem>
                   {brands.map((brand: any) => (
-                    <SelectItem key={brand.id} value={brand.slug}>
+                    <SelectItem key={brand.id} value={brand.slug || brand.id || 'unknown'}>
                       {brand.name}
                     </SelectItem>
                   ))}

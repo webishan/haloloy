@@ -438,7 +438,7 @@ export default function MerchantDashboard() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     {Array.isArray(categories) ? categories.map((category: any) => (
-                                      <SelectItem key={category.id} value={category.id}>
+                                      <SelectItem key={category.id} value={category.id || 'unknown'}>
                                         {category.name}
                                       </SelectItem>
                                     )) : null}
@@ -453,7 +453,7 @@ export default function MerchantDashboard() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     {Array.isArray(brands) ? brands.map((brand: any) => (
-                                      <SelectItem key={brand.id} value={brand.id}>
+                                      <SelectItem key={brand.id} value={brand.id || 'unknown'}>
                                         {brand.name}
                                       </SelectItem>
                                     )) : null}
