@@ -33,6 +33,16 @@ export default function AdminDashboard() {
     { code: 'PH', name: 'Philippines', flag: '🇵🇭' }
   ];
 
+  const { data: merchants = [] } = useQuery({
+    queryKey: ['/api/merchants', selectedCountry],
+    enabled: !!user && user.role === 'admin'
+  });
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ['/api/customers', selectedCountry], 
+    enabled: !!user && user.role === 'admin'
+  });
+
   const stats = selectedCountry && countryStats ? countryStats : globalStats;
   const isLoading = selectedCountry ? countryLoading : globalLoading;
 
@@ -99,7 +109,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Total Merchants</p>
-                      <p className="text-3xl font-bold text-primary">{stats?.totalMerchants || 0}</p>
+                      <p className="text-3xl font-bold text-primary">{selectedCountry ? merchants.length : stats?.totalMerchants || 0}</p>
                       <p className="text-sm text-green-600">+12% from last month</p>
                     </div>
                     <div className="p-3 bg-primary/10 rounded-lg">
@@ -114,7 +124,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Total Customers</p>
-                      <p className="text-3xl font-bold text-blue-600">{stats?.totalCustomers || 0}</p>
+                      <p className="text-3xl font-bold text-blue-600">{selectedCountry ? customers.length : stats?.totalCustomers || 0}</p>
                       <p className="text-sm text-green-600">+8% from last month</p>
                     </div>
                     <div className="p-3 bg-blue-100 rounded-lg">

@@ -133,7 +133,7 @@ export class MemStorage implements IStorage {
     }
 
     // Create admin user
-    await this.createUser({
+    const adminUser = await this.createUser({
       username: "admin",
       email: "admin@komarce.com",
       password: await bcrypt.hash("admin123", 10),
@@ -143,6 +143,119 @@ export class MemStorage implements IStorage {
       country: "BD",
       isActive: true
     });
+
+    // Create sample merchant users
+    const merchant1 = await this.createUser({
+      username: "techstore",
+      email: "merchant@techstore.com",
+      password: await bcrypt.hash("merchant123", 10),
+      firstName: "Tech",
+      lastName: "Store",
+      role: "merchant",
+      country: "BD",
+      isActive: true
+    });
+
+    const merchant2 = await this.createUser({
+      username: "fashionhub",
+      email: "merchant@fashionhub.com",
+      password: await bcrypt.hash("merchant123", 10),
+      firstName: "Fashion",
+      lastName: "Hub",
+      role: "merchant",
+      country: "MY",
+      isActive: true
+    });
+
+    // Create merchant profiles
+    await this.createMerchant({
+      userId: merchant1.id,
+      businessName: "TechStore Electronics",
+      businessType: "Electronics Retailer",
+      tier: "Double Star"
+    });
+
+    await this.createMerchant({
+      userId: merchant2.id,
+      businessName: "Fashion Hub Malaysia",
+      businessType: "Fashion Retailer", 
+      tier: "Star"
+    });
+
+    // Create sample products
+    const electronicsCategory = await this.getCategories();
+    const fashionCategory = electronicsCategory.find(c => c.slug === 'fashion');
+    const electronicsCat = electronicsCategory.find(c => c.slug === 'electronics');
+    const samsungBrand = await this.getBrands();
+    const appleBrand = samsungBrand.find(b => b.slug === 'apple');
+    const samsung = samsungBrand.find(b => b.slug === 'samsung');
+    const nike = samsungBrand.find(b => b.slug === 'nike');
+
+    const sampleProducts = [
+      {
+        name: "Samsung Galaxy S24 Ultra",
+        description: "Latest flagship smartphone with AI features and S Pen",
+        price: "1299.00",
+        originalPrice: "1499.00",
+        sku: "SGS24U-512",
+        stock: 25,
+        categoryId: electronicsCat?.id || "",
+        brandId: samsung?.id || "",
+        merchantId: merchant1.id,
+        pointsReward: 130,
+        images: ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9"],
+        isActive: true
+      },
+      {
+        name: "iPhone 15 Pro Max",
+        description: "Apple's most advanced iPhone with titanium design",
+        price: "1199.00", 
+        originalPrice: "1299.00",
+        sku: "IP15PM-256",
+        stock: 15,
+        categoryId: electronicsCat?.id || "",
+        brandId: appleBrand?.id || "",
+        merchantId: merchant1.id,
+        pointsReward: 120,
+        images: ["https://images.unsplash.com/photo-1592750475338-74b7b21085ab"],
+        isActive: true
+      },
+      {
+        name: "Nike Air Max 90",
+        description: "Classic Nike sneakers with comfortable cushioning",
+        price: "120.00",
+        originalPrice: "150.00", 
+        sku: "NAM90-10",
+        stock: 50,
+        categoryId: fashionCategory?.id || "",
+        brandId: nike?.id || "",
+        merchantId: merchant2.id,
+        pointsReward: 12,
+        images: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff"],
+        isActive: true
+      },
+      {
+        name: "Samsung 4K Smart TV 65\"",
+        description: "Crystal UHD 4K Smart TV with Tizen OS",
+        price: "799.00",
+        originalPrice: "999.00",
+        sku: "SST65-4K",
+        stock: 10,
+        categoryId: electronicsCat?.id || "",
+        brandId: samsung?.id || "",
+        merchantId: merchant1.id,
+        pointsReward: 80,
+        images: ["https://images.unsplash.com/photo-1593359677879-a4bb92f829d1"],
+        isActive: true
+      }
+    ];
+
+    for (const product of sampleProducts) {
+      await this.createProduct({
+        ...product,
+        slug: product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+      });
+    }
   }
 
   // User methods
