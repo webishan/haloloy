@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
@@ -14,6 +15,7 @@ import {
 
 export default function CustomerDashboard() {
   const { user, profile } = useAuth();
+  const [activeTab, setActiveTab] = useState('overview');
 
   const { data: dashboardData, isLoading } = useQuery({
     queryKey: ['/api/dashboard/customer'],
@@ -86,26 +88,22 @@ export default function CustomerDashboard() {
                 </div>
 
                 <nav className="space-y-2">
-                  <a href="#" className="flex items-center space-x-3 p-3 bg-primary/10 text-primary rounded-lg">
+                  <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'overview' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <LayoutDashboard className="w-5 h-5" />
                     <span>Dashboard</span>
-                  </a>
-                  <a href="#orders" className="flex items-center space-x-3 p-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                  </button>
+                  <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'orders' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <ShoppingBag className="w-5 h-5" />
                     <span>Orders</span>
-                  </a>
-                  <a href="#rewards" className="flex items-center space-x-3 p-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                  </button>
+                  <button onClick={() => setActiveTab('rewards')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'rewards' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <Coins className="w-5 h-5" />
                     <span>Rewards</span>
-                  </a>
-                  <Link href="/wishlist" className="flex items-center space-x-3 p-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
-                    <Heart className="w-5 h-5" />
-                    <span>Wishlist</span>
-                  </Link>
-                  <a href="#settings" className="flex items-center space-x-3 p-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                  </button>
+                  <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'profile' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <Settings className="w-5 h-5" />
-                    <span>Settings</span>
-                  </a>
+                    <span>Profile</span>
+                  </button>
                 </nav>
               </CardContent>
             </Card>
@@ -118,7 +116,7 @@ export default function CustomerDashboard() {
               <p className="text-gray-600">Here's your KOMARCE dashboard overview</p>
             </div>
 
-            <Tabs defaultValue="overview" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="orders">Orders</TabsTrigger>

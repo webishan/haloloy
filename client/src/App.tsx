@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
+import AdminLogin from "@/pages/admin-login";
 import Marketplace from "@/pages/marketplace";
 import ProductDetail from "@/pages/product-detail";
 import Cart from "@/pages/cart";
@@ -34,6 +35,11 @@ function Router() {
           <Route path="/register">
             <AuthGuard requireAuth={false}>
               <Register />
+            </AuthGuard>
+          </Route>
+          <Route path="/admin-login">
+            <AuthGuard requireAuth={false}>
+              <AdminLogin />
             </AuthGuard>
           </Route>
           <Route path="/marketplace" component={Marketplace} />

@@ -68,6 +68,13 @@ export default function Header() {
                 Marketplace
               </span>
             </Link>
+            <Link href="/admin-login">
+              <span className={`text-sm font-medium transition-colors hover:text-primary ${
+                location === '/admin-login' ? 'text-primary' : 'text-gray-600'
+              }`}>
+                Admin
+              </span>
+            </Link>
             {user && (
               <Link href={getDashboardPath()}>
                 <span className={`text-sm font-medium transition-colors hover:text-primary ${

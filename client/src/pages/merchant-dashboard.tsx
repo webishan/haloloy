@@ -25,6 +25,7 @@ export default function MerchantDashboard() {
   const queryClient = useQueryClient();
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('overview');
 
   const { data: dashboardData = {}, isLoading } = useQuery({
     queryKey: ['/api/dashboard/merchant'],
@@ -182,26 +183,22 @@ export default function MerchantDashboard() {
                 </div>
 
                 <nav className="space-y-2">
-                  <a href="#" className="flex items-center space-x-3 p-3 bg-primary/10 text-primary rounded-lg">
+                  <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'overview' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <LayoutDashboard className="w-5 h-5" />
                     <span>Dashboard</span>
-                  </a>
-                  <a href="#products" className="flex items-center space-x-3 p-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                  </button>
+                  <button onClick={() => setActiveTab('products')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'products' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <Package className="w-5 h-5" />
                     <span>Products</span>
-                  </a>
-                  <a href="#orders" className="flex items-center space-x-3 p-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                  </button>
+                  <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'orders' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <ShoppingCart className="w-5 h-5" />
                     <span>Orders</span>
-                  </a>
-                  <a href="#cashback" className="flex items-center space-x-3 p-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
-                    <Coins className="w-5 h-5" />
-                    <span>Cashback</span>
-                  </a>
-                  <a href="#analytics" className="flex items-center space-x-3 p-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                  </button>
+                  <button onClick={() => setActiveTab('analytics')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'analytics' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <BarChart className="w-5 h-5" />
                     <span>Analytics</span>
-                  </a>
+                  </button>
                 </nav>
               </CardContent>
             </Card>
@@ -214,7 +211,7 @@ export default function MerchantDashboard() {
               <p className="text-gray-600">Manage your store and track performance</p>
             </div>
 
-            <Tabs defaultValue="overview" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="products">Products</TabsTrigger>

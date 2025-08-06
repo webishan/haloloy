@@ -1,0 +1,151 @@
+ACCOUNT MANAGEMENT SYSTEM
+ADMIN ACCOUNT FEATURES:
+Mainly 2 admin, super/global admin and local country admin
+1. Global Admin dashboard
+a. Total global merchants
+i. Merchant
+ii. E-merchant
+iii. Total Star Merchant
+iv. Total Double Star Merchant
+v. Total Triple Star Merchant
+vi. Total Executive Merchant
+Daily Weekly Monthly Yearly
+b. Total global Customer
+i. Top ten customer by SN
+ii. Top 313 customer by SN as leader board in customer profile
+iii. Top ten customer by Refer
+iv. Top 313 customer by Refer as leader board in customer profile
+Daily Weekly Monthly Yearly
+c. Total Co-Founder List (global/local)
+d. Total Global Staff List and details
+e. Reward Points
+i. Total global sales to all merchant
+ii. Total sales country by country
+iii. Total distributed to customer
+iv. Total distributed to customer country by country
+Daily Weekly Monthly Yearly
+f. Total Global serial number (local S.N shows in local country button)
+g. Total Local serial number (country by country total count)
+Daily Weekly Monthly Yearly
+h. Total Withdrawal Amount
+i. Withdrawals
+ii. Merchant
+iii. Customer
+iv. Withdrawable but not withdraw
+Daily Weekly Monthly Yearly
+i. VAT & SERVICE CHARGE
+i. Total global vat & service charge
+ii. Vat & service charge county by country
+Daily weekly Monthly Yearly
+2. Global Commision & Percentage settings. Confirm password before save edit settings
+a. Customer Benefits
+i. Stepup reward
+ii. Infinity reward
+iii. Affiliate reward
+iv. Ripple reward
+v. Shopping voucher
+b. Merchant
+i. Instant cashback
+ii. Affiliate cashback
+iii. Profit share cashback
+iv. Shopping voucher
+v. Rank Incentive
+c. Co-founder
+i. Instant cashback
+ii. Affiliate cashback
+iii. Profit share cashback
+iv. Shopping voucher
+v. Rank Incentive
+vi. Partnership commission
+vii. All partnership commision
+3. Global Merchant List & E-merchant List (make indication sign for both merchant)
+4. Global Customer List
+5. Global Header manage
+6. Global Footer manage
+7. Global User Role & Permissions
+a. (Admin / Sub Admin/ Manager)
+8. Global Customer Care
+a. Merchant
+b. Customer
+c. Co-founder
+d. Staff
+e. Customer Care can see all the info and create reset password link if need but
+can't edit data and withdraw balance
+9. Global VAT and Service Charge
+10. Global Analytics and reporting
+a. Sales performance reports
+b. Popular Brand/product tracking
+c. Customer behavior analysis
+d. Inventory management
+11. Global Reporting for customer acquisition
+a. By customer referral
+b. By merchant signup
+c. By e-merchant signup
+d. By self signup
+12. Global Reporting for Merchant acquisition
+a. By self signup
+b. By merchant referral
+13. Global Website info daily backup system
+14. Global NPS (net promoter score) setup for customer and merchant
+15. Local Country Admin (BGD, MYS, UAE) highlight in the button lower side. When
+any country admin login his account, dashboard features will be:
+a. Local Country Admin dashboard
+i. Total Country Merchants
+1. Merchant
+2. E-merchant
+3. Total Star Merchant
+4. Total Double Star Merchant
+5. Total Triple Star Merchant
+6. Total Executive Merchant
+Daily Weekly Monthly Yearly
+ii. Total Local Country Customer
+1. Top ten customer by SN
+2. Top 313 customer by SN as leader board in customer profile
+3. Top ten customer by Refer
+4. Top 313 customer by Refer as leader board in customer profile
+Daily Weekly Monthly Yearly
+iii. Total Local Country Co-Founder List
+iv. Total Local Country Staff List and details
+v. Local Country Reward Points
+1. Total sales to merchant
+2. Total distributed to customer
+Daily Weekly Monthly Yearly
+vi. Total Global serial number
+vii. Country Local serial number
+Daily Weekly Monthly Yearly
+viii. Total Local Country Withdrawal Amount
+1. Withdrawals
+2. Merchant
+3. Customer
+4. Withdrawable but not withdraw
+Daily weekly Monthly Yearly
+16. Local Country Header manage
+17. Local Country Footer manage
+18. Local Country User Role & Permissions
+a. (Admin / Sub Admin/ Manager)
+19. Local Country Customer Care
+a. Merchant
+b. Customer
+c. Co-founder
+d. Staff
+e. Customer Care can see all the info and create reset password link if need but
+can't edit data and withdraw balance
+20. Local Country VAT and Service Charge
+21. Local Country Merchant List & E-merchant List (make indication sign for both merchant)
+22. Local Country Customer List
+23. Local Country Analytics and reporting
+a. Sales performance reports
+b. Popular Brand/product tracking
+c. Customer behavior analysis
+d. Inventory management
+24. Local Country Reporting for customer acquisition
+a. By customer referral
+b. By merchant signup
+c. By e-merchant signup
+d. By self signup
+25. Local Country Reporting for Merchant acquisition
+a. By self signup
+b. By merchant referral
+26. Website info daily backup system
+27. NPS (net promoter score) setup for customer and merchant
+28. Everything should be dynamic from the admin panel and can be editable
