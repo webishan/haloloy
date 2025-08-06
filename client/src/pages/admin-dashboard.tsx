@@ -15,7 +15,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const [selectedCountry, setSelectedCountry] = useState<string>('');
+  const [selectedCountry, setSelectedCountry] = useState<string>('global');
 
   const { data: globalStats = {}, isLoading: globalLoading } = useQuery({
     queryKey: ['/api/analytics/global'],
@@ -24,7 +24,7 @@ export default function AdminDashboard() {
 
   const { data: countryStats = {}, isLoading: countryLoading } = useQuery({
     queryKey: ['/api/analytics/country', selectedCountry],
-    enabled: !!user && user.role === 'admin' && !!selectedCountry
+    enabled: !!user && user.role === 'admin' && !!selectedCountry && selectedCountry !== 'global'
   });
 
   const countries = [
@@ -44,8 +44,8 @@ export default function AdminDashboard() {
     enabled: !!user && user.role === 'admin'
   });
 
-  const stats = selectedCountry && countryStats ? countryStats : globalStats;
-  const isLoading = selectedCountry ? countryLoading : globalLoading;
+  const stats = selectedCountry && selectedCountry !== 'global' && countryStats ? countryStats : globalStats;
+  const isLoading = selectedCountry && selectedCountry !== 'global' ? countryLoading : globalLoading;
 
   if (isLoading) {
     return (
@@ -75,7 +75,7 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <h1 className="text-6xl font-black text-gray-900 mb-2">
-                  {selectedCountry ? `${countries.find(c => c.code === selectedCountry)?.flag} ${countries.find(c => c.code === selectedCountry)?.name}` : 'Global'}{' '}
+                  {selectedCountry && selectedCountry !== 'global' ? `${countries.find(c => c.code === selectedCountry)?.flag} ${countries.find(c => c.code === selectedCountry)?.name}` : 'Global'}{' '}
                   <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Admin</span>
                 </h1>
                 <p className="text-2xl text-gray-600 font-medium">Manage the entire KOMARCE ecosystem</p>
@@ -87,7 +87,7 @@ export default function AdminDashboard() {
                   <SelectValue placeholder="🌍 Select Country" />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl border-2 border-blue-200">
-                  <SelectItem value="" className="text-lg font-semibold">🌍 Global View</SelectItem>
+                  <SelectItem value="global" className="text-lg font-semibold">🌍 Global View</SelectItem>
                   {countries.map((country) => (
                     <SelectItem key={country.code} value={country.code} className="text-lg font-semibold">
                       {country.flag} {country.name}
@@ -116,7 +116,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Total Merchants</p>
-                      <p className="text-3xl font-bold text-primary">{selectedCountry ? (merchants as any[])?.length || 0 : (stats as any)?.totalMerchants || 0}</p>
+                      <p className="text-3xl font-bold text-primary">{selectedCountry && selectedCountry !== 'global' ? (merchants as any[])?.length || 0 : (stats as any)?.totalMerchants || 0}</p>
                       <p className="text-sm text-green-600">+12% from last month</p>
                     </div>
                     <div className="p-3 bg-primary/10 rounded-lg">
@@ -131,7 +131,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Total Customers</p>
-                      <p className="text-3xl font-bold text-blue-600">{selectedCountry ? (customers as any[])?.length || 0 : (stats as any)?.totalCustomers || 0}</p>
+                      <p className="text-3xl font-bold text-blue-600">{selectedCountry && selectedCountry !== 'global' ? (customers as any[])?.length || 0 : (stats as any)?.totalCustomers || 0}</p>
                       <p className="text-sm text-green-600">+8% from last month</p>
                     </div>
                     <div className="p-3 bg-blue-100 rounded-lg">
@@ -145,7 +145,7 @@ export default function AdminDashboard() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">{selectedCountry ? 'Country' : 'Global'} Sales</p>
+                      <p className="text-sm text-gray-600">{selectedCountry && selectedCountry !== 'global' ? 'Country' : 'Global'} Sales</p>
                       <p className="text-3xl font-bold text-green-600">${(stats as any)?.totalSales || '0.00'}</p>
                       <p className="text-sm text-green-600">+15% from last month</p>
                     </div>
