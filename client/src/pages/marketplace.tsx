@@ -11,8 +11,8 @@ import { Search, Filter, Grid, List } from 'lucide-react';
 
 export default function Marketplace() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedBrand, setSelectedBrand] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [sortBy, setSortBy] = useState('name');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [, setLocation] = useLocation();
@@ -46,11 +46,11 @@ export default function Marketplace() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (searchQuery) params.append('search', searchQuery);
-      if (selectedCategory) {
+      if (selectedCategory && selectedCategory !== 'all') {
         const category = categories.find((c: any) => c.slug === selectedCategory);
         if (category) params.append('categoryId', category.id);
       }
-      if (selectedBrand) {
+      if (selectedBrand && selectedBrand !== 'all') {
         const brand = brands.find((b: any) => b.slug === selectedBrand);
         if (brand) params.append('brandId', brand.id);
       }
@@ -73,8 +73,8 @@ export default function Marketplace() {
 
   const clearFilters = () => {
     setSearchQuery('');
-    setSelectedCategory('');
-    setSelectedBrand('');
+    setSelectedCategory('all');
+    setSelectedBrand('all');
     setLocation('/marketplace');
   };
 
@@ -93,7 +93,7 @@ export default function Marketplace() {
     }
   }) : [];
 
-  const activeFiltersCount = [searchQuery, selectedCategory, selectedBrand].filter(Boolean).length;
+  const activeFiltersCount = [searchQuery, selectedCategory !== 'all' ? selectedCategory : '', selectedBrand !== 'all' ? selectedBrand : ''].filter(Boolean).length;
 
   return (
     <div className="pt-32 min-h-screen bg-gray-50">
@@ -123,7 +123,7 @@ export default function Marketplace() {
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="" key="all-categories">All Categories</SelectItem>
+                  <SelectItem value="all" key="all-categories">All Categories</SelectItem>
                   {categories.map((category: any) => (
                     <SelectItem key={category.id} value={category.slug}>
                       {category.name}
@@ -137,7 +137,7 @@ export default function Marketplace() {
                   <SelectValue placeholder="All Brands" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="" key="all-brands">All Brands</SelectItem>
+                  <SelectItem value="all" key="all-brands">All Brands</SelectItem>
                   {brands.map((brand: any) => (
                     <SelectItem key={brand.id} value={brand.slug}>
                       {brand.name}

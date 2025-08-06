@@ -80,7 +80,7 @@ export default function AdminDashboard() {
                   <SelectValue placeholder="Global View" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="" key="global">🌍 Global View</SelectItem>
+                  <SelectItem value="global" key="global">🌍 Global View</SelectItem>
                   {countries.map((country) => (
                     <SelectItem key={country.code} value={country.code}>
                       {country.flag} {country.name}
