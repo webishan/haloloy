@@ -68,23 +68,23 @@ export default function CustomerDashboard() {
   const pointsToNext = customer ? 1500 - customer.accumulatedPoints : 1500;
 
   return (
-    <div className="pt-20 min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-cyan-50">
       <div className="container mx-auto px-4 py-12">
         <div className="mb-12 flex items-center justify-between">
           <div className="flex items-center space-x-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-blue-600 rounded-3xl flex items-center justify-center shadow-2xl">
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center shadow-2xl">
               <LayoutDashboard className="w-10 h-10 text-white" />
             </div>
             <div>
               <h1 className="text-6xl font-black text-gray-900 mb-2">
-                Customer <span className="bg-gradient-to-r from-green-500 to-blue-600 bg-clip-text text-transparent">Dashboard</span>
+                Customer <span className="bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">Dashboard</span>
               </h1>
               <p className="text-2xl text-gray-600 font-medium">Welcome back, {user?.firstName} {user?.lastName}!</p>
             </div>
           </div>
-          <div className="text-right bg-white/80 backdrop-blur-sm rounded-3xl p-8 border-2 border-green-200 shadow-xl">
+          <div className="text-right bg-white/80 backdrop-blur-sm rounded-3xl p-8 border-2 border-blue-200 shadow-xl">
             <p className="text-xl text-gray-600 font-semibold mb-2">💰 Total Points</p>
-            <p className="text-5xl font-black bg-gradient-to-r from-green-500 to-blue-600 bg-clip-text text-transparent">{customer?.rewardPoints || 0}</p>
+            <p className="text-5xl font-black bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">{customer?.rewardPoints || 0}</p>
           </div>
         </div>
         <div className="grid lg:grid-cols-4 gap-8">
@@ -117,8 +117,8 @@ export default function CustomerDashboard() {
                     <Coins className="w-5 h-5" />
                     <span>Rewards</span>
                   </button>
-                  <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'profile' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <Settings className="w-5 h-5" />
+                  <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center space-x-3 p-4 rounded-2xl transition-all text-left font-semibold text-lg ${activeTab === 'profile' ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}>
+                    <Settings className="w-6 h-6" />
                     <span>Profile</span>
                   </button>
                 </nav>
@@ -368,39 +368,102 @@ export default function CustomerDashboard() {
               </TabsContent>
 
               <TabsContent value="profile">
-                <Card>
+                <Card className="bg-white/80 backdrop-blur-sm border-2 border-blue-200 shadow-2xl">
                   <CardHeader>
-                    <CardTitle>Profile Information</CardTitle>
+                    <CardTitle className="text-3xl font-black bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">
+                      Customer Profile Settings
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                  <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="text-sm font-medium text-gray-600">First Name</label>
-                        <p className="font-medium">{user?.firstName}</p>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">First Name</label>
+                        <input 
+                          type="text" 
+                          defaultValue={user?.firstName} 
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">Last Name</label>
-                        <p className="font-medium">{user?.lastName}</p>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Last Name</label>
+                        <input 
+                          type="text" 
+                          defaultValue={user?.lastName} 
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
                       </div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">Email</label>
-                      <p className="font-medium">{user?.email}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">Country</label>
-                      <p className="font-medium">{user?.country}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">Member Since</label>
-                      <p className="font-medium">{new Date(user?.createdAt || '').toLocaleDateString()}</p>
-                    </div>
-                    {customer?.referralCode && (
+                      <div className="md:col-span-2">
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Email</label>
+                        <input 
+                          type="email" 
+                          defaultValue={user?.email} 
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
+                      </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">Referral Code</label>
-                        <p className="font-medium font-mono bg-gray-100 p-2 rounded">{customer.referralCode}</p>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Country</label>
+                        <input 
+                          type="text" 
+                          defaultValue={user?.country} 
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
                       </div>
-                    )}
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Phone Number</label>
+                        <input 
+                          type="tel" 
+                          placeholder="Enter phone number"
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
+                      </div>
+                      {customer?.referralCode && (
+                        <div className="md:col-span-2">
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">Referral Code</label>
+                          <div className="flex items-center space-x-3">
+                            <input 
+                              type="text" 
+                              value={customer.referralCode}
+                              className="flex-1 px-4 py-3 rounded-xl border-2 border-blue-100 bg-gray-50 text-lg font-mono"
+                              disabled
+                            />
+                            <Button className="h-12 px-6 bg-gradient-to-r from-blue-500 to-indigo-600">
+                              Copy
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="pt-4 border-t border-blue-100">
+                      <h3 className="text-xl font-bold text-gray-800 mb-4">Security Settings</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">New Password</label>
+                          <input 
+                            type="password" 
+                            placeholder="Enter new password"
+                            className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">Confirm Password</label>
+                          <input 
+                            type="password" 
+                            placeholder="Confirm new password"
+                            className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex space-x-4 pt-6">
+                      <Button className="flex-1 h-14 text-lg font-semibold bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700">
+                        Save Changes
+                      </Button>
+                      <Button variant="outline" className="h-14 px-8 text-lg font-semibold border-2 border-blue-200">
+                        Cancel
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>

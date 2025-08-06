@@ -163,15 +163,15 @@ export default function MerchantDashboard() {
   const recentOrders = dashboardData?.recentOrders || [];
 
   return (
-    <div className="pt-20 min-h-screen bg-gradient-to-br from-orange-50 via-red-50 to-pink-50">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-50">
       <div className="container mx-auto px-4 py-12">
         <div className="mb-12 flex items-center space-x-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-600 rounded-3xl flex items-center justify-center shadow-2xl">
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-sky-600 rounded-3xl flex items-center justify-center shadow-2xl">
             <Store className="w-10 h-10 text-white" />
           </div>
           <div>
             <h1 className="text-6xl font-black text-gray-900 mb-2">
-              Merchant <span className="bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">Dashboard</span>
+              Merchant <span className="bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">Dashboard</span>
             </h1>
             <p className="text-2xl text-gray-600 font-medium">Welcome back, {user?.firstName} {user?.lastName}</p>
           </div>
@@ -210,6 +210,10 @@ export default function MerchantDashboard() {
                     <BarChart className="w-5 h-5" />
                     <span>Analytics</span>
                   </button>
+                  <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center space-x-3 p-4 rounded-2xl transition-all text-left font-semibold text-lg ${activeTab === 'profile' ? 'bg-gradient-to-r from-blue-600 to-sky-600 text-white shadow-lg' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}>
+                    <Settings className="w-6 h-6" />
+                    <span>Profile</span>
+                  </button>
                 </nav>
               </CardContent>
             </Card>
@@ -223,11 +227,12 @@ export default function MerchantDashboard() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="products">Products</TabsTrigger>
-                <TabsTrigger value="orders">Orders</TabsTrigger>
-                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-5 lg:w-[600px] bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-2xl p-2">
+                <TabsTrigger value="overview" className="text-lg font-semibold">Overview</TabsTrigger>
+                <TabsTrigger value="products" className="text-lg font-semibold">Products</TabsTrigger>
+                <TabsTrigger value="orders" className="text-lg font-semibold">Orders</TabsTrigger>
+                <TabsTrigger value="analytics" className="text-lg font-semibold">Analytics</TabsTrigger>
+                <TabsTrigger value="profile" className="text-lg font-semibold">Profile</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
@@ -694,6 +699,91 @@ export default function MerchantDashboard() {
                     </CardContent>
                   </Card>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="profile" className="space-y-8">
+                <Card className="bg-white/80 backdrop-blur-sm border-2 border-blue-200 shadow-2xl">
+                  <CardHeader>
+                    <CardTitle className="text-3xl font-black bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">
+                      Merchant Profile Settings
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Business Name</label>
+                        <input 
+                          type="text" 
+                          defaultValue={merchant?.businessName || `${user?.firstName}'s Store`} 
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Contact Person</label>
+                        <input 
+                          type="text" 
+                          defaultValue={`${user?.firstName} ${user?.lastName}`} 
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Email</label>
+                        <input 
+                          type="email" 
+                          defaultValue={user?.email} 
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Phone Number</label>
+                        <input 
+                          type="tel" 
+                          placeholder="Enter business phone"
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Country</label>
+                        <input 
+                          type="text" 
+                          defaultValue={user?.country} 
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-blue-100">
+                      <h3 className="text-xl font-bold text-gray-800 mb-4">Security Settings</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">New Password</label>
+                          <input 
+                            type="password" 
+                            placeholder="Enter new password"
+                            className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">Confirm Password</label>
+                          <input 
+                            type="password" 
+                            placeholder="Confirm new password"
+                            className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex space-x-4 pt-6">
+                      <Button className="flex-1 h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-700">
+                        Save Changes
+                      </Button>
+                      <Button variant="outline" className="h-14 px-8 text-lg font-semibold border-2 border-blue-200">
+                        Cancel
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </div>

@@ -18,7 +18,7 @@ export default function Home() {
   });
 
   return (
-    <div className="pt-20 min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-50">
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white overflow-hidden">
         {/* Floating Elements */}

@@ -64,7 +64,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="pt-20 min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-purple-50/50">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       <div className="container mx-auto px-4 py-12">
         <div className="mb-12">
           <div className="flex items-center justify-between">
@@ -82,10 +82,10 @@ export default function AdminDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                <SelectTrigger className="w-64 h-14 bg-white/80 backdrop-blur-sm border-2 border-purple-200 rounded-2xl text-lg font-semibold">
+                <SelectTrigger className="w-64 h-14 bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-2xl text-lg font-semibold">
                   <SelectValue placeholder="🌍 Select Country" />
                 </SelectTrigger>
-                <SelectContent className="rounded-2xl border-2 border-purple-200">
+                <SelectContent className="rounded-2xl border-2 border-blue-200">
                   <SelectItem value="" className="text-lg font-semibold">🌍 Global View</SelectItem>
                   {countries.map((country) => (
                     <SelectItem key={country.code} value={country.code} className="text-lg font-semibold">
@@ -98,13 +98,13 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="merchants">Merchants</TabsTrigger>
-            <TabsTrigger value="customers">Customers</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+        <Tabs defaultValue="overview" className="space-y-8">
+          <TabsList className="grid w-full grid-cols-5 lg:w-[600px] bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-2xl p-2">
+            <TabsTrigger value="overview" className="text-lg font-semibold">Overview</TabsTrigger>
+            <TabsTrigger value="merchants" className="text-lg font-semibold">Merchants</TabsTrigger>
+            <TabsTrigger value="customers" className="text-lg font-semibold">Customers</TabsTrigger>
+            <TabsTrigger value="analytics" className="text-lg font-semibold">Analytics</TabsTrigger>
+            <TabsTrigger value="profile" className="text-lg font-semibold">Profile</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -562,6 +562,86 @@ export default function AdminDashboard() {
                       <Button>Save Changes</Button>
                       <Button variant="outline">Reset to Default</Button>
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="profile" className="space-y-8">
+            <div className="max-w-2xl">
+              <Card className="bg-white/80 backdrop-blur-sm border-2 border-blue-200 shadow-2xl">
+                <CardHeader>
+                  <CardTitle className="text-3xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    Admin Profile Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">First Name</label>
+                      <input 
+                        type="text" 
+                        defaultValue={user?.firstName} 
+                        className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">Last Name</label>
+                      <input 
+                        type="text" 
+                        defaultValue={user?.lastName} 
+                        className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">Email</label>
+                      <input 
+                        type="email" 
+                        defaultValue={user?.email} 
+                        className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">Username</label>
+                      <input 
+                        type="text" 
+                        defaultValue={user?.username} 
+                        className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        disabled
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 border-t border-blue-100">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">Security Settings</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">New Password</label>
+                        <input 
+                          type="password" 
+                          placeholder="Enter new password"
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Confirm Password</label>
+                        <input 
+                          type="password" 
+                          placeholder="Confirm new password"
+                          className="w-full px-4 py-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 focus:outline-none text-lg"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex space-x-4 pt-6">
+                    <Button className="flex-1 h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                      Save Changes
+                    </Button>
+                    <Button variant="outline" className="h-14 px-8 text-lg font-semibold border-2 border-blue-200">
+                      Cancel
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
