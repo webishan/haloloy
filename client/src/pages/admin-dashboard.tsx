@@ -64,25 +64,31 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="pt-32 min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-purple-50/50">
+      <div className="container mx-auto px-4 py-12">
+        <div className="mb-12">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                {selectedCountry ? `${countries.find(c => c.code === selectedCountry)?.name} Admin Dashboard` : 'Global Admin Dashboard'}
-              </h1>
-              <p className="text-gray-600">Manage the entire KOMARCE ecosystem</p>
+            <div className="flex items-center space-x-6">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl">
+                <LayoutDashboard className="w-10 h-10 text-white" />
+              </div>
+              <div>
+                <h1 className="text-6xl font-black text-gray-900 mb-2">
+                  {selectedCountry ? `${countries.find(c => c.code === selectedCountry)?.flag} ${countries.find(c => c.code === selectedCountry)?.name}` : 'Global'}{' '}
+                  <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Admin</span>
+                </h1>
+                <p className="text-2xl text-gray-600 font-medium">Manage the entire KOMARCE ecosystem</p>
+              </div>
             </div>
             <div className="flex items-center space-x-4">
               <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Global View" />
+                <SelectTrigger className="w-64 h-14 bg-white/80 backdrop-blur-sm border-2 border-purple-200 rounded-2xl text-lg font-semibold">
+                  <SelectValue placeholder="🌍 Select Country" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="global" key="global">🌍 Global View</SelectItem>
+                <SelectContent className="rounded-2xl border-2 border-purple-200">
+                  <SelectItem value="" className="text-lg font-semibold">🌍 Global View</SelectItem>
                   {countries.map((country) => (
-                    <SelectItem key={country.code} value={country.code}>
+                    <SelectItem key={country.code} value={country.code} className="text-lg font-semibold">
                       {country.flag} {country.name}
                     </SelectItem>
                   ))}

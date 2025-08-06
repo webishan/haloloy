@@ -82,33 +82,7 @@ export default function Header() {
                 Contact Us
               </span>
             </Link>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-sm font-medium text-gray-600 hover:text-primary">
-                  Login Portal
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-48">
-                <DropdownMenuItem asChild>
-                  <Link href="/customer-login" className="flex items-center space-x-2">
-                    <User className="w-4 h-4 text-green-600" />
-                    <span>Customer Login</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/merchant-login" className="flex items-center space-x-2">
-                    <Store className="w-4 h-4 text-orange-600" />
-                    <span>Merchant Portal</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/admin-login" className="flex items-center space-x-2">
-                    <Shield className="w-4 h-4 text-blue-600" />
-                    <span>Admin Access</span>
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+
             {user && (
               <Link href={getDashboardPath()}>
                 <span className={`text-sm font-medium transition-colors hover:text-primary ${
@@ -169,10 +143,10 @@ export default function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="default" size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium">
+                    <Button variant="default" size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6">
                       Login Portal
                     </Button>
                   </DropdownMenuTrigger>
@@ -198,7 +172,7 @@ export default function Header() {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Link href="/register">
-                  <Button size="sm" variant="outline" className="border-2 border-purple-200 text-purple-700 hover:bg-purple-50">
+                  <Button size="sm" variant="outline" className="border-2 border-purple-300 text-purple-700 hover:bg-purple-50 font-semibold px-6">
                     Sign Up
                   </Button>
                 </Link>

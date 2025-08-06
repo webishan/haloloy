@@ -18,61 +18,92 @@ export default function Home() {
   });
 
   return (
-    <div className="pt-32">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-primary to-primary/90 text-white">
-        <div className="absolute inset-0 opacity-20" 
-             style={{
-               backgroundImage: "url('https://images.unsplash.com/photo-1556740758-90de374c12ad?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=800')", 
-               backgroundSize: 'cover', 
-               backgroundPosition: 'center'
-             }}>
+      <section className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white overflow-hidden">
+        {/* Floating Elements */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-20 left-10 w-72 h-72 bg-white/10 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl"></div>
         </div>
-        <div className="relative container mx-auto px-4 py-20">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
-              <h1 className="text-5xl md:text-6xl font-bold leading-tight">
-                Turn Your <span className="text-accent">Waste</span> Into{' '}
-                <span className="text-accent">Rewards</span>
-              </h1>
-              <p className="text-xl text-primary-foreground/90 leading-relaxed">
-                Join KOMARCE's unified loyalty ecosystem where every purchase, every action 
-                contributes to a sustainable future while earning you amazing rewards.
+        
+        <div className="relative container mx-auto px-4 py-24">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            <div className="space-y-8">
+              <div>
+                <Badge className="mb-6 bg-white/20 text-white border-white/30 text-base px-6 py-2">
+                  🌟 Loyalty Marketplace Revolution
+                </Badge>
+                <h1 className="text-6xl lg:text-7xl font-black leading-tight mb-8">
+                  Shop Smart,
+                  <br />
+                  <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
+                    Earn More
+                  </span>
+                </h1>
+              </div>
+              <p className="text-2xl text-white/90 leading-relaxed font-medium max-w-xl">
+                Join KOMARCE's revolutionary loyalty ecosystem where every purchase 
+                earns rewards while contributing to a sustainable future.
               </p>
-              <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-                <Button asChild size="lg" className="bg-accent text-black hover:bg-accent/90">
+              <div className="flex flex-col sm:flex-row gap-6">
+                <Button 
+                  asChild 
+                  size="lg" 
+                  className="bg-white text-blue-700 hover:bg-gray-100 text-xl font-bold py-8 px-12 rounded-2xl shadow-2xl transform hover:scale-105 transition-all duration-300"
+                >
                   <Link href="/marketplace">
-                    <ShoppingBag className="w-5 h-5 mr-2" />
+                    <ShoppingBag className="w-6 h-6 mr-3" />
                     Start Shopping
                   </Link>
                 </Button>
-                <Button asChild variant="outline" size="lg" className="border-white text-white hover:bg-white hover:text-primary">
+                <Button 
+                  asChild 
+                  variant="outline" 
+                  size="lg" 
+                  className="border-2 border-white text-white hover:bg-white hover:text-blue-700 text-xl font-bold py-8 px-12 rounded-2xl backdrop-blur-sm transform hover:scale-105 transition-all duration-300"
+                >
                   <Link href="/register?role=merchant">
-                    <Store className="w-5 h-5 mr-2" />
+                    <Store className="w-6 h-6 mr-3" />
                     Become a Merchant
                   </Link>
                 </Button>
               </div>
             </div>
-            <div className="text-center">
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 space-y-6">
-                <h3 className="text-2xl font-bold">Reward Tiers</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-white/20 rounded-lg">
-                    <span className="font-semibold">Tier 1</span>
-                    <span className="text-accent font-bold">800 Points</span>
+            <div className="lg:flex lg:justify-center">
+              <div className="bg-white/15 backdrop-blur-xl rounded-3xl p-10 max-w-md shadow-2xl border border-white/20">
+                <div className="text-center mb-8">
+                  <h3 className="text-3xl font-bold text-white mb-2">🏆 Reward Tiers</h3>
+                  <p className="text-white/80">Unlock exclusive benefits</p>
+                </div>
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between p-5 bg-white/20 rounded-2xl border border-white/30">
+                    <div className="flex items-center space-x-3">
+                      <span className="w-3 h-3 bg-green-400 rounded-full"></span>
+                      <span className="font-bold text-white text-lg">Bronze</span>
+                    </div>
+                    <span className="text-yellow-300 font-black text-xl">800 pts</span>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-white/20 rounded-lg">
-                    <span className="font-semibold">Tier 2</span>
-                    <span className="text-accent font-bold">1,500 Points</span>
+                  <div className="flex items-center justify-between p-5 bg-white/20 rounded-2xl border border-white/30">
+                    <div className="flex items-center space-x-3">
+                      <span className="w-3 h-3 bg-blue-400 rounded-full"></span>
+                      <span className="font-bold text-white text-lg">Silver</span>
+                    </div>
+                    <span className="text-yellow-300 font-black text-xl">1.5K pts</span>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-white/20 rounded-lg">
-                    <span className="font-semibold">Tier 3</span>
-                    <span className="text-accent font-bold">3,500 Points</span>
+                  <div className="flex items-center justify-between p-5 bg-white/20 rounded-2xl border border-white/30">
+                    <div className="flex items-center space-x-3">
+                      <span className="w-3 h-3 bg-purple-400 rounded-full"></span>
+                      <span className="font-bold text-white text-lg">Gold</span>
+                    </div>
+                    <span className="text-yellow-300 font-black text-xl">3.5K pts</span>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-accent/30 rounded-lg border-2 border-accent">
-                    <span className="font-semibold">Tier 4</span>
-                    <span className="text-accent font-bold">32,200 Points</span>
+                  <div className="flex items-center justify-between p-5 bg-gradient-to-r from-yellow-400/30 to-orange-400/30 rounded-2xl border-2 border-yellow-400/50">
+                    <div className="flex items-center space-x-3">
+                      <span className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></span>
+                      <span className="font-bold text-white text-lg">Diamond</span>
+                    </div>
+                    <span className="text-yellow-300 font-black text-xl">32.2K pts</span>
                   </div>
                 </div>
               </div>

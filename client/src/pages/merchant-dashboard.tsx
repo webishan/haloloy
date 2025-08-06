@@ -163,9 +163,20 @@ export default function MerchantDashboard() {
   const recentOrders = dashboardData?.recentOrders || [];
 
   return (
-    <div className="pt-32 min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-4 gap-6">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-orange-50 via-red-50 to-pink-50">
+      <div className="container mx-auto px-4 py-12">
+        <div className="mb-12 flex items-center space-x-6">
+          <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-600 rounded-3xl flex items-center justify-center shadow-2xl">
+            <Store className="w-10 h-10 text-white" />
+          </div>
+          <div>
+            <h1 className="text-6xl font-black text-gray-900 mb-2">
+              Merchant <span className="bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">Dashboard</span>
+            </h1>
+            <p className="text-2xl text-gray-600 font-medium">Welcome back, {user?.firstName} {user?.lastName}</p>
+          </div>
+        </div>
+        <div className="grid lg:grid-cols-4 gap-8">
           {/* Sidebar */}
           <div className="lg:col-span-1">
             <Card>

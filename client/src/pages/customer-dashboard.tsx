@@ -68,9 +68,26 @@ export default function CustomerDashboard() {
   const pointsToNext = customer ? 1500 - customer.accumulatedPoints : 1500;
 
   return (
-    <div className="pt-32 min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-4 gap-6">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50">
+      <div className="container mx-auto px-4 py-12">
+        <div className="mb-12 flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-blue-600 rounded-3xl flex items-center justify-center shadow-2xl">
+              <LayoutDashboard className="w-10 h-10 text-white" />
+            </div>
+            <div>
+              <h1 className="text-6xl font-black text-gray-900 mb-2">
+                Customer <span className="bg-gradient-to-r from-green-500 to-blue-600 bg-clip-text text-transparent">Dashboard</span>
+              </h1>
+              <p className="text-2xl text-gray-600 font-medium">Welcome back, {user?.firstName} {user?.lastName}!</p>
+            </div>
+          </div>
+          <div className="text-right bg-white/80 backdrop-blur-sm rounded-3xl p-8 border-2 border-green-200 shadow-xl">
+            <p className="text-xl text-gray-600 font-semibold mb-2">💰 Total Points</p>
+            <p className="text-5xl font-black bg-gradient-to-r from-green-500 to-blue-600 bg-clip-text text-transparent">{customer?.rewardPoints || 0}</p>
+          </div>
+        </div>
+        <div className="grid lg:grid-cols-4 gap-8">
           {/* Sidebar */}
           <div className="lg:col-span-1">
             <Card>
