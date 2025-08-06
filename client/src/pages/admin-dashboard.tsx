@@ -80,7 +80,7 @@ export default function AdminDashboard() {
                   <SelectValue placeholder="Global View" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">🌍 Global View</SelectItem>
+                  <SelectItem value="" key="global">🌍 Global View</SelectItem>
                   {countries.map((country) => (
                     <SelectItem key={country.code} value={country.code}>
                       {country.flag} {country.name}
@@ -109,7 +109,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Total Merchants</p>
-                      <p className="text-3xl font-bold text-primary">{selectedCountry ? merchants.length : stats?.totalMerchants || 0}</p>
+                      <p className="text-3xl font-bold text-primary">{selectedCountry ? (merchants as any[])?.length || 0 : (stats as any)?.totalMerchants || 0}</p>
                       <p className="text-sm text-green-600">+12% from last month</p>
                     </div>
                     <div className="p-3 bg-primary/10 rounded-lg">
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Total Customers</p>
-                      <p className="text-3xl font-bold text-blue-600">{selectedCountry ? customers.length : stats?.totalCustomers || 0}</p>
+                      <p className="text-3xl font-bold text-blue-600">{selectedCountry ? (customers as any[])?.length || 0 : (stats as any)?.totalCustomers || 0}</p>
                       <p className="text-sm text-green-600">+8% from last month</p>
                     </div>
                     <div className="p-3 bg-blue-100 rounded-lg">
@@ -139,7 +139,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">{selectedCountry ? 'Country' : 'Global'} Sales</p>
-                      <p className="text-3xl font-bold text-green-600">${stats?.totalSales || '0.00'}</p>
+                      <p className="text-3xl font-bold text-green-600">${(stats as any)?.totalSales || '0.00'}</p>
                       <p className="text-sm text-green-600">+15% from last month</p>
                     </div>
                     <div className="p-3 bg-green-100 rounded-lg">
@@ -154,7 +154,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Points Distributed</p>
-                      <p className="text-3xl font-bold text-accent">{stats?.totalPointsDistributed || 0}</p>
+                      <p className="text-3xl font-bold text-accent">{((stats as any)?.totalPointsDistributed || 0).toLocaleString()}</p>
                       <p className="text-sm text-green-600">+22% from last month</p>
                     </div>
                     <div className="p-3 bg-accent/10 rounded-lg">

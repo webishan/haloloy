@@ -9,6 +9,8 @@ import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import AdminLogin from "@/pages/admin-login";
+import CustomerLogin from "@/pages/customer-login";
+import MerchantLogin from "@/pages/merchant-login";
 import Marketplace from "@/pages/marketplace";
 import ProductDetail from "@/pages/product-detail";
 import Cart from "@/pages/cart";
@@ -40,6 +42,16 @@ function Router() {
           <Route path="/admin-login">
             <AuthGuard requireAuth={false}>
               <AdminLogin />
+            </AuthGuard>
+          </Route>
+          <Route path="/customer-login">
+            <AuthGuard requireAuth={false}>
+              <CustomerLogin />
+            </AuthGuard>
+          </Route>
+          <Route path="/merchant-login">
+            <AuthGuard requireAuth={false}>
+              <MerchantLogin />
             </AuthGuard>
           </Route>
           <Route path="/marketplace" component={Marketplace} />

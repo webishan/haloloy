@@ -167,6 +167,29 @@ export class MemStorage implements IStorage {
       isActive: true
     });
 
+    // Create sample customers
+    const customer1 = await this.createUser({
+      username: "customer1",
+      email: "customer@komarce.com",
+      password: await bcrypt.hash("customer123", 10),
+      firstName: "John",
+      lastName: "Customer",
+      role: "customer",
+      country: "BD",
+      isActive: true
+    });
+
+    const customer2 = await this.createUser({
+      username: "customer2",
+      email: "sarah@customer.com",
+      password: await bcrypt.hash("customer123", 10),
+      firstName: "Sarah",
+      lastName: "Wilson",
+      role: "customer",
+      country: "MY",
+      isActive: true
+    });
+
     // Create merchant profiles
     await this.createMerchant({
       userId: merchant1.id,
