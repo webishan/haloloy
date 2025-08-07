@@ -117,18 +117,19 @@ export default function Checkout() {
     }
 
     // Create order data
+    const firstProduct = cartItems[0]?.product || cartItems[0];
     const orderData = {
-      merchantId: cartItems[0].product.merchantId, // Simplified - assuming single merchant
+      merchantId: firstProduct?.merchantId || 'tech-store-id', // Use actual merchant ID from products
       totalAmount: total.toFixed(2),
       paymentMethod,
       paymentStatus: 'pending',
       shippingAddress: shippingInfo,
       items: cartItems.map((item: any) => ({
-        productId: item.product.id,
-        productName: item.product.name,
-        price: item.product.price,
-        quantity: item.quantity,
-        pointsReward: item.product.pointsReward
+        productId: item.product?.id || item.productId,
+        productName: item.product?.name || item.name,
+        price: item.product?.price || item.price,
+        quantity: item.quantity || 1,
+        pointsReward: item.product?.pointsReward || 0
       }))
     };
 

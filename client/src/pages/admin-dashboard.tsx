@@ -100,7 +100,7 @@ export default function AdminDashboard() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-5 lg:w-[600px] bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-2xl p-2">
+          <TabsList className="grid w-full grid-cols-5 lg:w-[600px] bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-2xl p-2 mx-auto items-center justify-center">
             <TabsTrigger value="overview" className="text-lg font-semibold">Overview</TabsTrigger>
             <TabsTrigger value="merchants" className="text-lg font-semibold">Merchants</TabsTrigger>
             <TabsTrigger value="customers" className="text-lg font-semibold">Customers</TabsTrigger>

@@ -229,7 +229,7 @@ export default function MerchantDashboard() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="grid w-full grid-cols-5 lg:w-[600px] bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-2xl p-2">
+              <TabsList className="grid w-full grid-cols-5 lg:w-[600px] bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-2xl p-2 mx-auto items-center justify-center">
                 <TabsTrigger value="overview" className="text-lg font-semibold">Overview</TabsTrigger>
                 <TabsTrigger value="products" className="text-lg font-semibold">Products</TabsTrigger>
                 <TabsTrigger value="orders" className="text-lg font-semibold">Orders</TabsTrigger>

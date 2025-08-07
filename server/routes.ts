@@ -352,6 +352,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Customer profile not found" });
       }
 
+      // Get the first available merchant if merchantId is missing
+      if (!req.body.merchantId) {
+        const merchants = await storage.getMerchants();
+        if (merchants.length > 0) {
+          req.body.merchantId = merchants[0].id;
+        } else {
+          return res.status(400).json({ message: "No merchants available for order processing" });
+        }
+      }
+
       const orderData = insertOrderSchema.parse(req.body);
       orderData.customerId = customer.id;
       orderData.orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;

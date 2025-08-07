@@ -191,14 +191,14 @@ export class MemStorage implements IStorage {
     });
 
     // Create merchant profiles
-    await this.createMerchant({
+    const techStoreMerchant = await this.createMerchant({
       userId: merchant1.id,
       businessName: "TechStore Electronics",
       businessType: "Electronics Retailer",
       tier: "Double Star"
     });
 
-    await this.createMerchant({
+    const fashionHubMerchant = await this.createMerchant({
       userId: merchant2.id,
       businessName: "Fashion Hub Malaysia",
       businessType: "Fashion Retailer", 
@@ -224,7 +224,7 @@ export class MemStorage implements IStorage {
         stock: 25,
         categoryId: electronicsCat?.id || "",
         brandId: samsung?.id || "",
-        merchantId: merchant1.id,
+        merchantId: techStoreMerchant.id,
         pointsReward: 130,
         images: ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9"],
         isActive: true
@@ -238,7 +238,7 @@ export class MemStorage implements IStorage {
         stock: 15,
         categoryId: electronicsCat?.id || "",
         brandId: appleBrand?.id || "",
-        merchantId: merchant1.id,
+        merchantId: techStoreMerchant.id,
         pointsReward: 120,
         images: ["https://images.unsplash.com/photo-1592750475338-74b7b21085ab"],
         isActive: true
@@ -252,7 +252,7 @@ export class MemStorage implements IStorage {
         stock: 50,
         categoryId: fashionCategory?.id || "",
         brandId: nike?.id || "",
-        merchantId: merchant2.id,
+        merchantId: fashionHubMerchant.id,
         pointsReward: 12,
         images: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff"],
         isActive: true
@@ -266,7 +266,7 @@ export class MemStorage implements IStorage {
         stock: 10,
         categoryId: electronicsCat?.id || "",
         brandId: samsung?.id || "",
-        merchantId: merchant1.id,
+        merchantId: techStoreMerchant.id,
         pointsReward: 80,
         images: ["https://images.unsplash.com/photo-1593359677879-a4bb92f829d1"],
         isActive: true
