@@ -77,6 +77,15 @@ export const merchants = pgTable("merchants", {
   totalSales: decimal("total_sales", { precision: 10, scale: 2 }).notNull().default("0.00"),
   totalOrders: integer("total_orders").notNull().default(0),
   productCount: integer("product_count").notNull().default(0),
+  availablePoints: integer("available_points").notNull().default(0),
+  totalPointsPurchased: integer("total_points_purchased").notNull().default(0),
+  totalPointsDistributed: integer("total_points_distributed").notNull().default(0),
+  instantCashback: decimal("instant_cashback", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  referralCommission: decimal("referral_commission", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  royaltyBonus: decimal("royalty_bonus", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  komarceBalance: decimal("komarce_balance", { precision: 10, scale: 2 }).notNull().default("500.00"),
+  totalReceived: decimal("total_received", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  totalWithdrawn: decimal("total_withdrawn", { precision: 10, scale: 2 }).notNull().default("0.00"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -120,11 +129,12 @@ export const orders = pgTable("orders", {
 // Reward transactions
 export const rewardTransactions = pgTable("reward_transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  type: text("type").notNull(), // earn, redeem, transfer
-  category: text("category").notNull(), // shopping, referral, daily_login, tier_reward
-  amount: integer("amount").notNull(),
+  fromUserId: varchar("from_user_id").notNull(),
+  toUserId: varchar("to_user_id").notNull(),
+  points: integer("points").notNull(),
+  type: text("type").notNull(), // earn, redeem, transfer, purchase, withdrawal, wallet_transfer, template_download
   description: text("description"),
+  status: text("status").notNull().default("completed"), // pending, completed, failed
   orderId: varchar("order_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
