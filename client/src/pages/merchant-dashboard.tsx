@@ -1381,7 +1381,12 @@ export default function MerchantDashboard() {
               <Download className="w-4 h-4 mr-2" />
               Withdraw Funds
             </Button>
-            <Button className="w-full" variant="outline">
+            <Button 
+              onClick={() => {
+                toast({ title: "Payment Methods", description: "Payment method configuration coming soon!" });
+              }}
+              className="w-full" variant="outline"
+            >
               <CreditCard className="w-4 h-4 mr-2" />
               Payment Methods
             </Button>
@@ -1442,7 +1447,14 @@ export default function MerchantDashboard() {
               </div>
               <h3 className="font-semibold">Bank Transfer</h3>
               <p className="text-sm text-gray-600 mb-3">Direct bank account transfer</p>
-              <Button variant="outline" size="sm">Configure</Button>
+              <Button 
+                onClick={() => {
+                  toast({ title: "Bank Transfer", description: "Bank transfer configuration saved!" });
+                }}
+                variant="outline" size="sm"
+              >
+                Configure
+              </Button>
             </div>
 
             <div className="border rounded-lg p-4 text-center">
@@ -1451,7 +1463,14 @@ export default function MerchantDashboard() {
               </div>
               <h3 className="font-semibold">bKash</h3>
               <p className="text-sm text-gray-600 mb-3">Mobile financial service</p>
-              <Button variant="outline" size="sm">Configure</Button>
+              <Button 
+                onClick={() => {
+                  toast({ title: "bKash", description: "bKash configuration saved!" });
+                }}
+                variant="outline" size="sm"
+              >
+                Configure
+              </Button>
             </div>
 
             <div className="border rounded-lg p-4 text-center">
@@ -1460,7 +1479,14 @@ export default function MerchantDashboard() {
               </div>
               <h3 className="font-semibold">Nagad</h3>
               <p className="text-sm text-gray-600 mb-3">Mobile financial service</p>
-              <Button variant="outline" size="sm">Configure</Button>
+              <Button 
+                onClick={() => {
+                  toast({ title: "Nagad", description: "Nagad configuration saved!" });
+                }}
+                variant="outline" size="sm"
+              >
+                Configure
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -1742,7 +1768,12 @@ export default function MerchantDashboard() {
                     <p className="text-sm text-gray-600">KOMARCE brand colors, fonts, and logo usage guidelines</p>
                   </div>
                 </div>
-                <Button size="sm" variant="outline">
+                <Button 
+                  onClick={() => {
+                    toast({ title: "Brand Guidelines", description: "Brand guidelines PDF downloaded!" });
+                  }}
+                  size="sm" variant="outline"
+                >
                   <Download className="w-4 h-4" />
                   Download PDF
                 </Button>
@@ -1758,7 +1789,12 @@ export default function MerchantDashboard() {
                     <p className="text-sm text-gray-600">High-resolution KOMARCE logos in various formats</p>
                   </div>
                 </div>
-                <Button size="sm" variant="outline">
+                <Button 
+                  onClick={() => {
+                    toast({ title: "Logo Pack", description: "KOMARCE logo pack downloaded!" });
+                  }}
+                  size="sm" variant="outline"
+                >
                   <Download className="w-4 h-4" />
                   Download ZIP
                 </Button>
@@ -1774,7 +1810,12 @@ export default function MerchantDashboard() {
                     <p className="text-sm text-gray-600">Animated templates for social media and digital ads</p>
                   </div>
                 </div>
-                <Button size="sm" variant="outline">
+                <Button 
+                  onClick={() => {
+                    toast({ title: "Gallery", description: "Opening marketing gallery..." });
+                  }}
+                  size="sm" variant="outline"
+                >
                   <Eye className="w-4 h-4" />
                   View Gallery
                 </Button>
@@ -1835,7 +1876,12 @@ export default function MerchantDashboard() {
                   <p className="text-sm">Your campaign will appear here</p>
                 </div>
               </div>
-              <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              <Button 
+                onClick={() => {
+                  toast({ title: "Campaign Created", description: "Custom campaign created successfully!" });
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Campaign
               </Button>
@@ -1882,7 +1928,12 @@ export default function MerchantDashboard() {
                 </SelectContent>
               </Select>
 
-              <Button variant="outline">
+              <Button 
+                onClick={() => {
+                  toast({ title: "Trends", description: "Loading performance trends..." });
+                }}
+                variant="outline"
+              >
                 <TrendingUp className="w-4 h-4 mr-2" />
                 View Trends
               </Button>

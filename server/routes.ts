@@ -617,10 +617,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "completed"
       });
 
-      // Update merchant points
+      // Calculate cashback for merchant (15% of distributed points)
+      const instantCashback = points * 0.15;
+
+      // Update merchant points and cashback
       await storage.updateMerchant(req.user.id, {
         availablePoints: merchant.availablePoints - points,
-        totalPointsDistributed: (merchant.totalPointsDistributed || 0) + points
+        totalPointsDistributed: (merchant.totalPointsDistributed || 0) + points,
+        instantCashback: (merchant.instantCashback || 0) + instantCashback
       });
 
       // Update customer points
