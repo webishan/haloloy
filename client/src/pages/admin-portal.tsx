@@ -12,41 +12,77 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { 
-  Users, Crown, Globe, MapPin, Send, MessageCircle, 
-  Plus, Settings, BarChart3, DollarSign, UserCheck,
-  Shield, Award, Zap, TrendingUp, Phone, Mail,
-  Calendar, Clock, CheckCircle, XCircle, AlertCircle
+  Users, Crown, Globe, MapPin, Send, MessageCircle, Plus, Settings, BarChart3, 
+  DollarSign, UserCheck, Shield, Award, Zap, TrendingUp, Phone, Mail, Calendar, 
+  Clock, CheckCircle, XCircle, AlertCircle, LogOut, Eye, Star
 } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 
+interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'global_admin' | 'local_admin';
+  country: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  senderName?: string;
+}
+
 export default function AdminPortal() {
-  const [adminType, setAdminType] = useState<"global" | "local" | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
-  const [newMessage, setNewMessage] = useState("");
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
-  const [showPointDistribution, setShowPointDistribution] = useState(false);
-  const [showChatDialog, setShowChatDialog] = useState(false);
+  const [newMessage, setNewMessage] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Login form states
+  // Login form state
   const [loginForm, setLoginForm] = useState({
     email: "",
     password: "",
     adminType: "global" as "global" | "local"
   });
 
-  // Initialize WebSocket connection
+  // Check authentication on mount
+  useEffect(() => {
+    const token = localStorage.getItem('adminToken');
+    const user = localStorage.getItem('adminUser');
+    if (token && user) {
+      try {
+        const userData = JSON.parse(user);
+        setCurrentUser(userData);
+        setIsAuthenticated(true);
+      } catch (error) {
+        console.error('Error parsing stored user data:', error);
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminUser');
+      }
+    }
+  }, []);
+
+  // Initialize WebSocket
   useEffect(() => {
     if (isAuthenticated && currentUser) {
-      const newSocket = io(`${window.location.protocol}//${window.location.host}`, {
-        path: '/ws',
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const newSocket = io(wsUrl, {
         query: { userId: currentUser.id }
       });
 
@@ -54,58 +90,16 @@ export default function AdminPortal() {
         console.log('Connected to chat server');
       });
 
-      newSocket.on('newMessage', (message) => {
+      newSocket.on('newMessage', (message: ChatMessage) => {
         setChatMessages(prev => [...prev, message]);
-      });
-
-      newSocket.on('messageUpdate', (updatedMessage) => {
-        setChatMessages(prev => 
-          prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg)
-        );
+        toast({ title: "New Message", description: `Message from ${message.senderName}` });
       });
 
       setSocket(newSocket);
 
-      return () => {
-        newSocket.close();
-      };
+      return () => newSocket.close();
     }
   }, [isAuthenticated, currentUser]);
-
-  // Fetch admin profile
-  const { data: adminProfile } = useQuery({
-    queryKey: ['/api/admin/profile'],
-    enabled: isAuthenticated && currentUser?.role?.includes('admin'),
-    retry: false
-  });
-
-  // Fetch point distributions
-  const { data: pointDistributions } = useQuery({
-    queryKey: ['/api/admin/point-distributions'],
-    enabled: isAuthenticated && currentUser?.role?.includes('admin'),
-    retry: false
-  });
-
-  // Fetch admins list (only for global admin)
-  const { data: adminsList } = useQuery({
-    queryKey: ['/api/admin/admins'],
-    enabled: isAuthenticated && adminType === 'global',
-    retry: false
-  });
-
-  // Fetch merchants list
-  const { data: merchantsList } = useQuery({
-    queryKey: ['/api/admin/merchants'],
-    enabled: isAuthenticated && currentUser?.role?.includes('admin'),
-    retry: false
-  });
-
-  // Fetch chat users
-  const { data: chatUsers } = useQuery({
-    queryKey: ['/api/admin/chat-users'],
-    enabled: isAuthenticated,
-    retry: false
-  });
 
   // Login mutation
   const loginMutation = useMutation({
@@ -126,13 +120,14 @@ export default function AdminPortal() {
       return await response.json();
     },
     onSuccess: (data) => {
-      console.log('Login successful:', data);
       setCurrentUser(data.user);
-      setAdminType(data.user.role === 'global_admin' ? 'global' : 'local');
       setIsAuthenticated(true);
       localStorage.setItem('adminToken', data.token);
       localStorage.setItem('adminUser', JSON.stringify(data.user));
-      toast({ title: "Login Successful", description: `Welcome ${data.user.firstName}!` });
+      toast({ 
+        title: "Login Successful", 
+        description: `Welcome ${data.user.firstName}! You are logged in as ${data.user.role.replace('_', ' ')}.` 
+      });
     },
     onError: (error: Error) => {
       console.error('Login error:', error);
@@ -144,18 +139,60 @@ export default function AdminPortal() {
     }
   });
 
+  // Data queries
+  const { data: dashboardData } = useQuery({
+    queryKey: ['/api/admin/dashboard'],
+    enabled: isAuthenticated,
+    retry: false
+  });
+
+  const { data: adminsList } = useQuery({
+    queryKey: ['/api/admin/admins'],
+    enabled: isAuthenticated && currentUser?.role === 'global_admin',
+    retry: false
+  });
+
+  const { data: merchantsList } = useQuery({
+    queryKey: ['/api/admin/merchants'],
+    enabled: isAuthenticated,
+    retry: false
+  });
+
+  const { data: pointDistributions } = useQuery({
+    queryKey: ['/api/admin/point-distributions'],
+    enabled: isAuthenticated,
+    retry: false
+  });
+
+  const { data: chatUsers } = useQuery({
+    queryKey: ['/api/admin/chat-users'],
+    enabled: isAuthenticated,
+    retry: false
+  });
+
   // Point distribution mutation
   const distributePointsMutation = useMutation({
     mutationFn: async (data: { toUserId: string; points: number; description: string }) => {
-      return await apiRequest('/api/admin/distribute-points', {
+      const response = await fetch('/api/admin/distribute-points', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        },
         body: JSON.stringify(data)
       });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       toast({ title: "Points Distributed", description: "Points have been distributed successfully!" });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/point-distributions'] });
-      setShowPointDistribution(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
     },
     onError: (error: Error) => {
       toast({ title: "Distribution Failed", description: error.message, variant: "destructive" });
@@ -165,14 +202,28 @@ export default function AdminPortal() {
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { receiverId: string; message: string }) => {
-      return await apiRequest('/api/admin/send-message', {
+      const response = await fetch('/api/admin/send-message', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        },
         body: JSON.stringify(data)
       });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       setNewMessage("");
       queryClient.invalidateQueries({ queryKey: ['/api/admin/chat-messages'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Message Failed", description: error.message, variant: "destructive" });
     }
   });
 
@@ -181,227 +232,242 @@ export default function AdminPortal() {
     loginMutation.mutate(loginForm);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    if (socket) {
+      socket.disconnect();
+    }
+    toast({ title: "Logged Out", description: "You have been logged out successfully." });
+  };
+
   const handleSendMessage = () => {
     if (!newMessage.trim() || !selectedChatUser) return;
     
+    sendMessageMutation.mutate({
+      receiverId: selectedChatUser.id,
+      message: newMessage.trim()
+    });
+
     if (socket) {
       socket.emit('sendMessage', {
         receiverId: selectedChatUser.id,
         message: newMessage.trim()
       });
     }
-    
-    sendMessageMutation.mutate({
-      receiverId: selectedChatUser.id,
-      message: newMessage.trim()
-    });
   };
 
   // Login Form
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-blue-600 rounded-full mx-auto mb-4 flex items-center justify-center">
-              <Shield className="w-8 h-8 text-white" />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg shadow-2xl border-0">
+          <CardHeader className="text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
+            <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full mx-auto mb-4 flex items-center justify-center">
+              <Shield className="w-10 h-10 text-white" />
             </div>
-            <CardTitle className="text-2xl font-bold">KOMARCE Admin Portal</CardTitle>
-            <p className="text-gray-600">Secure access for administrators</p>
+            <CardTitle className="text-3xl font-bold">KOMARCE Admin Portal</CardTitle>
+            <p className="text-blue-100">Secure administrative access</p>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
+          <CardContent className="p-8">
+            <form onSubmit={handleLogin} className="space-y-6">
               <div>
-                <Label htmlFor="email">Email Address</Label>
+                <Label htmlFor="email" className="text-sm font-semibold text-gray-700">Email Address</Label>
                 <Input
                   id="email"
                   type="email"
                   value={loginForm.email}
                   onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
-                  placeholder="Enter your email"
+                  placeholder="global@komarce.com"
+                  className="mt-2 h-12"
                   required
+                  data-testid="input-admin-email"
                 />
               </div>
               
               <div>
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-sm font-semibold text-gray-700">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   value={loginForm.password}
                   onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                  placeholder="Enter your password"
+                  placeholder="Enter your secure password"
+                  className="mt-2 h-12"
                   required
+                  data-testid="input-admin-password"
                 />
               </div>
 
               <div>
-                <Label htmlFor="adminType">Admin Type</Label>
+                <Label htmlFor="adminType" className="text-sm font-semibold text-gray-700">Admin Level</Label>
                 <Select 
                   value={loginForm.adminType} 
                   onValueChange={(value: "global" | "local") => setLoginForm({...loginForm, adminType: value})}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="mt-2 h-12" data-testid="select-admin-type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="global">Global Admin</SelectItem>
-                    <SelectItem value="local">Local Admin</SelectItem>
+                    <SelectItem value="global">Global Administrator</SelectItem>
+                    <SelectItem value="local">Local Administrator</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <Button 
                 type="submit" 
-                className="w-full"
+                className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-lg"
                 disabled={loginMutation.isPending}
+                data-testid="button-admin-login"
               >
-                {loginMutation.isPending ? "Signing In..." : "Sign In"}
+                {loginMutation.isPending ? "Authenticating..." : "Access Admin Portal"}
               </Button>
             </form>
+            
+            <div className="mt-6 text-center text-sm text-gray-500">
+              <p>Test Credentials:</p>
+              <p>Global: global@komarce.com / global123</p>
+              <p>Local BD: local.bd@komarce.com / local123</p>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // Admin Dashboard
+  // Main Admin Dashboard
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Shield className="w-5 h-5 text-white" />
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                <Shield className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">KOMARCE Admin Portal</h1>
-                <p className="text-sm text-gray-600">
-                  {adminType === 'global' ? 'Global Administrator' : `Local Administrator - ${currentUser?.country}`}
+                <p className="text-sm text-gray-500">
+                  {currentUser?.role === 'global_admin' ? 'Global Administrator' : `Local Admin - ${currentUser?.country}`}
                 </p>
               </div>
             </div>
             
             <div className="flex items-center space-x-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowChatDialog(true)}
-              >
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Chat
-              </Button>
+              <Badge variant={currentUser?.role === 'global_admin' ? 'default' : 'secondary'} className="px-3 py-1">
+                {currentUser?.role === 'global_admin' ? (
+                  <>
+                    <Crown className="w-4 h-4 mr-1" />
+                    Global Admin
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="w-4 h-4 mr-1" />
+                    Local Admin
+                  </>
+                )}
+              </Badge>
               
-              <div className="text-right">
-                <p className="text-sm font-medium">{currentUser?.firstName} {currentUser?.lastName}</p>
-                <p className="text-xs text-gray-600">{currentUser?.email}</p>
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <span>{currentUser?.firstName} {currentUser?.lastName}</span>
               </div>
               
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  localStorage.removeItem('adminToken');
-                  setIsAuthenticated(false);
-                  setCurrentUser(null);
-                  setAdminType(null);
-                }}
-              >
+              <Button onClick={handleLogout} variant="outline" size="sm" data-testid="button-admin-logout">
+                <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="points">Point Distribution</TabsTrigger>
-            <TabsTrigger value="users">User Management</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="dashboard" data-testid="tab-dashboard">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="points" data-testid="tab-points">
+              <DollarSign className="w-4 h-4 mr-2" />
+              Points
+            </TabsTrigger>
+            <TabsTrigger value="users" data-testid="tab-users">
+              <Users className="w-4 h-4 mr-2" />
+              Users
+            </TabsTrigger>
+            <TabsTrigger value="merchants" data-testid="tab-merchants">
+              <Star className="w-4 h-4 mr-2" />
+              Merchants
+            </TabsTrigger>
+            <TabsTrigger value="chat" data-testid="tab-chat">
+              <MessageCircle className="w-4 h-4 mr-2" />
+              Chat
+            </TabsTrigger>
+            <TabsTrigger value="settings" data-testid="tab-settings">
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
+            </TabsTrigger>
           </TabsList>
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
-            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Points Balance</p>
-                      <p className="text-3xl font-bold text-blue-600">
-                        {adminProfile?.pointsBalance?.toLocaleString() || 0}
-                      </p>
+                      <p className="text-sm font-medium text-gray-600">Total Merchants</p>
+                      <p className="text-3xl font-bold text-blue-600">{dashboardData?.totalMerchants || 0}</p>
                     </div>
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Zap className="w-6 h-6 text-blue-600" />
-                    </div>
+                    <Star className="w-8 h-8 text-blue-500" />
                   </div>
-                  <p className="text-xs text-green-600 mt-1">Available for distribution</p>
                 </CardContent>
               </Card>
-
+              
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Total Distributed</p>
-                      <p className="text-3xl font-bold text-green-600">
-                        {adminProfile?.totalPointsDistributed?.toLocaleString() || 0}
-                      </p>
+                      <p className="text-sm font-medium text-gray-600">Total Customers</p>
+                      <p className="text-3xl font-bold text-green-600">{dashboardData?.totalCustomers || 0}</p>
                     </div>
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-green-600" />
-                    </div>
+                    <Users className="w-8 h-8 text-green-500" />
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">Points distributed to date</p>
                 </CardContent>
               </Card>
-
+              
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        {adminType === 'global' ? 'Local Admins' : 'Merchants'}
-                      </p>
-                      <p className="text-3xl font-bold text-purple-600">
-                        {adminType === 'global' ? (adminsList?.length || 0) : (merchantsList?.length || 0)}
-                      </p>
+                      <p className="text-sm font-medium text-gray-600">Points Distributed</p>
+                      <p className="text-3xl font-bold text-purple-600">{dashboardData?.totalPointsDistributed || 0}</p>
                     </div>
-                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <Users className="w-6 h-6 text-purple-600" />
-                    </div>
+                    <Award className="w-8 h-8 text-purple-500" />
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">Active users under management</p>
                 </CardContent>
               </Card>
-
+              
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Total Received</p>
-                      <p className="text-3xl font-bold text-orange-600">
-                        {adminProfile?.totalPointsReceived?.toLocaleString() || 0}
-                      </p>
+                      <p className="text-sm font-medium text-gray-600">Total Sales</p>
+                      <p className="text-3xl font-bold text-orange-600">${dashboardData?.totalSales || 0}</p>
                     </div>
-                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <Award className="w-6 h-6 text-orange-600" />
-                    </div>
+                    <TrendingUp className="w-8 h-8 text-orange-500" />
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">Points received from higher level</p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Recent Distributions */}
+            {/* Recent Activity */}
             <Card>
               <CardHeader>
                 <CardTitle>Recent Point Distributions</CardTitle>
@@ -411,37 +477,20 @@ export default function AdminPortal() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
+                      <TableHead>From</TableHead>
                       <TableHead>To</TableHead>
                       <TableHead>Points</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Status</TableHead>
                       <TableHead>Description</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pointDistributions?.slice(0, 5).map((distribution: any) => (
                       <TableRow key={distribution.id}>
-                        <TableCell>
-                          {new Date(distribution.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>{distribution.toUser?.firstName} {distribution.toUser?.lastName}</TableCell>
-                        <TableCell>{distribution.points.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {distribution.distributionType.replace('_', ' ')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={distribution.status === 'completed' ? 'default' : 
-                                   distribution.status === 'pending' ? 'secondary' : 'destructive'}
-                          >
-                            {distribution.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {distribution.description}
-                        </TableCell>
+                        <TableCell>{new Date(distribution.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell>{distribution.fromUserName}</TableCell>
+                        <TableCell>{distribution.toUserName}</TableCell>
+                        <TableCell className="font-semibold text-green-600">+{distribution.points}</TableCell>
+                        <TableCell>{distribution.description}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -450,18 +499,37 @@ export default function AdminPortal() {
             </Card>
           </TabsContent>
 
-          {/* Point Distribution Tab */}
+          {/* Points Distribution Tab */}
           <TabsContent value="points" className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Point Distribution Management</h2>
-              <Button onClick={() => setShowPointDistribution(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Distribute Points
-              </Button>
+              <h2 className="text-2xl font-bold">Point Distribution System</h2>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button data-testid="button-distribute-points">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Distribute Points
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Distribute Points</DialogTitle>
+                  </DialogHeader>
+                  <PointDistributionForm 
+                    currentUser={currentUser}
+                    adminsList={adminsList}
+                    merchantsList={merchantsList}
+                    onSubmit={(data) => distributePointsMutation.mutate(data)}
+                    isLoading={distributePointsMutation.isPending}
+                  />
+                </DialogContent>
+              </Dialog>
             </div>
 
             <Card>
-              <CardContent className="p-6">
+              <CardHeader>
+                <CardTitle>Point Distribution History</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -469,37 +537,23 @@ export default function AdminPortal() {
                       <TableHead>From</TableHead>
                       <TableHead>To</TableHead>
                       <TableHead>Points</TableHead>
-                      <TableHead>Type</TableHead>
+                      <TableHead>Description</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pointDistributions?.map((distribution: any) => (
                       <TableRow key={distribution.id}>
+                        <TableCell>{new Date(distribution.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell>{distribution.fromUserName}</TableCell>
+                        <TableCell>{distribution.toUserName}</TableCell>
+                        <TableCell className="font-semibold text-green-600">+{distribution.points}</TableCell>
+                        <TableCell>{distribution.description}</TableCell>
                         <TableCell>
-                          {new Date(distribution.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>{distribution.fromUser?.firstName} {distribution.fromUser?.lastName}</TableCell>
-                        <TableCell>{distribution.toUser?.firstName} {distribution.toUser?.lastName}</TableCell>
-                        <TableCell>{distribution.points.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {distribution.distributionType.replace('_', ' ')}
+                          <Badge variant="default">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Completed
                           </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={distribution.status === 'completed' ? 'default' : 
-                                   distribution.status === 'pending' ? 'secondary' : 'destructive'}
-                          >
-                            {distribution.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="outline" size="sm">
-                            View Details
-                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -509,11 +563,11 @@ export default function AdminPortal() {
             </Card>
           </TabsContent>
 
-          {/* User Management Tab */}
+          {/* Users Management Tab */}
           <TabsContent value="users" className="space-y-6">
             <h2 className="text-2xl font-bold">User Management</h2>
             
-            {adminType === 'global' && (
+            {currentUser?.role === 'global_admin' && (
               <Card>
                 <CardHeader>
                   <CardTitle>Local Administrators</CardTitle>
@@ -525,29 +579,29 @@ export default function AdminPortal() {
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Country</TableHead>
-                        <TableHead>Points Balance</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Points Available</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {adminsList?.map((admin: any) => (
+                      {adminsList?.filter((admin: any) => admin.adminType === 'local').map((admin: any) => (
                         <TableRow key={admin.id}>
                           <TableCell>{admin.user?.firstName} {admin.user?.lastName}</TableCell>
                           <TableCell>{admin.user?.email}</TableCell>
-                          <TableCell>{admin.country}</TableCell>
-                          <TableCell>{admin.pointsBalance?.toLocaleString()}</TableCell>
                           <TableCell>
-                            <Badge variant={admin.isActive ? 'default' : 'secondary'}>
-                              {admin.isActive ? 'Active' : 'Inactive'}
-                            </Badge>
+                            <Badge variant="secondary">{admin.user?.country}</Badge>
                           </TableCell>
                           <TableCell>
-                            <Button variant="outline" size="sm" className="mr-2">
-                              <MessageCircle className="w-4 h-4" />
-                            </Button>
-                            <Button variant="outline" size="sm">
-                              <Send className="w-4 h-4" />
+                            <Badge variant={admin.user?.isActive ? "default" : "destructive"}>
+                              {admin.user?.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-semibold">{admin.availablePoints || 0}</TableCell>
+                          <TableCell>
+                            <Button size="sm" variant="outline" data-testid={`button-view-admin-${admin.id}`}>
+                              <Eye className="w-4 h-4 mr-1" />
+                              View
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -557,7 +611,12 @@ export default function AdminPortal() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
 
+          {/* Merchants Tab */}
+          <TabsContent value="merchants" className="space-y-6">
+            <h2 className="text-2xl font-bold">Merchant Management</h2>
+            
             <Card>
               <CardHeader>
                 <CardTitle>Merchants</CardTitle>
@@ -570,29 +629,28 @@ export default function AdminPortal() {
                       <TableHead>Owner</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Country</TableHead>
-                      <TableHead>Points Balance</TableHead>
                       <TableHead>Tier</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>Points</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {merchantsList?.map((merchant: any) => (
                       <TableRow key={merchant.id}>
-                        <TableCell>{merchant.businessName}</TableCell>
+                        <TableCell className="font-medium">{merchant.businessName}</TableCell>
                         <TableCell>{merchant.user?.firstName} {merchant.user?.lastName}</TableCell>
                         <TableCell>{merchant.user?.email}</TableCell>
-                        <TableCell>{merchant.user?.country}</TableCell>
-                        <TableCell>{merchant.availablePoints?.toLocaleString()}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{merchant.user?.country}</Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline">{merchant.tier}</Badge>
                         </TableCell>
+                        <TableCell className="font-semibold">{merchant.availablePoints || 0}</TableCell>
                         <TableCell>
-                          <Button variant="outline" size="sm" className="mr-2">
-                            <MessageCircle className="w-4 h-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Send className="w-4 h-4" />
-                          </Button>
+                          <Badge variant={merchant.isActive ? "default" : "destructive"}>
+                            {merchant.isActive ? "Active" : "Inactive"}
+                          </Badge>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -602,29 +660,119 @@ export default function AdminPortal() {
             </Card>
           </TabsContent>
 
-          {/* Analytics Tab */}
-          <TabsContent value="analytics" className="space-y-6">
-            <h2 className="text-2xl font-bold">Analytics & Reports</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Chat Tab */}
+          <TabsContent value="chat" className="space-y-6">
+            <h2 className="text-2xl font-bold">Real-time Communication</h2>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Chat Users List */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Point Distribution Trends</CardTitle>
+                  <CardTitle>Available Users</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <p className="text-gray-500">Chart will be implemented here</p>
-                  </div>
+                  <ScrollArea className="h-96">
+                    <div className="space-y-2">
+                      {chatUsers?.map((user: any) => (
+                        <div
+                          key={user.id}
+                          className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                            selectedChatUser?.id === user.id 
+                              ? 'bg-blue-100 border-blue-300' 
+                              : 'bg-gray-50 hover:bg-gray-100'
+                          }`}
+                          onClick={() => setSelectedChatUser(user)}
+                          data-testid={`chat-user-${user.id}`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                              <span className="text-white text-xs font-medium">
+                                {user.firstName?.charAt(0) || user.email.charAt(0)}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{user.firstName} {user.lastName}</p>
+                              <p className="text-xs text-gray-500 capitalize">{user.role?.replace('_', ' ')}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
-              
-              <Card>
+
+              {/* Chat Window */}
+              <Card className="lg:col-span-2">
                 <CardHeader>
-                  <CardTitle>User Growth</CardTitle>
+                  <CardTitle>
+                    {selectedChatUser ? (
+                      <div className="flex items-center space-x-3">
+                        <MessageCircle className="w-5 h-5" />
+                        <span>Chat with {selectedChatUser.firstName} {selectedChatUser.lastName}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {selectedChatUser.role?.replace('_', ' ')}
+                        </Badge>
+                      </div>
+                    ) : (
+                      'Select a user to start chatting'
+                    )}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <p className="text-gray-500">Chart will be implemented here</p>
-                  </div>
+                  {selectedChatUser ? (
+                    <div className="space-y-4">
+                      {/* Messages Area */}
+                      <ScrollArea className="h-80 border rounded-lg p-4">
+                        <div className="space-y-3">
+                          {chatMessages.map((message) => (
+                            <div
+                              key={message.id}
+                              className={`flex ${message.senderId === currentUser?.id ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div
+                                className={`max-w-xs px-4 py-2 rounded-lg ${
+                                  message.senderId === currentUser?.id
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-100 text-gray-900'
+                                }`}
+                              >
+                                <p className="text-sm">{message.message}</p>
+                                <p className="text-xs opacity-70 mt-1">
+                                  {new Date(message.createdAt).toLocaleTimeString()}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+
+                      {/* Message Input */}
+                      <div className="flex space-x-2">
+                        <Input
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder="Type your message..."
+                          onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                          data-testid="input-chat-message"
+                        />
+                        <Button 
+                          onClick={handleSendMessage}
+                          disabled={!newMessage.trim() || sendMessageMutation.isPending}
+                          data-testid="button-send-message"
+                        >
+                          <Send className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-80 flex items-center justify-center text-gray-500">
+                      <div className="text-center">
+                        <MessageCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p>Select a user from the list to start a conversation</p>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -632,88 +780,53 @@ export default function AdminPortal() {
 
           {/* Settings Tab */}
           <TabsContent value="settings" className="space-y-6">
-            <h2 className="text-2xl font-bold">Settings</h2>
+            <h2 className="text-2xl font-bold">Settings & Configuration</h2>
+            
             <Card>
               <CardHeader>
-                <CardTitle>Profile Settings</CardTitle>
+                <CardTitle>Account Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>First Name</Label>
-                    <Input value={currentUser?.firstName} readOnly />
+                    <Label>Name</Label>
+                    <Input value={`${currentUser?.firstName} ${currentUser?.lastName}`} disabled />
                   </div>
                   <div>
-                    <Label>Last Name</Label>
-                    <Input value={currentUser?.lastName} readOnly />
+                    <Label>Email</Label>
+                    <Input value={currentUser?.email} disabled />
                   </div>
-                </div>
-                <div>
-                  <Label>Email</Label>
-                  <Input value={currentUser?.email} readOnly />
-                </div>
-                <div>
-                  <Label>Admin Type</Label>
-                  <Input value={adminType === 'global' ? 'Global Administrator' : 'Local Administrator'} readOnly />
-                </div>
-                {adminType === 'local' && (
+                  <div>
+                    <Label>Role</Label>
+                    <Input value={currentUser?.role?.replace('_', ' ').toUpperCase()} disabled />
+                  </div>
                   <div>
                     <Label>Country</Label>
-                    <Input value={currentUser?.country} readOnly />
+                    <Input value={currentUser?.country} disabled />
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Point Distribution Dialog */}
-      <Dialog open={showPointDistribution} onOpenChange={setShowPointDistribution}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Distribute Points</DialogTitle>
-          </DialogHeader>
-          <PointDistributionForm 
-            adminType={adminType}
-            onSuccess={() => setShowPointDistribution(false)}
-            mutation={distributePointsMutation}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Chat Dialog */}
-      <Dialog open={showChatDialog} onOpenChange={setShowChatDialog}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>Real-time Chat</DialogTitle>
-          </DialogHeader>
-          <ChatInterface 
-            currentUser={currentUser}
-            socket={socket}
-            chatUsers={chatUsers}
-            selectedUser={selectedChatUser}
-            onSelectUser={setSelectedChatUser}
-            messages={chatMessages}
-            newMessage={newMessage}
-            setNewMessage={setNewMessage}
-            onSendMessage={handleSendMessage}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
 
 // Point Distribution Form Component
 function PointDistributionForm({ 
-  adminType, 
-  onSuccess, 
-  mutation 
-}: { 
-  adminType: "global" | "local" | null;
-  onSuccess: () => void;
-  mutation: any;
+  currentUser, 
+  adminsList, 
+  merchantsList, 
+  onSubmit, 
+  isLoading 
+}: {
+  currentUser: AdminUser | null;
+  adminsList: any[];
+  merchantsList: any[];
+  onSubmit: (data: any) => void;
+  isLoading: boolean;
 }) {
   const [form, setForm] = useState({
     toUserId: "",
@@ -721,33 +834,36 @@ function PointDistributionForm({
     description: ""
   });
 
-  const { data: recipients } = useQuery({
-    queryKey: adminType === 'global' ? ['/api/admin/local-admins'] : ['/api/admin/merchants'],
-    retry: false
-  });
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    mutation.mutate({
+    onSubmit({
       toUserId: form.toUserId,
       points: parseInt(form.points),
       description: form.description
     });
+    setForm({ toUserId: "", points: "", description: "" });
   };
+
+  // Determine available recipients based on admin type
+  const availableRecipients = currentUser?.role === 'global_admin' 
+    ? adminsList?.filter(admin => admin.adminType === 'local') || []
+    : merchantsList || [];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label>Recipient</Label>
         <Select value={form.toUserId} onValueChange={(value) => setForm({...form, toUserId: value})}>
-          <SelectTrigger>
-            <SelectValue placeholder={`Select ${adminType === 'global' ? 'Local Admin' : 'Merchant'}`} />
+          <SelectTrigger data-testid="select-point-recipient">
+            <SelectValue placeholder={`Select ${currentUser?.role === 'global_admin' ? 'local admin' : 'merchant'}`} />
           </SelectTrigger>
           <SelectContent>
-            {recipients?.map((recipient: any) => (
-              <SelectItem key={recipient.id} value={recipient.userId}>
-                {recipient.businessName || `${recipient.user?.firstName} ${recipient.user?.lastName}`}
-                {recipient.user?.email && ` (${recipient.user.email})`}
+            {availableRecipients.map((recipient: any) => (
+              <SelectItem key={recipient.userId || recipient.id} value={recipient.userId || recipient.id}>
+                {currentUser?.role === 'global_admin' 
+                  ? `${recipient.user?.firstName} ${recipient.user?.lastName} (${recipient.user?.country})`
+                  : `${recipient.businessName} - ${recipient.user?.firstName} ${recipient.user?.lastName}`
+                }
               </SelectItem>
             ))}
           </SelectContent>
@@ -761,7 +877,9 @@ function PointDistributionForm({
           value={form.points}
           onChange={(e) => setForm({...form, points: e.target.value})}
           placeholder="Enter points to distribute"
+          min="1"
           required
+          data-testid="input-points-amount"
         />
       </div>
 
@@ -770,121 +888,15 @@ function PointDistributionForm({
         <Textarea
           value={form.description}
           onChange={(e) => setForm({...form, description: e.target.value})}
-          placeholder="Reason for distribution"
+          placeholder="Reason for point distribution"
           required
+          data-testid="textarea-points-description"
         />
       </div>
 
-      <div className="flex justify-end space-x-2">
-        <Button type="button" variant="outline" onClick={onSuccess}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={mutation.isPending}>
-          {mutation.isPending ? "Distributing..." : "Distribute Points"}
-        </Button>
-      </div>
+      <Button type="submit" disabled={isLoading} className="w-full" data-testid="button-submit-points">
+        {isLoading ? "Distributing..." : "Distribute Points"}
+      </Button>
     </form>
-  );
-}
-
-// Chat Interface Component
-function ChatInterface({
-  currentUser,
-  socket,
-  chatUsers,
-  selectedUser,
-  onSelectUser,
-  messages,
-  newMessage,
-  setNewMessage,
-  onSendMessage
-}: any) {
-  return (
-    <div className="grid grid-cols-3 gap-4 h-96">
-      {/* Users List */}
-      <div className="border-r pr-4">
-        <h3 className="font-semibold mb-4">Available Users</h3>
-        <ScrollArea className="h-80">
-          {chatUsers?.map((user: any) => (
-            <div
-              key={user.id}
-              className={`p-3 rounded-lg cursor-pointer mb-2 ${
-                selectedUser?.id === user.id ? 'bg-blue-100' : 'hover:bg-gray-100'
-              }`}
-              onClick={() => onSelectUser(user)}
-            >
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                  {user.role === 'merchant' ? '🏪' : user.role?.includes('admin') ? '👑' : '👤'}
-                </div>
-                <div>
-                  <p className="font-medium text-sm">{user.firstName} {user.lastName}</p>
-                  <p className="text-xs text-gray-600">{user.role}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </ScrollArea>
-      </div>
-
-      {/* Chat Area */}
-      <div className="col-span-2">
-        {selectedUser ? (
-          <>
-            <div className="border-b pb-2 mb-4">
-              <h3 className="font-semibold">
-                Chat with {selectedUser.firstName} {selectedUser.lastName}
-              </h3>
-              <p className="text-sm text-gray-600">{selectedUser.role}</p>
-            </div>
-
-            <ScrollArea className="h-64 mb-4">
-              <div className="space-y-2">
-                {messages
-                  .filter((msg: any) => 
-                    (msg.senderId === currentUser.id && msg.receiverId === selectedUser.id) ||
-                    (msg.senderId === selectedUser.id && msg.receiverId === currentUser.id)
-                  )
-                  .map((message: any) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.senderId === currentUser.id ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-xs p-3 rounded-lg ${
-                          message.senderId === currentUser.id
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-900'
-                        }`}
-                      >
-                        <p className="text-sm">{message.message}</p>
-                        <p className="text-xs opacity-75 mt-1">
-                          {new Date(message.createdAt).toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </ScrollArea>
-
-            <div className="flex space-x-2">
-              <Input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type your message..."
-                onKeyPress={(e) => e.key === 'Enter' && onSendMessage()}
-              />
-              <Button onClick={onSendMessage}>
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            Select a user to start chatting
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
