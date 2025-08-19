@@ -82,6 +82,27 @@ export interface IStorage {
   // Analytics
   getGlobalStats(): Promise<any>;
   getCountryStats(country: string): Promise<any>;
+  
+  // Admin management
+  getAdmin(userId: string): Promise<Admin | undefined>;
+  createAdmin(admin: InsertAdmin): Promise<Admin>;
+  updateAdmin(userId: string, admin: Partial<Admin>): Promise<Admin>;
+  getAdminsByType(adminType: 'global' | 'local'): Promise<Admin[]>;
+  getAdminsByCountry(country: string): Promise<Admin[]>;
+  
+  // Point distribution
+  getPointDistributions(userId?: string): Promise<PointDistribution[]>;
+  createPointDistribution(distribution: InsertPointDistribution): Promise<PointDistribution>;
+  updatePointDistribution(id: string, distribution: Partial<PointDistribution>): Promise<PointDistribution>;
+  
+  // Chat functionality
+  getChatMessages(senderId: string, receiverId: string): Promise<ChatMessage[]>;
+  getAllChatMessages(userId: string): Promise<ChatMessage[]>;
+  createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  updateChatMessage(id: string, message: Partial<ChatMessage>): Promise<ChatMessage>;
+  getChatUsers(currentUserId: string): Promise<User[]>;
+  getChatRooms(userId: string): Promise<ChatRoom[]>;
+  createChatRoom(room: InsertChatRoom): Promise<ChatRoom>;
 }
 
 export class MemStorage implements IStorage {
@@ -97,6 +118,10 @@ export class MemStorage implements IStorage {
   private cartItems: Map<string, CartItem> = new Map();
   private wishlistItems: Map<string, WishlistItem> = new Map();
   private reviews: Map<string, Review> = new Map();
+  private admins: Map<string, Admin> = new Map();
+  private pointDistributions: Map<string, PointDistribution> = new Map();
+  private chatMessages: Map<string, ChatMessage> = new Map();
+  private chatRooms: Map<string, ChatRoom> = new Map();
 
   constructor() {
     this.initializeData();
@@ -132,7 +157,57 @@ export class MemStorage implements IStorage {
       await this.createBrand({ ...brand, description: `${brand.name} products`, isActive: true });
     }
 
-    // Create admin user
+    // Create global admin user
+    const globalAdminUser = await this.createUser({
+      username: "globaladmin",
+      email: "global@komarce.com",
+      password: await bcrypt.hash("global123", 10),
+      firstName: "Global",
+      lastName: "Admin",
+      role: "global_admin",
+      country: "BD",
+      isActive: true
+    });
+
+    // Create global admin profile
+    await this.createAdmin({
+      userId: globalAdminUser.id,
+      adminType: "global",
+      pointsBalance: 1000000,
+      totalPointsReceived: 1000000,
+      totalPointsDistributed: 0,
+      permissions: ["all"],
+      isActive: true
+    });
+
+    // Create local admin users for different countries
+    const countries = ["BD", "MY", "AE", "PH"];
+    for (const country of countries) {
+      const localAdminUser = await this.createUser({
+        username: `local${country.toLowerCase()}`,
+        email: `local.${country.toLowerCase()}@komarce.com`,
+        password: await bcrypt.hash("local123", 10),
+        firstName: `Local ${country}`,
+        lastName: "Admin",
+        role: "local_admin",
+        country: country,
+        isActive: true
+      });
+
+      // Create local admin profile
+      await this.createAdmin({
+        userId: localAdminUser.id,
+        adminType: "local",
+        country: country,
+        pointsBalance: 50000,
+        totalPointsReceived: 50000,
+        totalPointsDistributed: 0,
+        permissions: ["manage_merchants", "distribute_points", "view_analytics"],
+        isActive: true
+      });
+    }
+
+    // Create legacy admin user for backward compatibility
     const adminUser = await this.createUser({
       username: "admin",
       email: "admin@komarce.com",
@@ -801,6 +876,154 @@ export class MemStorage implements IStorage {
       totalSales: totalSales.toFixed(2),
       totalOrders: countryOrders.length
     };
+  }
+
+  // Admin management methods
+  async getAdmin(userId: string): Promise<Admin | undefined> {
+    return Array.from(this.admins.values()).find(admin => admin.userId === userId);
+  }
+
+  async createAdmin(admin: InsertAdmin): Promise<Admin> {
+    const id = crypto.randomUUID();
+    const newAdmin: Admin = {
+      id,
+      createdAt: new Date(),
+      ...admin
+    };
+    this.admins.set(id, newAdmin);
+    return newAdmin;
+  }
+
+  async updateAdmin(userId: string, admin: Partial<Admin>): Promise<Admin> {
+    const existingAdmin = await this.getAdmin(userId);
+    if (!existingAdmin) {
+      throw new Error("Admin not found");
+    }
+    const updated = { ...existingAdmin, ...admin };
+    this.admins.set(existingAdmin.id, updated);
+    return updated;
+  }
+
+  async getAdminsByType(adminType: 'global' | 'local'): Promise<Admin[]> {
+    return Array.from(this.admins.values()).filter(admin => admin.adminType === adminType);
+  }
+
+  async getAdminsByCountry(country: string): Promise<Admin[]> {
+    return Array.from(this.admins.values()).filter(admin => admin.country === country);
+  }
+
+  // Point distribution methods
+  async getPointDistributions(userId?: string): Promise<PointDistribution[]> {
+    const distributions = Array.from(this.pointDistributions.values());
+    if (userId) {
+      return distributions.filter(d => d.fromUserId === userId || d.toUserId === userId);
+    }
+    return distributions;
+  }
+
+  async createPointDistribution(distribution: InsertPointDistribution): Promise<PointDistribution> {
+    const id = crypto.randomUUID();
+    const newDistribution: PointDistribution = {
+      id,
+      createdAt: new Date(),
+      ...distribution
+    };
+    this.pointDistributions.set(id, newDistribution);
+    return newDistribution;
+  }
+
+  async updatePointDistribution(id: string, distribution: Partial<PointDistribution>): Promise<PointDistribution> {
+    const existing = this.pointDistributions.get(id);
+    if (!existing) {
+      throw new Error("Point distribution not found");
+    }
+    const updated = { ...existing, ...distribution };
+    this.pointDistributions.set(id, updated);
+    return updated;
+  }
+
+  // Chat functionality methods
+  async getChatMessages(senderId: string, receiverId: string): Promise<ChatMessage[]> {
+    return Array.from(this.chatMessages.values()).filter(msg => 
+      (msg.senderId === senderId && msg.receiverId === receiverId) ||
+      (msg.senderId === receiverId && msg.receiverId === senderId)
+    ).sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
+  }
+
+  async getAllChatMessages(userId: string): Promise<ChatMessage[]> {
+    return Array.from(this.chatMessages.values()).filter(msg => 
+      msg.senderId === userId || msg.receiverId === userId
+    ).sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  async createChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
+    const id = crypto.randomUUID();
+    const newMessage: ChatMessage = {
+      id,
+      createdAt: new Date(),
+      ...message
+    };
+    this.chatMessages.set(id, newMessage);
+    return newMessage;
+  }
+
+  async updateChatMessage(id: string, message: Partial<ChatMessage>): Promise<ChatMessage> {
+    const existing = this.chatMessages.get(id);
+    if (!existing) {
+      throw new Error("Chat message not found");
+    }
+    const updated = { ...existing, ...message };
+    this.chatMessages.set(id, updated);
+    return updated;
+  }
+
+  async getChatUsers(currentUserId: string): Promise<User[]> {
+    const currentUser = this.users.get(currentUserId);
+    if (!currentUser) return [];
+
+    // Get users based on role hierarchy
+    const users: User[] = [];
+    
+    if (currentUser.role === 'global_admin') {
+      // Global admin can chat with local admins and other global admins
+      users.push(...Array.from(this.users.values()).filter(u => 
+        u.role === 'local_admin' || (u.role === 'global_admin' && u.id !== currentUserId)
+      ));
+    } else if (currentUser.role === 'local_admin') {
+      // Local admin can chat with global admins and merchants in their country
+      users.push(...Array.from(this.users.values()).filter(u => 
+        u.role === 'global_admin' || 
+        (u.role === 'merchant' && u.country === currentUser.country)
+      ));
+    } else if (currentUser.role === 'merchant') {
+      // Merchant can chat with local admin of their country and customers
+      users.push(...Array.from(this.users.values()).filter(u => 
+        (u.role === 'local_admin' && u.country === currentUser.country) ||
+        u.role === 'customer'
+      ));
+    } else if (currentUser.role === 'customer') {
+      // Customer can chat with merchants
+      users.push(...Array.from(this.users.values()).filter(u => u.role === 'merchant'));
+    }
+
+    return users;
+  }
+
+  async getChatRooms(userId: string): Promise<ChatRoom[]> {
+    return Array.from(this.chatRooms.values()).filter(room => 
+      Array.isArray(room.participants) && room.participants.includes(userId)
+    );
+  }
+
+  async createChatRoom(room: InsertChatRoom): Promise<ChatRoom> {
+    const id = crypto.randomUUID();
+    const newRoom: ChatRoom = {
+      id,
+      createdAt: new Date(),
+      ...room
+    };
+    this.chatRooms.set(id, newRoom);
+    return newRoom;
   }
 }
 

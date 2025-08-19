@@ -1,7 +1,16 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { Server as SocketIOServer } from "socket.io";
 import { storage } from "./storage";
-import { insertUserSchema, insertProductSchema, insertOrderSchema, insertRewardTransactionSchema } from "@shared/schema";
+import { 
+  insertUserSchema, 
+  insertProductSchema, 
+  insertOrderSchema, 
+  insertRewardTransactionSchema,
+  insertPointDistributionSchema,
+  insertChatMessageSchema,
+  insertAdminSchema
+} from "@shared/schema";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -962,6 +971,300 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin Portal API Routes
+  
+  // Admin login
+  app.post('/api/admin/login', async (req, res) => {
+    try {
+      const { email, password, adminType } = req.body;
+      
+      const user = await storage.getUserByEmail(email);
+      if (!user || !await bcrypt.compare(password, user.password)) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      
+      if (adminType === 'global' && user.role !== 'global_admin') {
+        return res.status(403).json({ message: 'Not authorized as global admin' });
+      }
+      
+      if (adminType === 'local' && user.role !== 'local_admin') {
+        return res.status(403).json({ message: 'Not authorized as local admin' });
+      }
+      
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+      
+      res.json({ user, token });
+    } catch (error) {
+      console.error('Admin login error:', error);
+      res.status(500).json({ message: 'Login failed' });
+    }
+  });
+
+  // Get admin profile
+  app.get('/api/admin/profile', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
+    try {
+      const admin = await storage.getAdmin(req.user.userId);
+      if (!admin) {
+        return res.status(404).json({ message: 'Admin profile not found' });
+      }
+      res.json(admin);
+    } catch (error) {
+      console.error('Get admin profile error:', error);
+      res.status(500).json({ message: 'Failed to fetch admin profile' });
+    }
+  });
+
+  // Get point distributions
+  app.get('/api/admin/point-distributions', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
+    try {
+      const distributions = await storage.getPointDistributions(req.user.userId);
+      
+      // Enhance with user details
+      const enhancedDistributions = await Promise.all(distributions.map(async (dist) => {
+        const fromUser = await storage.getUser(dist.fromUserId);
+        const toUser = await storage.getUser(dist.toUserId);
+        return {
+          ...dist,
+          fromUser: fromUser ? { firstName: fromUser.firstName, lastName: fromUser.lastName, email: fromUser.email } : null,
+          toUser: toUser ? { firstName: toUser.firstName, lastName: toUser.lastName, email: toUser.email } : null
+        };
+      }));
+      
+      res.json(enhancedDistributions);
+    } catch (error) {
+      console.error('Get point distributions error:', error);
+      res.status(500).json({ message: 'Failed to fetch point distributions' });
+    }
+  });
+
+  // Distribute points
+  app.post('/api/admin/distribute-points', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
+    try {
+      const { toUserId, points, description } = req.body;
+      const distributionData = insertPointDistributionSchema.parse({
+        fromUserId: req.user.userId,
+        toUserId,
+        points,
+        description,
+        distributionType: req.user.role === 'global_admin' ? 'admin_to_admin' : 'admin_to_merchant',
+        status: 'completed'
+      });
+
+      // Update sender points balance
+      const senderAdmin = await storage.getAdmin(req.user.userId);
+      if (!senderAdmin || senderAdmin.pointsBalance < points) {
+        return res.status(400).json({ message: 'Insufficient points balance' });
+      }
+
+      await storage.updateAdmin(req.user.userId, {
+        pointsBalance: senderAdmin.pointsBalance - points,
+        totalPointsDistributed: senderAdmin.totalPointsDistributed + points
+      });
+
+      // Update receiver points balance
+      if (req.user.role === 'global_admin') {
+        // Distributing to local admin
+        const receiverAdmin = await storage.getAdmin(toUserId);
+        if (receiverAdmin) {
+          await storage.updateAdmin(toUserId, {
+            pointsBalance: receiverAdmin.pointsBalance + points,
+            totalPointsReceived: receiverAdmin.totalPointsReceived + points
+          });
+        }
+      } else {
+        // Distributing to merchant
+        const merchant = await storage.getMerchantByUserId(toUserId);
+        if (merchant) {
+          await storage.updateMerchant(merchant.id, {
+            availablePoints: Number(merchant.availablePoints) + points
+          });
+        }
+      }
+
+      const distribution = await storage.createPointDistribution(distributionData);
+      res.json(distribution);
+    } catch (error) {
+      console.error('Distribute points error:', error);
+      res.status(500).json({ message: 'Failed to distribute points' });
+    }
+  });
+
+  // Get admins list (global admin only)
+  app.get('/api/admin/admins', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const localAdmins = await storage.getAdminsByType('local');
+      
+      // Enhance with user details
+      const enhancedAdmins = await Promise.all(localAdmins.map(async (admin) => {
+        const user = await storage.getUser(admin.userId);
+        return {
+          ...admin,
+          user: user ? { firstName: user.firstName, lastName: user.lastName, email: user.email } : null
+        };
+      }));
+      
+      res.json(enhancedAdmins);
+    } catch (error) {
+      console.error('Get admins error:', error);
+      res.status(500).json({ message: 'Failed to fetch admins' });
+    }
+  });
+
+  // Get merchants list
+  app.get('/api/admin/merchants', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
+    try {
+      const merchants = await storage.getMerchants();
+      
+      // Filter by country for local admin
+      let filteredMerchants = merchants;
+      if (req.user.role === 'local_admin') {
+        const currentUser = await storage.getUser(req.user.userId);
+        filteredMerchants = [];
+        for (const merchant of merchants) {
+          const user = await storage.getUser(merchant.userId);
+          if (user?.country === currentUser?.country) {
+            filteredMerchants.push(merchant);
+          }
+        }
+      }
+      
+      // Enhance with user details
+      const enhancedMerchants = [];
+      for (const merchant of filteredMerchants) {
+        const user = await storage.getUser(merchant.userId);
+        enhancedMerchants.push({
+          ...merchant,
+          user: user ? { firstName: user.firstName, lastName: user.lastName, email: user.email, country: user.country } : null
+        });
+      }
+      
+      res.json(enhancedMerchants);
+    } catch (error) {
+      console.error('Get merchants error:', error);
+      res.status(500).json({ message: 'Failed to fetch merchants' });
+    }
+  });
+
+  // Get chat users
+  app.get('/api/admin/chat-users', authenticateToken, async (req, res) => {
+    try {
+      const users = await storage.getChatUsers(req.user.userId);
+      res.json(users);
+    } catch (error) {
+      console.error('Get chat users error:', error);
+      res.status(500).json({ message: 'Failed to fetch chat users' });
+    }
+  });
+
+  // Send message
+  app.post('/api/admin/send-message', authenticateToken, async (req, res) => {
+    try {
+      const { receiverId, message } = req.body;
+      const messageData = insertChatMessageSchema.parse({
+        senderId: req.user.userId,
+        receiverId,
+        message,
+        messageType: 'text'
+      });
+
+      const newMessage = await storage.createChatMessage(messageData);
+      
+      // Note: WebSocket will be handled by the socket.io server
+      
+      res.json(newMessage);
+    } catch (error) {
+      console.error('Send message error:', error);
+      res.status(500).json({ message: 'Failed to send message' });
+    }
+  });
+
+  // Get chat messages
+  app.get('/api/admin/chat-messages/:receiverId', authenticateToken, async (req, res) => {
+    try {
+      const { receiverId } = req.params;
+      const messages = await storage.getChatMessages(req.user.userId, receiverId);
+      res.json(messages);
+    } catch (error) {
+      console.error('Get chat messages error:', error);
+      res.status(500).json({ message: 'Failed to fetch chat messages' });
+    }
+  });
+
+  // Create HTTP server and WebSocket server
   const httpServer = createServer(app);
+  
+  // Initialize Socket.IO with the correct path
+  const io = new SocketIOServer(httpServer, {
+    path: '/ws',
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"]
+    }
+  });
+
+  // WebSocket connection handling
+  io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
+    
+    // Join user to their own room for private messages
+    socket.on('join', (userId) => {
+      socket.join(userId);
+      console.log(`User ${userId} joined room`);
+    });
+
+    // Handle sending messages
+    socket.on('sendMessage', async (data) => {
+      try {
+        const { receiverId, message } = data;
+        
+        // Get sender info from socket
+        const token = socket.handshake.auth.token || socket.handshake.query.token;
+        if (!token) return;
+        
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        
+        const messageData = insertChatMessageSchema.parse({
+          senderId: decoded.userId,
+          receiverId,
+          message,
+          messageType: 'text'
+        });
+
+        const newMessage = await storage.createChatMessage(messageData);
+        
+        // Send to receiver
+        io.to(receiverId).emit('newMessage', newMessage);
+        
+        // Confirm to sender
+        socket.emit('messageConfirmed', newMessage);
+        
+      } catch (error) {
+        console.error('Socket message error:', error);
+        socket.emit('messageError', { error: 'Failed to send message' });
+      }
+    });
+
+    // Handle message updates (read status, etc.)
+    socket.on('updateMessage', async (data) => {
+      try {
+        const { messageId, updates } = data;
+        const updatedMessage = await storage.updateChatMessage(messageId, updates);
+        
+        // Broadcast update to all participants
+        io.emit('messageUpdate', updatedMessage);
+      } catch (error) {
+        console.error('Socket message update error:', error);
+      }
+    });
+
+    socket.on('disconnect', () => {
+      console.log('User disconnected:', socket.id);
+    });
+  });
+
   return httpServer;
 }

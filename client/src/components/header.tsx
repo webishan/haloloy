@@ -102,6 +102,13 @@ export default function Header() {
               </Link>
             )}
 
+            {/* Admin Portal Link - Quick Access */}
+            <Link href="/admin-portal">
+              <Button variant="outline" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 hover:from-blue-700 hover:to-indigo-700">
+                Admin Portal
+              </Button>
+            </Link>
+
             {/* User Menu */}
             {user ? (
               <DropdownMenu>

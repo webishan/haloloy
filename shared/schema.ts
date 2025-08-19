@@ -11,7 +11,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
-  role: text("role").notNull(), // 'admin', 'merchant', 'customer'
+  role: text("role", { enum: ["customer", "merchant", "admin", "global_admin", "local_admin"] }).notNull().default("customer"),
   country: text("country").notNull().default("BD"), // BD, MY, AE, PH
   phone: text("phone"),
   address: text("address"),
@@ -184,8 +184,69 @@ export const reviews = pgTable("reviews", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Admin profiles for global and local admins
+export const admins = pgTable("admins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  adminType: text("admin_type", { enum: ["global", "local"] }).notNull(),
+  country: text("country"), // Only for local admins
+  pointsBalance: integer("points_balance").notNull().default(0),
+  totalPointsReceived: integer("total_points_received").notNull().default(0),
+  totalPointsDistributed: integer("total_points_distributed").notNull().default(0),
+  permissions: jsonb("permissions").default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Chat messages table
+export const chatMessages = pgTable("chat_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  senderId: varchar("sender_id").notNull(),
+  receiverId: varchar("receiver_id").notNull(),
+  message: text("message").notNull(),
+  messageType: text("message_type", { enum: ["text", "image", "file"] }).default("text"),
+  fileUrl: text("file_url"),
+  fileName: text("file_name"),
+  isRead: boolean("is_read").notNull().default(false),
+  isEdited: boolean("is_edited").notNull().default(false),
+  editedAt: timestamp("edited_at"),
+  replyTo: varchar("reply_to"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Chat rooms for group conversations
+export const chatRooms = pgTable("chat_rooms", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  roomType: text("room_type", { enum: ["direct", "group", "support"] }).default("direct"),
+  participants: jsonb("participants").notNull(), // Array of user IDs
+  createdBy: varchar("created_by").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  lastMessageAt: timestamp("last_message_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Point distribution tracking
+export const pointDistributions = pgTable("point_distributions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fromUserId: varchar("from_user_id").notNull(),
+  toUserId: varchar("to_user_id").notNull(),
+  points: integer("points").notNull(),
+  distributionType: text("distribution_type", { enum: ["admin_to_admin", "admin_to_merchant", "merchant_to_customer"] }).notNull(),
+  description: text("description"),
+  status: text("status", { enum: ["pending", "completed", "failed"] }).default("pending"),
+  approvedBy: varchar("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
+export const insertAdminSchema = createInsertSchema(admins).omit({ id: true, createdAt: true });
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
+export const insertChatRoomSchema = createInsertSchema(chatRooms).omit({ id: true, createdAt: true });
+export const insertPointDistributionSchema = createInsertSchema(pointDistributions).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
 export const insertBrandSchema = createInsertSchema(brands).omit({ id: true, createdAt: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true });
@@ -223,3 +284,11 @@ export type WishlistItem = typeof wishlistItems.$inferSelect;
 export type InsertWishlistItem = z.infer<typeof insertWishlistItemSchema>;
 export type Review = typeof reviews.$inferSelect;
 export type InsertReview = z.infer<typeof insertReviewSchema>;
+export type Admin = typeof admins.$inferSelect;
+export type InsertAdmin = z.infer<typeof insertAdminSchema>;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type ChatRoom = typeof chatRooms.$inferSelect;
+export type InsertChatRoom = z.infer<typeof insertChatRoomSchema>;
+export type PointDistribution = typeof pointDistributions.$inferSelect;
+export type InsertPointDistribution = z.infer<typeof insertPointDistributionSchema>;
