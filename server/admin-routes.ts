@@ -169,7 +169,7 @@ export function setupAdminRoutes(app: Express) {
       
       // Get current admin's points balance
       const currentAdmin = await storage.getAdmin(req.user.userId);
-      const globalPointsBalance = currentAdmin?.pointsBalance || 0;
+      const adminPointsBalance = currentAdmin?.pointsBalance || 0;
 
       const dashboardData = {
         overview: {
@@ -180,7 +180,8 @@ export function setupAdminRoutes(app: Express) {
           activeMerchants: merchants.filter(m => m.isActive).length,
           newMerchantsThisMonth: lastMonthMerchants,
           newCustomersThisMonth: lastMonthCustomers,
-          globalPointsBalance: isGlobal ? globalPointsBalance : undefined
+          globalPointsBalance: isGlobal ? adminPointsBalance : undefined,
+          localPointsBalance: !isGlobal ? adminPointsBalance : undefined
         },
         
         merchantAnalytics: {
@@ -305,13 +306,25 @@ export function setupAdminRoutes(app: Express) {
       
       // Update recipient's balance
       if (toUserType === 'local_admin') {
-        const receiverAdmin = await storage.getAdmin(toUserId);
-        if (receiverAdmin) {
-          await storage.updateAdmin(toUserId, {
-            pointsBalance: (receiverAdmin.pointsBalance || 0) + points,
-            totalPointsReceived: (receiverAdmin.totalPointsReceived || 0) + points
+        let receiverAdmin = await storage.getAdmin(toUserId);
+        if (!receiverAdmin) {
+          // Create local admin record if it doesn't exist
+          const toUser = await storage.getUser(toUserId);
+          receiverAdmin = await storage.createAdmin({
+            userId: toUserId,
+            adminType: 'local',
+            country: toUser?.country || 'Unknown',
+            pointsBalance: 0,
+            totalPointsReceived: 0,
+            totalPointsDistributed: 0,
+            isActive: true
           });
         }
+        
+        await storage.updateAdmin(toUserId, {
+          pointsBalance: (receiverAdmin.pointsBalance || 0) + points,
+          totalPointsReceived: (receiverAdmin.totalPointsReceived || 0) + points
+        });
       } else if (toUserType === 'merchant') {
         const merchant = await storage.getMerchantByUserId(toUserId);
         if (merchant) {

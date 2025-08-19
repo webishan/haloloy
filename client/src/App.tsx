@@ -19,6 +19,8 @@ import CustomerDashboard from "@/pages/customer-dashboard";
 import MerchantDashboard from "@/pages/merchant-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminPortal from "@/pages/admin-portal";
+import GlobalAdminPortal from "@/pages/global-admin-portal";
+import LocalAdminPortal from "@/pages/local-admin-portal";
 import MerchantPanel from "@/pages/merchant-panel";
 import Header from "@/components/header";
 import Footer from "@/components/footer";
@@ -80,6 +82,8 @@ function Router() {
             </AuthGuard>
           </Route>
           <Route path="/admin-portal" component={AdminPortal} />
+          <Route path="/global-admin-portal" component={GlobalAdminPortal} />
+          <Route path="/local-admin-portal" component={LocalAdminPortal} />
           <Route path="/merchant-panel" component={MerchantPanel} />
           <Route component={NotFound} />
         </Switch>
