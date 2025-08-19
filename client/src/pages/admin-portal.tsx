@@ -110,20 +110,32 @@ export default function AdminPortal() {
   // Login mutation
   const loginMutation = useMutation({
     mutationFn: async (credentials: typeof loginForm) => {
-      const response = await apiRequest('/api/admin/login', {
+      const response = await fetch('/api/admin/login', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(credentials)
       });
-      return response;
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Login failed');
+      }
+      
+      return await response.json();
     },
     onSuccess: (data) => {
+      console.log('Login successful:', data);
       setCurrentUser(data.user);
       setAdminType(data.user.role === 'global_admin' ? 'global' : 'local');
       setIsAuthenticated(true);
       localStorage.setItem('adminToken', data.token);
+      localStorage.setItem('adminUser', JSON.stringify(data.user));
       toast({ title: "Login Successful", description: `Welcome ${data.user.firstName}!` });
     },
     onError: (error: Error) => {
+      console.error('Login error:', error);
       toast({ 
         title: "Login Failed", 
         description: error.message || "Invalid credentials",
