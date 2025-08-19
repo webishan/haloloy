@@ -235,6 +235,34 @@ export default function AdminPortal() {
     retry: false
   });
 
+  // Manual point addition mutation (global admin only)
+  const addPointsMutation = useMutation({
+    mutationFn: async (data: { points: number; description: string }) => {
+      const response = await fetch('/api/admin/add-points', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        },
+        body: JSON.stringify(data)
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Points Added", description: "Points have been added to your balance successfully!" });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Add Points Failed", description: error.message, variant: "destructive" });
+    }
+  });
+
   // Point distribution mutation
   const distributePointsMutation = useMutation({
     mutationFn: async (data: { toUserId: string; points: number; description: string }) => {

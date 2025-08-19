@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { storage } from "./storage";
 import { setupAdminRoutes } from "./admin-routes";
+import { setupMerchantRoutes } from "./merchant-routes";
 import { 
   insertUserSchema, 
   insertProductSchema, 
@@ -974,6 +975,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Set up admin routes
   setupAdminRoutes(app);
+  setupMerchantRoutes(app);
 
   // Admin Portal API Routes
   

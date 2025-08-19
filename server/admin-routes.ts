@@ -32,6 +32,50 @@ function authorizeRole(roles: string[]) {
 }
 
 export function setupAdminRoutes(app: Express) {
+  // Only global admins can manually add points to their own balance
+  app.post('/api/admin/add-points', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { points, description } = req.body;
+      
+      if (!points || points <= 0) {
+        return res.status(400).json({ message: 'Invalid points amount' });
+      }
+      
+      const globalAdminId = req.user.userId;
+      const globalAdmin = await storage.getAdmin(globalAdminId);
+      
+      if (!globalAdmin) {
+        return res.status(404).json({ message: 'Global admin not found' });
+      }
+      
+      // Update global admin's points balance
+      await storage.updateAdmin(globalAdminId, {
+        pointsBalance: (globalAdmin.pointsBalance || 0) + points,
+        totalPointsReceived: (globalAdmin.totalPointsReceived || 0) + points
+      });
+      
+      // Create a record of manual point addition
+      await storage.createPointDistribution({
+        fromUserId: 'system',
+        toUserId: globalAdminId,
+        points,
+        description: description || 'Manual points addition by global admin',
+        distributionType: 'manual_addition',
+        toUserType: 'global_admin',
+        status: 'completed'
+      });
+      
+      res.json({
+        message: 'Points added successfully',
+        newBalance: (globalAdmin.pointsBalance || 0) + points
+      });
+      
+    } catch (error) {
+      console.error('Add points error:', error);
+      res.status(500).json({ message: 'Failed to add points' });
+    }
+  });
+
   // Comprehensive dashboard with analytics
   app.get('/api/admin/dashboard', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
     try {

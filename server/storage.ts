@@ -103,6 +103,8 @@ export interface IStorage {
   getChatUsers(currentUserId: string): Promise<User[]>;
   getChatRooms(userId: string): Promise<ChatRoom[]>;
   createChatRoom(room: InsertChatRoom): Promise<ChatRoom>;
+  getOrdersByMerchant(merchantId: string): Promise<Order[]>;
+  getProductsByMerchant(merchantId: string): Promise<Product[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -1007,6 +1009,14 @@ export class MemStorage implements IStorage {
     }
 
     return users;
+  }
+
+  async getOrdersByMerchant(merchantId: string): Promise<Order[]> {
+    return Array.from(this.orders.values()).filter(order => order.merchantId === merchantId);
+  }
+
+  async getProductsByMerchant(merchantId: string): Promise<Product[]> {
+    return Array.from(this.products.values()).filter(product => product.merchantId === merchantId);
   }
 
   async getChatRooms(userId: string): Promise<ChatRoom[]> {
