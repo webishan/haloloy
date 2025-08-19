@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { storage } from "./storage";
+import { setupAdminRoutes } from "./admin-routes";
 import { 
   insertUserSchema, 
   insertProductSchema, 
@@ -971,6 +972,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Set up admin routes
+  setupAdminRoutes(app);
+
   // Admin Portal API Routes
   
   // Admin login
@@ -1206,41 +1210,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // WebSocket connection handling
+  // Enhanced WebSocket connection handling
+  const connectedUsers = new Map();
+  
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
     
-    // Join user to their own room for private messages
-    socket.on('join', (userId) => {
-      socket.join(userId);
-      console.log(`User ${userId} joined room`);
+    // Handle user authentication
+    socket.on('authenticate', async (data) => {
+      try {
+        const { userId, token } = data;
+        
+        if (token) {
+          const decoded = jwt.verify(token, JWT_SECRET) as any;
+          socket.userId = decoded.userId;
+          socket.userRole = decoded.role;
+        } else if (userId) {
+          socket.userId = userId;
+        }
+        
+        if (socket.userId) {
+          socket.join(socket.userId);
+          connectedUsers.set(socket.userId, socket.id);
+          console.log(`User ${socket.userId} authenticated and joined room`);
+          socket.emit('authenticated', { userId: socket.userId, role: socket.userRole });
+        }
+      } catch (error) {
+        console.error('Socket authentication error:', error);
+        socket.emit('authError', { error: 'Authentication failed' });
+      }
     });
 
-    // Handle sending messages
+    // Handle sending messages with enhanced features
     socket.on('sendMessage', async (data) => {
       try {
         const { receiverId, message } = data;
         
-        // Get sender info from socket
-        const token = socket.handshake.auth.token || socket.handshake.query.token;
-        if (!token) return;
+        if (!socket.userId) {
+          socket.emit('messageError', { error: 'Not authenticated' });
+          return;
+        }
         
-        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        if (!receiverId || !message?.trim()) {
+          socket.emit('messageError', { error: 'Invalid message data' });
+          return;
+        }
         
-        const messageData = insertChatMessageSchema.parse({
-          senderId: decoded.userId,
+        const messageData = {
+          senderId: socket.userId,
           receiverId,
-          message,
-          messageType: 'text'
-        });
+          message: message.trim(),
+          messageType: 'text',
+          isRead: false
+        };
 
         const newMessage = await storage.createChatMessage(messageData);
         
-        // Send to receiver
-        io.to(receiverId).emit('newMessage', newMessage);
+        // Get sender info for enhanced message display
+        const sender = await storage.getUser(socket.userId);
+        const enhancedMessage = {
+          ...newMessage,
+          senderName: sender ? `${sender.firstName} ${sender.lastName}` : 'Unknown User',
+          senderRole: sender?.role
+        };
+        
+        // Send to receiver if online
+        io.to(receiverId).emit('newMessage', enhancedMessage);
         
         // Confirm to sender
-        socket.emit('messageConfirmed', newMessage);
+        socket.emit('messageConfirmed', enhancedMessage);
+        
+        console.log(`Message sent: ${socket.userId} -> ${receiverId}`);
         
       } catch (error) {
         console.error('Socket message error:', error);
@@ -1248,23 +1288,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Handle message updates (read status, etc.)
-    socket.on('updateMessage', async (data) => {
-      try {
-        const { messageId, updates } = data;
-        const updatedMessage = await storage.updateChatMessage(messageId, updates);
-        
-        // Broadcast update to all participants
-        io.emit('messageUpdate', updatedMessage);
-      } catch (error) {
-        console.error('Socket message update error:', error);
+    // Handle typing indicators
+    socket.on('typing', (data) => {
+      const { receiverId, isTyping } = data;
+      if (socket.userId && receiverId) {
+        io.to(receiverId).emit('userTyping', {
+          senderId: socket.userId,
+          isTyping: isTyping || false
+        });
       }
     });
 
+    // Handle message read status
+    socket.on('markAsRead', async (data) => {
+      try {
+        const { messageId } = data;
+        if (messageId && socket.userId) {
+          await storage.updateChatMessage(messageId, { isRead: true });
+          
+          const message = await storage.getChatMessage(messageId);
+          if (message) {
+            io.to(message.senderId).emit('messageRead', { 
+              messageId, 
+              readBy: socket.userId 
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Mark as read error:', error);
+      }
+    });
+
+    // Get online users
+    socket.on('getOnlineUsers', () => {
+      const onlineUsers = Array.from(connectedUsers.keys());
+      socket.emit('onlineUsers', onlineUsers);
+    });
+
+    // Handle disconnect
     socket.on('disconnect', () => {
       console.log('User disconnected:', socket.id);
+      if (socket.userId) {
+        connectedUsers.delete(socket.userId);
+        socket.broadcast.emit('userOffline', socket.userId);
+      }
     });
   });
 
+  // Make io available globally for admin routes
+  (global as any).socketIO = io;
+
   return httpServer;
 }
+
+// Export Socket.IO instance for external use
+export let io: SocketIOServer;

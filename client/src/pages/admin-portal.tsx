@@ -77,27 +77,70 @@ export default function AdminPortal() {
     }
   }, []);
 
-  // Initialize WebSocket
+  // Initialize WebSocket with proper authentication
   useEffect(() => {
     if (isAuthenticated && currentUser) {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const wsUrl = `${protocol}//${window.location.host}`;
+      const token = localStorage.getItem('adminToken');
+      
       const newSocket = io(wsUrl, {
+        path: '/ws',
+        auth: { token },
         query: { userId: currentUser.id }
       });
 
       newSocket.on('connect', () => {
         console.log('Connected to chat server');
+        // Authenticate with the server
+        newSocket.emit('authenticate', { 
+          userId: currentUser.id, 
+          token 
+        });
+      });
+
+      newSocket.on('authenticated', (data) => {
+        console.log('Socket authenticated:', data);
+        toast({ title: "Chat Connected", description: "Real-time chat is now active" });
+      });
+
+      newSocket.on('authError', (error) => {
+        console.error('Socket auth error:', error);
+        toast({ title: "Chat Error", description: "Failed to connect to chat", variant: "destructive" });
       });
 
       newSocket.on('newMessage', (message: ChatMessage) => {
         setChatMessages(prev => [...prev, message]);
-        toast({ title: "New Message", description: `Message from ${message.senderName}` });
+        toast({ 
+          title: "New Message", 
+          description: `Message from ${message.senderName}: ${message.message.slice(0, 50)}...` 
+        });
+      });
+
+      newSocket.on('messageConfirmed', (message: ChatMessage) => {
+        setChatMessages(prev => [...prev, message]);
+      });
+
+      newSocket.on('messageError', (error) => {
+        console.error('Message error:', error);
+        toast({ title: "Message Failed", description: error.error, variant: "destructive" });
+      });
+
+      newSocket.on('userTyping', (data) => {
+        // Handle typing indicators if needed
+        console.log('User typing:', data);
+      });
+
+      newSocket.on('messageRead', (data) => {
+        // Handle read receipts if needed
+        console.log('Message read:', data);
       });
 
       setSocket(newSocket);
 
-      return () => newSocket.close();
+      return () => {
+        newSocket.disconnect();
+      };
     }
   }, [isAuthenticated, currentUser]);
 
@@ -139,11 +182,12 @@ export default function AdminPortal() {
     }
   });
 
-  // Data queries
-  const { data: dashboardData } = useQuery({
+  // Data queries with error handling
+  const { data: dashboardData, isLoading: isDashboardLoading } = useQuery({
     queryKey: ['/api/admin/dashboard'],
     enabled: isAuthenticated,
-    retry: false
+    retry: false,
+    refetchInterval: 30000 // Refresh every 30 seconds
   });
 
   const { data: adminsList } = useQuery({
@@ -246,13 +290,16 @@ export default function AdminPortal() {
   const handleSendMessage = () => {
     if (!newMessage.trim() || !selectedChatUser) return;
     
-    sendMessageMutation.mutate({
-      receiverId: selectedChatUser.id,
-      message: newMessage.trim()
-    });
-
+    // Send via WebSocket for real-time delivery
     if (socket) {
       socket.emit('sendMessage', {
+        receiverId: selectedChatUser.id,
+        message: newMessage.trim()
+      });
+      setNewMessage(""); // Clear input immediately for better UX
+    } else {
+      // Fallback to HTTP API if socket not available
+      sendMessageMutation.mutate({
         receiverId: selectedChatUser.id,
         message: newMessage.trim()
       });
@@ -423,7 +470,12 @@ export default function AdminPortal() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Merchants</p>
-                      <p className="text-3xl font-bold text-blue-600">{dashboardData?.totalMerchants || 0}</p>
+                      <p className="text-3xl font-bold text-blue-600">
+                        {isDashboardLoading ? "..." : (dashboardData?.overview?.totalMerchants || 0)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        +{dashboardData?.overview?.newMerchantsThisMonth || 0} this month
+                      </p>
                     </div>
                     <Star className="w-8 h-8 text-blue-500" />
                   </div>
@@ -435,7 +487,12 @@ export default function AdminPortal() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Customers</p>
-                      <p className="text-3xl font-bold text-green-600">{dashboardData?.totalCustomers || 0}</p>
+                      <p className="text-3xl font-bold text-green-600">
+                        {isDashboardLoading ? "..." : (dashboardData?.overview?.totalCustomers || 0)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        +{dashboardData?.overview?.newCustomersThisMonth || 0} this month
+                      </p>
                     </div>
                     <Users className="w-8 h-8 text-green-500" />
                   </div>
@@ -447,7 +504,12 @@ export default function AdminPortal() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Distributed</p>
-                      <p className="text-3xl font-bold text-purple-600">{dashboardData?.totalPointsDistributed || 0}</p>
+                      <p className="text-3xl font-bold text-purple-600">
+                        {isDashboardLoading ? "..." : (dashboardData?.overview?.totalPointsDistributed || 0)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Across all channels
+                      </p>
                     </div>
                     <Award className="w-8 h-8 text-purple-500" />
                   </div>
@@ -459,9 +521,73 @@ export default function AdminPortal() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Sales</p>
-                      <p className="text-3xl font-bold text-orange-600">${dashboardData?.totalSales || 0}</p>
+                      <p className="text-3xl font-bold text-orange-600">
+                        ${isDashboardLoading ? "..." : (dashboardData?.financialMetrics?.totalSales || "0.00")}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Avg: ${dashboardData?.financialMetrics?.averageOrderValue || "0.00"} per order
+                      </p>
                     </div>
                     <TrendingUp className="w-8 h-8 text-orange-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Enhanced Analytics Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Merchant Analytics */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Merchant Distribution</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {Object.entries(dashboardData?.merchantAnalytics?.byTier || {}).map(([tier, count]) => (
+                      <div key={tier} className="flex justify-between items-center">
+                        <span className="text-sm capitalize">{tier.replace(/([A-Z])/g, ' $1').trim()}</span>
+                        <Badge variant="outline">{count as number}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex justify-between text-sm">
+                      <span>Active:</span>
+                      <span className="font-semibold text-green-600">
+                        {dashboardData?.merchantAnalytics?.totalActive || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span>Avg Points:</span>
+                      <span className="font-semibold">
+                        {dashboardData?.merchantAnalytics?.averagePointsBalance || "0"}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Customer Analytics */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Customer Tiers</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {Object.entries(dashboardData?.customerAnalytics?.byTier || {}).map(([tier, count]) => (
+                      <div key={tier} className="flex justify-between items-center">
+                        <span className="text-sm">{tier}</span>
+                        <Badge variant={tier === 'Diamond' ? 'default' : 'secondary'}>{count as number}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex justify-between text-sm">
+                      <span>Total Points:</span>
+                      <span className="font-semibold text-purple-600">
+                        {dashboardData?.customerAnalytics?.totalActivePoints?.toLocaleString() || "0"}
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -477,22 +603,37 @@ export default function AdminPortal() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
-                      <TableHead>From</TableHead>
-                      <TableHead>To</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead>Points</TableHead>
                       <TableHead>Description</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pointDistributions?.slice(0, 5).map((distribution: any) => (
+                    {dashboardData?.recentActivity?.recentDistributions?.map((distribution: any) => (
                       <TableRow key={distribution.id}>
                         <TableCell>{new Date(distribution.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell>{distribution.fromUserName}</TableCell>
-                        <TableCell>{distribution.toUserName}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {distribution.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="font-semibold text-green-600">+{distribution.points}</TableCell>
-                        <TableCell>{distribution.description}</TableCell>
+                        <TableCell className="truncate max-w-xs">{distribution.description}</TableCell>
+                        <TableCell>
+                          <Badge variant="default" className="text-xs">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Completed
+                          </Badge>
+                        </TableCell>
                       </TableRow>
-                    ))}
+                    )) || (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-gray-500 py-8">
+                          No recent distributions found
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
