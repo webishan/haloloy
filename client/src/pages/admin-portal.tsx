@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +58,12 @@ export default function AdminPortal() {
     email: "",
     password: "",
     adminType: "global" as "global" | "local"
+  });
+
+  // Points form state
+  const [addPointsForm, setAddPointsForm] = useState({
+    points: "",
+    description: ""
   });
 
   // Check authentication on mount
@@ -356,6 +362,20 @@ export default function AdminPortal() {
     }
   };
 
+  const handleAddPoints = () => {
+    if (!addPointsForm.points || !addPointsForm.description) {
+      toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
+      return;
+    }
+    
+    addPointsMutation.mutate({
+      points: parseInt(addPointsForm.points),
+      description: addPointsForm.description
+    });
+    
+    setAddPointsForm({ points: "", description: "" });
+  };
+
   // Login Form
   if (!isAuthenticated) {
     return (
@@ -485,11 +505,17 @@ export default function AdminPortal() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className={`grid w-full ${currentUser?.role === 'global_admin' ? 'grid-cols-7' : 'grid-cols-6'}`}>
             <TabsTrigger value="dashboard" data-testid="tab-dashboard">
               <BarChart3 className="w-4 h-4 mr-2" />
               Dashboard
             </TabsTrigger>
+            {currentUser?.role === 'global_admin' && (
+              <TabsTrigger value="add-points" data-testid="tab-add-points">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Points
+              </TabsTrigger>
+            )}
             <TabsTrigger value="points" data-testid="tab-points">
               <DollarSign className="w-4 h-4 mr-2" />
               Points
@@ -511,6 +537,94 @@ export default function AdminPortal() {
               Settings
             </TabsTrigger>
           </TabsList>
+
+          {/* Add Points Tab (Global Admin Only) */}
+          {currentUser?.role === 'global_admin' && (
+            <TabsContent value="add-points" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Plus className="w-5 h-5 mr-2 text-yellow-600" />
+                    Manual Points Addition
+                  </CardTitle>
+                  <CardDescription>
+                    Add points to your global balance for distribution to local admins and merchants
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <AlertCircle className="w-5 h-5 text-yellow-600 mr-2" />
+                      <div>
+                        <p className="font-semibold text-yellow-800">Global Admin Authority</p>
+                        <p className="text-sm text-yellow-700">
+                          Only global administrators can manually add points to the system. 
+                          These points will be available for distribution to local admins and merchants.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="add-points-amount">Points Amount</Label>
+                        <Input
+                          id="add-points-amount"
+                          type="number"
+                          placeholder="Enter points amount"
+                          value={addPointsForm.points}
+                          onChange={(e) => setAddPointsForm(prev => ({ ...prev, points: e.target.value }))}
+                          min="1"
+                          data-testid="input-add-points-amount"
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="add-points-description">Description</Label>
+                        <Input
+                          id="add-points-description"
+                          placeholder="Reason for adding points"
+                          value={addPointsForm.description}
+                          onChange={(e) => setAddPointsForm(prev => ({ ...prev, description: e.target.value }))}
+                          data-testid="input-add-points-description"
+                        />
+                      </div>
+
+                      <Button
+                        onClick={handleAddPoints}
+                        disabled={addPointsMutation.isPending || !addPointsForm.points || !addPointsForm.description}
+                        className="w-full"
+                        data-testid="button-add-points"
+                      >
+                        {addPointsMutation.isPending ? "Adding Points..." : "Add Points to System"}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                        <h4 className="font-semibold text-blue-800 mb-2">Current Balance</h4>
+                        <p className="text-2xl font-bold text-blue-600">
+                          {dashboardData?.overview?.globalPointsBalance?.toLocaleString() || 0} Points
+                        </p>
+                        <p className="text-sm text-blue-600 mt-1">Available for distribution</p>
+                      </div>
+
+                      <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
+                        <h4 className="font-semibold text-gray-800 mb-2">How it works:</h4>
+                        <ol className="text-sm text-gray-600 space-y-1">
+                          <li>1. Add points to your global balance</li>
+                          <li>2. Distribute points to local admins</li>
+                          <li>3. Local admins distribute to merchants</li>
+                          <li>4. Merchants use points for customers</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
