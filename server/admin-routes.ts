@@ -257,7 +257,7 @@ export function setupAdminRoutes(app: Express) {
       } else if (toUserType === 'merchant') {
         const merchant = await storage.getMerchantByUserId(toUserId);
         if (merchant) {
-          await storage.updateMerchant(merchant.id, {
+          await storage.updateMerchant(toUserId, {
             loyaltyPointsBalance: (merchant.loyaltyPointsBalance || 0) + points
           });
         }

@@ -110,7 +110,10 @@ export default function AdminPortal() {
       });
 
       newSocket.on('newMessage', (message: ChatMessage) => {
-        setChatMessages(prev => [...prev, message]);
+        // Only add message to state if it's for the current conversation
+        if (selectedChatUser && (message.senderId === selectedChatUser.id || message.receiverId === selectedChatUser.id)) {
+          setChatMessages(prev => [...prev, message]);
+        }
         toast({ 
           title: "New Message", 
           description: `Message from ${message.senderName}: ${message.message.slice(0, 50)}...` 
@@ -118,7 +121,10 @@ export default function AdminPortal() {
       });
 
       newSocket.on('messageConfirmed', (message: ChatMessage) => {
-        setChatMessages(prev => [...prev, message]);
+        // Only add message to state if it's for the current conversation
+        if (selectedChatUser && (message.senderId === selectedChatUser.id || message.receiverId === selectedChatUser.id)) {
+          setChatMessages(prev => [...prev, message]);
+        }
       });
 
       newSocket.on('messageError', (error) => {
@@ -142,7 +148,7 @@ export default function AdminPortal() {
         newSocket.disconnect();
       };
     }
-  }, [isAuthenticated, currentUser]);
+  }, [isAuthenticated, currentUser, selectedChatUser]);
 
   // Login mutation
   const loginMutation = useMutation({
@@ -214,6 +220,21 @@ export default function AdminPortal() {
     retry: false
   });
 
+  // Fetch chat messages for selected user
+  const { data: messagesForSelectedUser = [], refetch: refetchMessages } = useQuery({
+    queryKey: ['/api/admin/chat-messages', selectedChatUser?.id],
+    queryFn: async () => {
+      if (!selectedChatUser) return [];
+      const response = await fetch(`/api/admin/chat-messages?partnerId=${selectedChatUser.id}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      return response.json();
+    },
+    enabled: !!selectedChatUser,
+    retry: false
+  });
+
   // Point distribution mutation
   const distributePointsMutation = useMutation({
     mutationFn: async (data: { toUserId: string; points: number; description: string }) => {
@@ -265,6 +286,7 @@ export default function AdminPortal() {
     onSuccess: () => {
       setNewMessage("");
       queryClient.invalidateQueries({ queryKey: ['/api/admin/chat-messages'] });
+      refetchMessages();
     },
     onError: (error: Error) => {
       toast({ title: "Message Failed", description: error.message, variant: "destructive" });
