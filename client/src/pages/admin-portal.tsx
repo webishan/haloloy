@@ -337,8 +337,10 @@ export default function AdminPortal() {
     localStorage.removeItem('adminUser');
     setIsAuthenticated(false);
     setCurrentUser(null);
+    setActiveTab("dashboard");
     if (socket) {
       socket.disconnect();
+      setSocket(null);
     }
     toast({ title: "Logged Out", description: "You have been logged out successfully." });
   };
@@ -469,7 +471,10 @@ export default function AdminPortal() {
               <div>
                 <h1 className="text-xl font-bold text-gray-900">KOMARCE Admin Portal</h1>
                 <p className="text-sm text-gray-500">
-                  {currentUser?.role === 'global_admin' ? 'Global Administrator' : `Local Admin - ${currentUser?.country}`}
+                  {currentUser?.role === 'global_admin' ? 'Global Administrator' : `Local Administrator - ${currentUser?.country || 'Unknown'}`}
+                </p>
+                <p className="text-xs text-gray-400">
+                  User ID: {currentUser?.username || currentUser?.email || 'Unknown'}
                 </p>
               </div>
             </div>
@@ -488,6 +493,10 @@ export default function AdminPortal() {
                   </>
                 )}
               </Badge>
+              
+              <div className="text-xs text-gray-500">
+                Role: {currentUser?.role || 'Unknown'}
+              </div>
               
               <div className="flex items-center space-x-2 text-sm text-gray-600">
                 <span>{currentUser?.firstName} {currentUser?.lastName}</span>

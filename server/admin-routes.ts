@@ -42,14 +42,23 @@ export function setupAdminRoutes(app: Express) {
       }
       
       const globalAdminId = req.user.userId;
-      const globalAdmin = await storage.getAdmin(globalAdminId);
+      let globalAdmin = await storage.getAdmin(globalAdminId);
       
       if (!globalAdmin) {
-        return res.status(404).json({ message: 'Global admin not found' });
+        // Create admin record if it doesn't exist
+        globalAdmin = await storage.createAdmin({
+          userId: globalAdminId,
+          adminType: 'global',
+          country: 'Global',
+          pointsBalance: 0,
+          totalPointsReceived: 0,
+          totalPointsDistributed: 0,
+          isActive: true
+        });
       }
       
       // Update global admin's points balance
-      await storage.updateAdmin(globalAdminId, {
+      const updatedAdmin = await storage.updateAdmin(globalAdminId, {
         pointsBalance: (globalAdmin.pointsBalance || 0) + points,
         totalPointsReceived: (globalAdmin.totalPointsReceived || 0) + points
       });
@@ -67,7 +76,7 @@ export function setupAdminRoutes(app: Express) {
       
       res.json({
         message: 'Points added successfully',
-        newBalance: (globalAdmin.pointsBalance || 0) + points
+        newBalance: updatedAdmin.pointsBalance || (globalAdmin.pointsBalance || 0) + points
       });
       
     } catch (error) {
@@ -158,6 +167,10 @@ export function setupAdminRoutes(app: Express) {
         return created > thirtyDaysAgo;
       }).length;
       
+      // Get current admin's points balance
+      const currentAdmin = await storage.getAdmin(req.user.userId);
+      const globalPointsBalance = currentAdmin?.pointsBalance || 0;
+
       const dashboardData = {
         overview: {
           totalMerchants: merchants.length,
@@ -166,7 +179,8 @@ export function setupAdminRoutes(app: Express) {
           totalPointsDistributed,
           activeMerchants: merchants.filter(m => m.isActive).length,
           newMerchantsThisMonth: lastMonthMerchants,
-          newCustomersThisMonth: lastMonthCustomers
+          newCustomersThisMonth: lastMonthCustomers,
+          globalPointsBalance: isGlobal ? globalPointsBalance : undefined
         },
         
         merchantAnalytics: {
