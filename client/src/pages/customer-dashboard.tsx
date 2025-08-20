@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import RewardProgress from '@/components/reward-progress';
+import SecureChat from '@/components/SecureChat';
 import { 
-  LayoutDashboard, ShoppingBag, Coins, Heart, Settings, 
+  LayoutDashboard, ShoppingBag, Coins, Heart, Settings, MessageCircle,
   Package, DollarSign, Award, TrendingUp, Star, Calendar
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -118,6 +119,10 @@ export default function CustomerDashboard() {
                     <Coins className="w-5 h-5" />
                     <span>Rewards</span>
                   </button>
+                  <button onClick={() => setActiveTab('messages')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeTab === 'messages' ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-50'}`}>
+                    <MessageCircle className="w-5 h-5" />
+                    <span>Messages</span>
+                  </button>
                   <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center space-x-3 p-4 rounded-2xl transition-all text-left font-semibold text-lg ${activeTab === 'profile' ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}>
                     <Settings className="w-6 h-6" />
                     <span>Profile</span>
@@ -139,6 +144,7 @@ export default function CustomerDashboard() {
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="orders">Orders</TabsTrigger>
                 <TabsTrigger value="rewards">Rewards</TabsTrigger>
+                <TabsTrigger value="messages">Messages</TabsTrigger>
                 <TabsTrigger value="profile">Profile</TabsTrigger>
               </TabsList>
 
@@ -363,6 +369,32 @@ export default function CustomerDashboard() {
                         <Coins className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                         <p className="text-gray-500">No reward activity yet</p>
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="messages" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <MessageCircle className="w-5 h-5" />
+                      Secure Messaging
+                    </CardTitle>
+                    <p className="text-sm text-gray-600">
+                      Connect with merchants and support for assistance
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {user && (
+                      <SecureChat 
+                        currentUser={{
+                          id: user.id,
+                          name: `${user.firstName} ${user.lastName}`,
+                          role: 'customer',
+                          token: localStorage.getItem('customerToken') || ''
+                        }}
+                      />
                     )}
                   </CardContent>
                 </Card>

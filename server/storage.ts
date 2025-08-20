@@ -4,7 +4,10 @@ import {
   type Category, type InsertCategory, type Brand, type InsertBrand,
   type Order, type InsertOrder, type RewardTransaction, type InsertRewardTransaction,
   type RewardNumber, type InsertRewardNumber, type CartItem, type InsertCartItem,
-  type WishlistItem, type InsertWishlistItem, type Review, type InsertReview
+  type WishlistItem, type InsertWishlistItem, type Review, type InsertReview,
+  type Admin, type InsertAdmin, type ChatMessage, type InsertChatMessage, 
+  type ChatRoom, type InsertChatRoom, type Conversation, type InsertConversation,
+  type PointDistribution, type InsertPointDistribution
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
@@ -95,12 +98,15 @@ export interface IStorage {
   createPointDistribution(distribution: InsertPointDistribution): Promise<PointDistribution>;
   updatePointDistribution(id: string, distribution: Partial<PointDistribution>): Promise<PointDistribution>;
   
-  // Chat functionality
-  getChatMessages(senderId: string, receiverId: string): Promise<ChatMessage[]>;
-  getAllChatMessages(userId: string): Promise<ChatMessage[]>;
-  createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
-  updateChatMessage(id: string, message: Partial<ChatMessage>): Promise<ChatMessage>;
-  getChatUsers(currentUserId: string): Promise<User[]>;
+  // Enhanced secure chat functionality
+  getConversation(participant1Id: string, participant2Id: string): Promise<Conversation | undefined>;
+  createConversation(conversation: InsertConversation): Promise<Conversation>;
+  getUserConversations(userId: string, userRole: string): Promise<Conversation[]>;
+  getChatMessages(conversationId: string): Promise<ChatMessage[]>;
+  getAvailableChatUsers(currentUserId: string, currentUserRole: string): Promise<any[]>;
+  createSecureChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  markMessageAsRead(messageId: string): Promise<void>;
+  markConversationMessagesAsRead(conversationId: string, userId: string): Promise<void>;
   getChatRooms(userId: string): Promise<ChatRoom[]>;
   createChatRoom(room: InsertChatRoom): Promise<ChatRoom>;
   getOrdersByMerchant(merchantId: string): Promise<Order[]>;
@@ -122,6 +128,7 @@ export class MemStorage implements IStorage {
   private reviews: Map<string, Review> = new Map();
   private admins: Map<string, Admin> = new Map();
   private pointDistributions: Map<string, PointDistribution> = new Map();
+  private conversations: Map<string, Conversation> = new Map();
   private chatMessages: Map<string, ChatMessage> = new Map();
   private chatRooms: Map<string, ChatRoom> = new Map();
 
@@ -944,71 +951,198 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  // Chat functionality methods
-  async getChatMessages(senderId: string, receiverId: string): Promise<ChatMessage[]> {
-    return Array.from(this.chatMessages.values()).filter(msg => 
-      (msg.senderId === senderId && msg.receiverId === receiverId) ||
-      (msg.senderId === receiverId && msg.receiverId === senderId)
-    ).sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
+  // Enhanced secure chat functionality methods
+  async getConversation(participant1Id: string, participant2Id: string): Promise<Conversation | undefined> {
+    return Array.from(this.conversations.values()).find(conv => 
+      (conv.participant1Id === participant1Id && conv.participant2Id === participant2Id) ||
+      (conv.participant1Id === participant2Id && conv.participant2Id === participant1Id)
+    );
   }
 
-  async getAllChatMessages(userId: string): Promise<ChatMessage[]> {
-    return Array.from(this.chatMessages.values()).filter(msg => 
-      msg.senderId === userId || msg.receiverId === userId
-    ).sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  async createConversation(conversation: InsertConversation): Promise<Conversation> {
+    const id = crypto.randomUUID();
+    const newConversation: Conversation = {
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastMessageAt: null,
+      lastMessageId: null,
+      ...conversation
+    };
+    this.conversations.set(id, newConversation);
+    return newConversation;
   }
 
-  async createChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
+  async getUserConversations(userId: string, userRole: string): Promise<Conversation[]> {
+    return Array.from(this.conversations.values())
+      .filter(conv => 
+        (conv.participant1Id === userId && conv.participant1Role === userRole) ||
+        (conv.participant2Id === userId && conv.participant2Role === userRole)
+      )
+      .sort((a, b) => new Date(b.lastMessageAt || b.createdAt).getTime() - new Date(a.lastMessageAt || a.createdAt).getTime());
+  }
+
+  async getChatMessages(conversationId: string): Promise<ChatMessage[]> {
+    return Array.from(this.chatMessages.values())
+      .filter(msg => msg.conversationId === conversationId)
+      .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
+  }
+
+  async getAvailableChatUsers(currentUserId: string, currentUserRole: string): Promise<any[]> {
+    const users: any[] = [];
+
+    if (currentUserRole === 'global_admin') {
+      // Global admin can chat with local admins
+      const localAdmins = Array.from(this.users.values())
+        .filter(user => user.role === 'local_admin' && user.id !== currentUserId);
+      users.push(...localAdmins.map(user => ({
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+        country: user.country,
+        email: user.email,
+        isOnline: false
+      })));
+    } else if (currentUserRole === 'local_admin') {
+      // Local admin can chat with global admins and merchants in their country
+      const currentUser = this.users.get(currentUserId);
+      const globalAdmins = Array.from(this.users.values())
+        .filter(user => user.role === 'global_admin');
+      const merchants = Array.from(this.users.values())
+        .filter(user => user.role === 'merchant' && user.country === currentUser?.country);
+      
+      users.push(...globalAdmins.map(user => ({
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+        country: user.country,
+        email: user.email,
+        isOnline: false
+      })));
+      
+      users.push(...merchants.map(user => ({
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+        country: user.country,
+        email: user.email,
+        isOnline: false
+      })));
+    } else if (currentUserRole === 'merchant') {
+      // Merchant can chat with local admins in their country and customers
+      const currentUser = this.users.get(currentUserId);
+      const localAdmins = Array.from(this.users.values())
+        .filter(user => user.role === 'local_admin' && user.country === currentUser?.country);
+      const customers = Array.from(this.users.values())
+        .filter(user => user.role === 'customer');
+      
+      users.push(...localAdmins.map(user => ({
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+        country: user.country,
+        email: user.email,
+        isOnline: false
+      })));
+      
+      users.push(...customers.map(user => ({
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+        country: user.country,
+        email: user.email,
+        isOnline: false
+      })));
+    } else if (currentUserRole === 'customer') {
+      // Customer can chat with merchants
+      const merchants = Array.from(this.users.values())
+        .filter(user => user.role === 'merchant');
+      
+      users.push(...merchants.map(user => ({
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+        country: user.country,
+        email: user.email,
+        isOnline: false
+      })));
+    }
+
+    return users;
+  }
+
+  async createSecureChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
     const id = crypto.randomUUID();
     const newMessage: ChatMessage = {
       id,
       createdAt: new Date(),
+      isRead: false,
+      isEncrypted: true,
+      isEdited: false,
+      messageType: 'text',
+      editedAt: null,
+      fileUrl: null,
+      fileName: null,
+      replyTo: null,
       ...message
     };
     this.chatMessages.set(id, newMessage);
+
+    // Update conversation last message
+    const conversation = this.conversations.get(message.conversationId);
+    if (conversation) {
+      const updatedConversation = {
+        ...conversation,
+        lastMessageId: id,
+        lastMessageAt: newMessage.createdAt,
+        updatedAt: new Date()
+      };
+      this.conversations.set(conversation.id, updatedConversation);
+    }
+
     return newMessage;
   }
 
-  async updateChatMessage(id: string, message: Partial<ChatMessage>): Promise<ChatMessage> {
-    const existing = this.chatMessages.get(id);
-    if (!existing) {
-      throw new Error("Chat message not found");
+  async markMessageAsRead(messageId: string): Promise<void> {
+    const message = this.chatMessages.get(messageId);
+    if (message) {
+      const updatedMessage = { ...message, isRead: true };
+      this.chatMessages.set(messageId, updatedMessage);
     }
-    const updated = { ...existing, ...message };
-    this.chatMessages.set(id, updated);
-    return updated;
   }
 
+  async markConversationMessagesAsRead(conversationId: string, userId: string): Promise<void> {
+    const messages = Array.from(this.chatMessages.values())
+      .filter(msg => msg.conversationId === conversationId && msg.receiverId === userId && !msg.isRead);
+    
+    for (const message of messages) {
+      const updatedMessage = { ...message, isRead: true };
+      this.chatMessages.set(message.id, updatedMessage);
+    }
+  }
+
+  // Legacy method for backward compatibility
   async getChatUsers(currentUserId: string): Promise<User[]> {
     const currentUser = this.users.get(currentUserId);
     if (!currentUser) return [];
 
-    // Get users based on role hierarchy
-    const users: User[] = [];
-    
-    if (currentUser.role === 'global_admin') {
-      // Global admin can chat with local admins and other global admins
-      users.push(...Array.from(this.users.values()).filter(u => 
-        u.role === 'local_admin' || (u.role === 'global_admin' && u.id !== currentUserId)
-      ));
-    } else if (currentUser.role === 'local_admin') {
-      // Local admin can chat with global admins and merchants in their country
-      users.push(...Array.from(this.users.values()).filter(u => 
-        u.role === 'global_admin' || 
-        (u.role === 'merchant' && u.country === currentUser.country)
-      ));
-    } else if (currentUser.role === 'merchant') {
-      // Merchant can chat with local admin of their country and customers
-      users.push(...Array.from(this.users.values()).filter(u => 
-        (u.role === 'local_admin' && u.country === currentUser.country) ||
-        u.role === 'customer'
-      ));
-    } else if (currentUser.role === 'customer') {
-      // Customer can chat with merchants
-      users.push(...Array.from(this.users.values()).filter(u => u.role === 'merchant'));
-    }
-
-    return users;
+    const users = await this.getAvailableChatUsers(currentUserId, currentUser.role);
+    return users.map(user => ({
+      id: user.id,
+      username: user.email,
+      email: user.email,
+      firstName: user.name.split(' ')[0] || 'Unknown',
+      lastName: user.name.split(' ')[1] || 'User',
+      role: user.role as any,
+      country: user.country,
+      phone: null,
+      address: null,
+      dateOfBirth: null,
+      bloodGroup: null,
+      isActive: true,
+      createdAt: new Date(),
+      password: ''
+    }));
   }
 
   async getOrdersByMerchant(merchantId: string): Promise<Order[]> {
@@ -1023,6 +1157,45 @@ export class MemStorage implements IStorage {
     return Array.from(this.chatRooms.values()).filter(room => 
       Array.isArray(room.participants) && room.participants.includes(userId)
     );
+  }
+
+  async createChatRoom(room: InsertChatRoom): Promise<ChatRoom> {
+    const id = crypto.randomUUID();
+    const newRoom: ChatRoom = {
+      id,
+      createdAt: new Date(),
+      lastMessageAt: null,
+      ...room
+    };
+    this.chatRooms.set(id, newRoom);
+    return newRoom;
+  }
+
+  // Legacy methods for backward compatibility
+  async createChatMessage(message: any): Promise<ChatMessage> {
+    return this.createSecureChatMessage({
+      conversationId: crypto.randomUUID(),
+      senderId: message.senderId,
+      senderRole: 'customer', // default fallback
+      receiverId: message.receiverId,
+      receiverRole: 'merchant', // default fallback
+      message: message.message,
+      messageType: message.messageType || 'text'
+    });
+  }
+
+  async updateChatMessage(id: string, message: Partial<ChatMessage>): Promise<ChatMessage> {
+    const existing = this.chatMessages.get(id);
+    if (!existing) {
+      throw new Error("Chat message not found");
+    }
+    const updated = { ...existing, ...message };
+    this.chatMessages.set(id, updated);
+    return updated;
+  }
+
+  async getChatMessage(id: string): Promise<ChatMessage | undefined> {
+    return this.chatMessages.get(id);
   }
 
   async createChatRoom(room: InsertChatRoom): Promise<ChatRoom> {

@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageCircle, Send, Users, Package, TrendingUp, DollarSign, Star } from "lucide-react";
 import io from "socket.io-client";
+import SecureChat from "@/components/SecureChat";
 
 interface User {
   id: string;
@@ -533,6 +534,28 @@ export default function MerchantPanel() {
                     <div className="h-[500px] flex items-center justify-center text-gray-500">
                       Select a contact to start messaging
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Enhanced Secure Chat */}
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Enhanced Secure Messaging</CardTitle>
+                  <CardDescription>
+                    Real-time communication with customers and administrators
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {currentUser && (
+                    <SecureChat 
+                      currentUser={{
+                        id: currentUser.userId,
+                        name: `${currentUser.firstName} ${currentUser.lastName}`,
+                        role: 'merchant',
+                        token: localStorage.getItem('merchantToken') || ''
+                      }}
+                    />
                   )}
                 </CardContent>
               </Card>

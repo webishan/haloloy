@@ -1,9 +1,10 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { Server as SocketIOServer } from "socket.io";
+import { Server as SocketIOServer, Socket as SocketIOSocket } from "socket.io";
 import { storage } from "./storage";
 import { setupAdminRoutes } from "./admin-routes";
 import { setupMerchantRoutes } from "./merchant-routes";
+import { setupChatRoutes } from "./chat-routes";
 import { 
   insertUserSchema, 
   insertProductSchema, 
@@ -973,9 +974,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Set up admin routes
+  // Set up specialized route modules
   setupAdminRoutes(app);
   setupMerchantRoutes(app);
+  setupChatRoutes(app);
 
   // Admin Portal API Routes
   
@@ -1212,14 +1214,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Enhanced WebSocket connection handling
-  const connectedUsers = new Map();
+  // Enhanced WebSocket connection handling with proper typing
+  const connectedUsers = new Map<string, string>();
   
-  io.on('connection', (socket) => {
+  interface AuthenticatedSocket extends SocketIOSocket {
+    userId?: string;
+    userRole?: string;
+  }
+  
+  io.on('connection', (socket: AuthenticatedSocket) => {
     console.log('User connected:', socket.id);
     
     // Handle user authentication
-    socket.on('authenticate', async (data) => {
+    socket.on('authenticate', async (data: { userId?: string; token?: string }) => {
       try {
         const { userId, token } = data;
         
@@ -1244,9 +1251,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     // Handle sending messages with enhanced features
-    socket.on('sendMessage', async (data) => {
+    socket.on('sendMessage', async (data: { receiverId: string; message: string; conversationId?: string }) => {
       try {
-        const { receiverId, message } = data;
+        const { receiverId, message, conversationId } = data;
         
         if (!socket.userId) {
           socket.emit('messageError', { error: 'Not authenticated' });
@@ -1262,7 +1269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           senderId: socket.userId,
           receiverId,
           message: message.trim(),
-          messageType: 'text',
+          messageType: 'text' as const,
           isRead: false
         };
 
@@ -1291,7 +1298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     // Handle typing indicators
-    socket.on('typing', (data) => {
+    socket.on('typing', (data: { receiverId: string; isTyping: boolean }) => {
       const { receiverId, isTyping } = data;
       if (socket.userId && receiverId) {
         io.to(receiverId).emit('userTyping', {
@@ -1302,7 +1309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     // Handle message read status
-    socket.on('markAsRead', async (data) => {
+    socket.on('markAsRead', async (data: { messageId: string }) => {
       try {
         const { messageId } = data;
         if (messageId && socket.userId) {

@@ -18,6 +18,7 @@ import {
   Clock, CheckCircle, XCircle, AlertCircle, LogOut, Eye, Star
 } from "lucide-react";
 import { io, Socket } from "socket.io-client";
+import SecureChat from "@/components/SecureChat";
 
 interface AdminUser {
   id: string;
@@ -1090,6 +1091,28 @@ export default function AdminPortal() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Enhanced Secure Chat Integration */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Enhanced Secure Messaging</CardTitle>
+                <CardDescription>
+                  Advanced real-time communication with role-based hierarchy and conversation management
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {currentUser && (
+                  <SecureChat 
+                    currentUser={{
+                      id: currentUser.id,
+                      name: `${currentUser.firstName} ${currentUser.lastName}`,
+                      role: currentUser.role,
+                      token: localStorage.getItem('adminToken') || ''
+                    }}
+                  />
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Settings Tab */}

@@ -198,20 +198,38 @@ export const admins = pgTable("admins", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Chat messages table
+// Secure chat messages table with role-based access
 export const chatMessages = pgTable("chat_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").notNull(),
   senderId: varchar("sender_id").notNull(),
+  senderRole: text("sender_role", { enum: ["global_admin", "local_admin", "merchant", "customer"] }).notNull(),
   receiverId: varchar("receiver_id").notNull(),
+  receiverRole: text("receiver_role", { enum: ["global_admin", "local_admin", "merchant", "customer"] }).notNull(),
   message: text("message").notNull(),
   messageType: text("message_type", { enum: ["text", "image", "file"] }).default("text"),
   fileUrl: text("file_url"),
   fileName: text("file_name"),
   isRead: boolean("is_read").notNull().default(false),
+  isEncrypted: boolean("is_encrypted").notNull().default(true),
   isEdited: boolean("is_edited").notNull().default(false),
   editedAt: timestamp("edited_at"),
   replyTo: varchar("reply_to"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Conversations table to track secure one-to-one chats
+export const conversations = pgTable("conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  participant1Id: varchar("participant1_id").notNull(),
+  participant1Role: text("participant1_role", { enum: ["global_admin", "local_admin", "merchant", "customer"] }).notNull(),
+  participant2Id: varchar("participant2_id").notNull(),
+  participant2Role: text("participant2_role", { enum: ["global_admin", "local_admin", "merchant", "customer"] }).notNull(),
+  lastMessageId: varchar("last_message_id"),
+  lastMessageAt: timestamp("last_message_at"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Chat rooms for group conversations
@@ -246,6 +264,7 @@ export const insertUserSchema = createInsertSchema(users).omit({ id: true, creat
 export const insertAdminSchema = createInsertSchema(admins).omit({ id: true, createdAt: true });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export const insertChatRoomSchema = createInsertSchema(chatRooms).omit({ id: true, createdAt: true });
+export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPointDistributionSchema = createInsertSchema(pointDistributions).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
 export const insertBrandSchema = createInsertSchema(brands).omit({ id: true, createdAt: true });
@@ -290,5 +309,7 @@ export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatRoom = typeof chatRooms.$inferSelect;
 export type InsertChatRoom = z.infer<typeof insertChatRoomSchema>;
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type PointDistribution = typeof pointDistributions.$inferSelect;
 export type InsertPointDistribution = z.infer<typeof insertPointDistributionSchema>;
