@@ -351,6 +351,28 @@ export default function SecureChat({ currentUser }: SecureChatProps) {
     }
   };
 
+  // Get role description for current user
+  const getRoleDescription = (role: string) => {
+    switch (role) {
+      case 'global_admin': return 'Can message Local Admins';
+      case 'local_admin': return 'Can message Global Admin & Merchants';
+      case 'merchant': return 'Can message Local Admins & Customers';
+      case 'customer': return 'Can message Merchants';
+      default: return '';
+    }
+  };
+
+  // Get no users message based on role
+  const getNoUsersMessage = (role: string) => {
+    switch (role) {
+      case 'global_admin': return 'Local admins will appear here when available';
+      case 'local_admin': return 'Global admins and merchants in your region will appear here';
+      case 'merchant': return 'Local admins and customers who bought from you will appear here';
+      case 'customer': return 'Merchants you\'ve purchased from will appear here';
+      default: return '';
+    }
+  };
+
   if (usersLoading || conversationsLoading) {
     return (
       <div className="flex items-center justify-center h-96" data-testid="chat-loading">
@@ -429,13 +451,18 @@ export default function SecureChat({ currentUser }: SecureChatProps) {
 
           {/* Available Users */}
           <div className="p-4">
-            <h4 className="text-sm font-medium text-gray-500 mb-2">Available Users</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-gray-500">Available Users</h4>
+              <Badge variant="outline" className="text-xs">
+                {getRoleDescription(currentUser.role)}
+              </Badge>
+            </div>
             {filteredUsers.length > 0 ? (
               filteredUsers.map((user: any) => (
                 <div
                   key={user.id}
                   onClick={() => handleStartConversation(user)}
-                  className="p-3 rounded-lg cursor-pointer mb-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  className="p-3 rounded-lg cursor-pointer mb-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-transparent hover:border-blue-200"
                   data-testid={`user-item-${user.id}`}
                 >
                   <div className="flex items-center space-x-3">
@@ -453,7 +480,7 @@ export default function SecureChat({ currentUser }: SecureChatProps) {
                       <p className="text-sm font-medium truncate">{user.name}</p>
                       <div className="flex items-center space-x-2">
                         <Badge className={`text-xs ${getRoleBadgeColor(user.role)}`}>
-                          {user.role}
+                          {user.role.replace('_', ' ')}
                         </Badge>
                         {user.country && (
                           <Badge variant="outline" className="text-xs">
@@ -466,9 +493,14 @@ export default function SecureChat({ currentUser }: SecureChatProps) {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-gray-500 text-center py-4">
-                {searchQuery ? 'No users found' : 'No available users to chat with'}
-              </p>
+              <div className="text-center py-4">
+                <p className="text-sm text-gray-500 mb-2">
+                  {searchQuery ? 'No users found' : 'No available users to chat with'}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {getNoUsersMessage(currentUser.role)}
+                </p>
+              </div>
             )}
           </div>
         </ScrollArea>

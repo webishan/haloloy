@@ -1029,12 +1029,44 @@ export class MemStorage implements IStorage {
         isOnline: false
       })));
     } else if (currentUserRole === 'merchant') {
-      // Merchant can chat with local admins in their country and customers
+      // Merchant can chat with local admins in their country and customers who have bought from them
       const currentUser = this.users.get(currentUserId);
       const localAdmins = Array.from(this.users.values())
         .filter(user => user.role === 'local_admin' && user.country === currentUser?.country);
+      
+      // Get customers who have bought from this merchant (via orders or point transactions)
+      const merchantProfile = Array.from(this.merchants.values())
+        .find(merchant => merchant.userId === currentUserId);
+      
+      let customerIds = new Set<string>();
+      
+      if (merchantProfile) {
+        // Get customers from orders
+        const merchantOrders = Array.from(this.orders.values())
+          .filter(order => order.merchantId === merchantProfile.id);
+        merchantOrders.forEach(order => {
+          if (order.customerId) customerIds.add(order.customerId);
+        });
+        
+        // Get customers from point transactions
+        const pointTransactions = Array.from(this.pointTransactions.values())
+          .filter(transaction => 
+            transaction.fromUserId === currentUserId || 
+            transaction.toUserId === currentUserId
+          );
+        pointTransactions.forEach(transaction => {
+          const otherUserId = transaction.fromUserId === currentUserId 
+            ? transaction.toUserId 
+            : transaction.fromUserId;
+          const otherUser = this.users.get(otherUserId);
+          if (otherUser && otherUser.role === 'customer') {
+            customerIds.add(otherUserId);
+          }
+        });
+      }
+      
       const customers = Array.from(this.users.values())
-        .filter(user => user.role === 'customer');
+        .filter(user => user.role === 'customer' && customerIds.has(user.id));
       
       users.push(...localAdmins.map(user => ({
         id: user.id,
@@ -1054,9 +1086,45 @@ export class MemStorage implements IStorage {
         isOnline: false
       })));
     } else if (currentUserRole === 'customer') {
-      // Customer can chat with merchants
+      // Customer can chat with merchants they have interacted with (purchased from or received points from)
+      const currentUser = this.users.get(currentUserId);
+      const customerProfile = Array.from(this.customers.values())
+        .find(customer => customer.userId === currentUserId);
+      
+      let merchantIds = new Set<string>();
+      
+      if (customerProfile) {
+        // Get merchants from orders
+        const customerOrders = Array.from(this.orders.values())
+          .filter(order => order.customerId === customerProfile.id);
+        
+        for (const order of customerOrders) {
+          const merchant = this.merchants.get(order.merchantId);
+          if (merchant) {
+            merchantIds.add(merchant.userId);
+          }
+        }
+        
+        // Get merchants from point transactions
+        const pointTransactions = Array.from(this.pointTransactions.values())
+          .filter(transaction => 
+            transaction.fromUserId === currentUserId || 
+            transaction.toUserId === currentUserId
+          );
+        
+        for (const transaction of pointTransactions) {
+          const otherUserId = transaction.fromUserId === currentUserId 
+            ? transaction.toUserId 
+            : transaction.fromUserId;
+          const otherUser = this.users.get(otherUserId);
+          if (otherUser && otherUser.role === 'merchant') {
+            merchantIds.add(otherUserId);
+          }
+        }
+      }
+      
       const merchants = Array.from(this.users.values())
-        .filter(user => user.role === 'merchant');
+        .filter(user => user.role === 'merchant' && merchantIds.has(user.id));
       
       users.push(...merchants.map(user => ({
         id: user.id,
