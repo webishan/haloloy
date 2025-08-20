@@ -13,6 +13,7 @@ import {
   TrendingUp, Coins, Send
 } from "lucide-react";
 import io from "socket.io-client";
+import SecureChat from "@/components/SecureChat";
 
 interface LocalAdminUser {
   id: string;
@@ -440,16 +441,23 @@ export default function LocalAdminPortal() {
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <MessageCircle className="w-5 h-5 mr-2" />
-                  Local Admin Chat
+                  Local Admin Secure Chat
                 </CardTitle>
                 <CardDescription>
-                  Communicate with global admin and merchants in your region
+                  Communicate with global admin and merchants in your region with end-to-end security
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-96 flex items-center justify-center text-gray-500">
-                  Chat functionality will be implemented here
-                </div>
+                {currentUser && (
+                  <SecureChat 
+                    currentUser={{
+                      id: currentUser.id,
+                      name: `${currentUser.firstName} ${currentUser.lastName}`,
+                      role: currentUser.role,
+                      token: localStorage.getItem('localAdminToken') || ''
+                    }}
+                  />
+                )}
               </CardContent>
             </Card>
           </TabsContent>

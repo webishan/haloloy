@@ -167,7 +167,7 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center mb-12">Top Selling Brands</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-            {brands?.slice(0, 6).map((brand: any) => (
+            {Array.isArray(brands) && brands.slice(0, 6).map((brand: any) => (
               <Link
                 key={brand.id}
                 href={`/marketplace?brand=${brand.slug}`}

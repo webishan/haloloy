@@ -102,12 +102,29 @@ export default function Header() {
               </Link>
             )}
 
-            {/* Admin Portal Link - Quick Access */}
-            <Link href="/admin-portal">
-              <Button variant="outline" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 hover:from-blue-700 hover:to-indigo-700">
-                Admin Portal
-              </Button>
-            </Link>
+            {/* Admin Portal Links - Quick Access */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 hover:from-blue-700 hover:to-indigo-700">
+                  <Shield className="w-4 h-4 mr-1" />
+                  Admin Access
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <Link href="/global-admin-portal">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Global Admin Portal
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/local-admin-portal">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <Users className="w-4 h-4 mr-2" />
+                    Local Admin Portal
+                  </DropdownMenuItem>
+                </Link>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* User Menu */}
             {user ? (
