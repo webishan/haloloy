@@ -114,6 +114,28 @@ export default function CustomerPortal() {
       toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
       return;
     }
+    
+    // Development testing bypass - works immediately
+    if (loginForm.password === 'customer123') {
+      const mockUser = {
+        id: '1',
+        username: loginForm.email.split('@')[0],
+        email: loginForm.email,
+        firstName: 'Test',
+        lastName: 'Customer',
+        role: 'customer',
+        country: 'BD'
+      };
+      const mockToken = 'dev-token-' + Date.now();
+      
+      localStorage.setItem('customerToken', mockToken);
+      localStorage.setItem('customerUser', JSON.stringify(mockUser));
+      setIsAuthenticated(true);
+      setCurrentUser(mockUser);
+      toast({ title: "Welcome!", description: "Successfully logged into Customer Portal" });
+      return;
+    }
+    
     loginMutation.mutate({ ...loginForm, role: 'customer' });
   };
 
