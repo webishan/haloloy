@@ -1146,6 +1146,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get admin profile
+  app.get('/api/admin/profile', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
+    try {
+      let admin = await storage.getAdmin(req.user.userId);
+      
+      if (!admin && req.user.role === 'global_admin') {
+        // Create admin profile if it doesn't exist for global admin
+        admin = await storage.createAdmin({
+          userId: req.user.userId,
+          role: 'global_admin',
+          country: 'GLOBAL',
+          pointsBalance: 0,
+          totalPointsGenerated: 0,
+          isActive: true
+        });
+      }
+      
+      res.json(admin || { pointsBalance: 0 });
+    } catch (error) {
+      console.error('Admin profile fetch error:', error);
+      res.status(500).json({ message: 'Failed to fetch admin profile' });
+    }
+  });
+
   // Distribute points
   app.post('/api/admin/distribute-points', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
     try {

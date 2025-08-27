@@ -175,6 +175,13 @@ export default function GlobalAdminPortal() {
     retry: false
   });
 
+  const { data: adminProfile, refetch: refetchProfile } = useQuery({
+    queryKey: ['/api/admin/profile'],
+    enabled: isAuthenticated,
+    retry: false,
+    refetchInterval: 5000 // Refresh every 5 seconds
+  });
+
   // Point generation mutation (global admin only)
   const addPointsMutation = useMutation({
     mutationFn: async (data: { points: number; description: string }) => {
@@ -201,6 +208,7 @@ export default function GlobalAdminPortal() {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/profile'] });
+      refetchProfile(); // Force refresh of profile data
       setAddPointsForm({ points: "", description: "" });
     },
     onError: (error: Error) => {
@@ -449,7 +457,7 @@ export default function GlobalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Balance</p>
                       <p className="text-3xl font-bold text-blue-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.overview?.globalPointsBalance?.toLocaleString() || 0)}
+                        {adminProfile ? (adminProfile.pointsBalance?.toLocaleString() || 0) : (isDashboardLoading ? "..." : 0)}
                       </p>
                     </div>
                     <Coins className="w-8 h-8 text-blue-500" />
@@ -566,7 +574,7 @@ export default function GlobalAdminPortal() {
                     <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
                       <h4 className="font-semibold text-green-800 mb-2">Current Balance</h4>
                       <p className="text-2xl font-bold text-green-600">
-                        {dashboardData?.overview?.globalPointsBalance?.toLocaleString() || 0} Points
+                        {adminProfile?.pointsBalance?.toLocaleString() || 0} Points
                       </p>
                       <p className="text-sm text-green-600 mt-1">Available for distribution</p>
                     </div>
