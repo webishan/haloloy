@@ -47,6 +47,17 @@ app.use((req, res, next) => {
     throw err;
   });
 
+  // Auto-seed data on development startup
+  if (app.get("env") === "development") {
+    try {
+      const { seedTestData } = await import("./seed-data");
+      await seedTestData();
+      console.log("✅ Development data seeded automatically");
+    } catch (error) {
+      console.log("⚠️  Auto-seed skipped (data may already exist)");
+    }
+  }
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
