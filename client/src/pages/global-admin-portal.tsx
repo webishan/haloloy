@@ -403,7 +403,13 @@ export default function GlobalAdminPortal() {
                 <span>{currentUser?.firstName} {currentUser?.lastName}</span>
               </div>
               
-              <Button onClick={handleLogout} variant="outline" size="sm" data-testid="button-global-admin-logout">
+              <Button 
+                onClick={handleLogout} 
+                variant="outline" 
+                size="sm" 
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                data-testid="button-global-admin-logout"
+              >
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>

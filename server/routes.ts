@@ -1104,13 +1104,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Valid point amount required' });
       }
 
-      // Update global admin's points balance
-      const admin = await storage.getAdmin(req.user.userId);
+      // Find or create global admin profile
+      let admin = await storage.getAdmin(req.user.userId);
       if (!admin) {
-        return res.status(404).json({ message: 'Admin profile not found' });
+        // Create admin profile if it doesn't exist
+        admin = await storage.createAdmin({
+          userId: req.user.userId,
+          role: 'global_admin',
+          country: 'GLOBAL',
+          pointsBalance: 0,
+          totalPointsGenerated: 0,
+          isActive: true
+        });
       }
 
-      const newBalance = admin.pointsBalance + points;
+      const newBalance = (admin.pointsBalance || 0) + points;
       await storage.updateAdmin(req.user.userId, {
         pointsBalance: newBalance,
         totalPointsGenerated: (admin.totalPointsGenerated || 0) + points
