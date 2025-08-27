@@ -175,10 +175,10 @@ export default function GlobalAdminPortal() {
     retry: false
   });
 
-  // Manual point addition mutation (global admin only)
+  // Point generation mutation (global admin only)
   const addPointsMutation = useMutation({
     mutationFn: async (data: { points: number; description: string }) => {
-      const response = await fetch('/api/admin/add-points', {
+      const response = await fetch('/api/admin/generate-points', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -188,19 +188,23 @@ export default function GlobalAdminPortal() {
       });
       
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to generate points');
       }
       
       return response.json();
     },
-    onSuccess: () => {
-      toast({ title: "Points Added", description: "Points have been added to your balance successfully!" });
+    onSuccess: (data) => {
+      toast({ 
+        title: "Points Generated Successfully", 
+        description: `${data.pointsGenerated?.toLocaleString()} points added. New balance: ${data.newBalance?.toLocaleString()}` 
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/profile'] });
       setAddPointsForm({ points: "", description: "" });
     },
     onError: (error: Error) => {
-      toast({ title: "Add Points Failed", description: error.message, variant: "destructive" });
+      toast({ title: "Point Generation Failed", description: error.message, variant: "destructive" });
     }
   });
 
@@ -262,8 +266,14 @@ export default function GlobalAdminPortal() {
       return;
     }
     
+    const points = parseInt(addPointsForm.points);
+    if (points <= 0) {
+      toast({ title: "Error", description: "Points must be greater than 0", variant: "destructive" });
+      return;
+    }
+    
     addPointsMutation.mutate({
-      points: parseInt(addPointsForm.points),
+      points: points,
       description: addPointsForm.description
     });
   };
