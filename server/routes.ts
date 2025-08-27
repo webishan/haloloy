@@ -982,6 +982,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Import and register loyalty routes
   const { registerLoyaltyRoutes } = await import("./loyalty-routes");
   registerLoyaltyRoutes(app);
+  
+  // Seed data route for development
+  app.post('/api/admin/seed-data', async (req, res) => {
+    try {
+      const { seedTestData } = await import("./seed-data");
+      const result = await seedTestData();
+      res.json({ 
+        message: "Test data seeded successfully", 
+        data: result 
+      });
+    } catch (error: any) {
+      console.error('Seed data error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
 
   // Admin Portal API Routes
   

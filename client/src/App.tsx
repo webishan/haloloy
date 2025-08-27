@@ -21,6 +21,8 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import AdminPortal from "@/pages/admin-portal";
 import GlobalAdminPortal from "@/pages/global-admin-portal";
 import LocalAdminPortal from "@/pages/local-admin-portal";
+import MerchantPortal from "@/pages/merchant-portal";
+import CustomerPortal from "@/pages/customer-portal";
 import MerchantPanel from "@/pages/merchant-panel";
 import Header from "@/components/header";
 import Footer from "@/components/footer";
@@ -84,6 +86,8 @@ function Router() {
           <Route path="/admin-portal" component={AdminPortal} />
           <Route path="/global-admin-portal" component={GlobalAdminPortal} />
           <Route path="/local-admin-portal" component={LocalAdminPortal} />
+          <Route path="/merchant-portal" component={MerchantPortal} />
+          <Route path="/customer-portal" component={CustomerPortal} />
           <Route path="/merchant-panel" component={MerchantPanel} />
           <Route component={NotFound} />
         </Switch>

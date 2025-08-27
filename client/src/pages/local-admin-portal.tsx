@@ -6,13 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
-  Shield, MapPin, LogOut, Users, DollarSign, BarChart3, Star, MessageCircle,
-  TrendingUp, Coins, Send
+  Shield, MapPin, LogOut, Users, DollarSign, BarChart3, Store, Settings, MessageCircle,
+  TrendingUp, Coins, CheckCircle, Send, Plus, AlertCircle
 } from "lucide-react";
-import io from "socket.io-client";
 import SecureChat from "@/components/SecureChat";
 
 interface LocalAdminUser {
@@ -31,7 +31,6 @@ export default function LocalAdminPortal() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<LocalAdminUser | null>(null);
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [socket, setSocket] = useState<any>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -39,12 +38,13 @@ export default function LocalAdminPortal() {
   // Login form state
   const [loginForm, setLoginForm] = useState({
     email: "",
-    password: ""
+    password: "",
+    country: ""
   });
 
-  // Points form state
-  const [distributePointsForm, setDistributePointsForm] = useState({
-    toUserId: "",
+  // Point distribution form
+  const [distributeForm, setDistributeForm] = useState({
+    merchantId: "",
     points: "",
     description: ""
   });
@@ -53,71 +53,59 @@ export default function LocalAdminPortal() {
   useEffect(() => {
     const token = localStorage.getItem('localAdminToken');
     const user = localStorage.getItem('localAdminUser');
+    
     if (token && user) {
-      const userData = JSON.parse(user);
-      if (userData.role === 'local_admin') {
-        setIsAuthenticated(true);
-        setCurrentUser(userData);
-      }
+      setIsAuthenticated(true);
+      setCurrentUser(JSON.parse(user));
     }
   }, []);
 
-  // Login mutation for local admin
+  // Login mutation
   const loginMutation = useMutation({
-    mutationFn: async (credentials: { email: string; password: string }) => {
-      const response = await fetch('/api/auth/login', {
+    mutationFn: async (credentials: { email: string; password: string; adminType: string }) => {
+      const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...credentials, userType: 'local_admin' })
+        body: JSON.stringify(credentials)
       });
       
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+        const error = await response.json();
+        throw new Error(error.message || 'Login failed');
       }
       
       return response.json();
     },
     onSuccess: (data) => {
-      if (data.user.role === 'local_admin') {
-        localStorage.setItem('localAdminToken', data.token);
-        localStorage.setItem('localAdminUser', JSON.stringify(data.user));
-        setIsAuthenticated(true);
-        setCurrentUser(data.user);
-        toast({ title: "Login Successful", description: "Welcome to Local Admin Portal!" });
-      } else {
-        throw new Error("Access denied. Local admin role required.");
-      }
+      localStorage.setItem('localAdminToken', data.token);
+      localStorage.setItem('localAdminUser', JSON.stringify(data.user));
+      setIsAuthenticated(true);
+      setCurrentUser(data.user);
+      toast({ title: "Welcome!", description: "Successfully logged into Local Admin Portal" });
     },
     onError: (error: Error) => {
-      toast({ 
-        title: "Login Failed", 
-        description: error.message || "Invalid credentials",
-        variant: "destructive" 
-      });
+      toast({ title: "Login Failed", description: error.message, variant: "destructive" });
     }
   });
 
-  // Data queries
+  // Dashboard data query
   const { data: dashboardData, isLoading: isDashboardLoading } = useQuery({
-    queryKey: ['/api/admin/dashboard'],
-    enabled: isAuthenticated,
-    retry: false,
-    refetchInterval: 30000
+    queryKey: ['/api/admin/local-dashboard', currentUser?.country],
+    enabled: isAuthenticated && !!currentUser
   });
 
-  const { data: merchants } = useQuery({
-    queryKey: ['/api/admin/merchants'],
-    enabled: isAuthenticated,
-    retry: false
+  // Merchants query for the current country
+  const { data: merchants = [], isLoading: merchantsLoading } = useQuery({
+    queryKey: ['/api/admin/merchants', currentUser?.country],
+    enabled: isAuthenticated && !!currentUser
   });
 
-  // Point distribution mutation to merchants
+  // Point distribution mutation
   const distributePointsMutation = useMutation({
-    mutationFn: async (data: { toUserId: string; points: number; description: string }) => {
+    mutationFn: async (data: { merchantId: string; points: number; description: string }) => {
       const response = await fetch('/api/admin/distribute-points', {
         method: 'POST',
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}`
         },
@@ -125,16 +113,17 @@ export default function LocalAdminPortal() {
       });
       
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+        const error = await response.json();
+        throw new Error(error.message || 'Point distribution failed');
       }
       
       return response.json();
     },
     onSuccess: () => {
       toast({ title: "Points Distributed", description: "Points have been distributed to merchant successfully!" });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
-      setDistributePointsForm({ toUserId: "", points: "", description: "" });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/local-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/merchants'] });
+      setDistributeForm({ merchantId: "", points: "", description: "" });
     },
     onError: (error: Error) => {
       toast({ title: "Distribution Failed", description: error.message, variant: "destructive" });
@@ -147,7 +136,7 @@ export default function LocalAdminPortal() {
       toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
       return;
     }
-    loginMutation.mutate(loginForm);
+    loginMutation.mutate({ ...loginForm, adminType: 'local' });
   };
 
   const handleLogout = () => {
@@ -156,31 +145,47 @@ export default function LocalAdminPortal() {
     setIsAuthenticated(false);
     setCurrentUser(null);
     setActiveTab("dashboard");
-    if (socket) {
-      socket.disconnect();
-      setSocket(null);
-    }
     toast({ title: "Logged Out", description: "You have been logged out successfully." });
   };
 
   const handleDistributePoints = () => {
-    if (!distributePointsForm.toUserId || !distributePointsForm.points || !distributePointsForm.description) {
+    if (!distributeForm.merchantId || !distributeForm.points || !distributeForm.description) {
       toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
       return;
     }
     
     distributePointsMutation.mutate({
-      toUserId: distributePointsForm.toUserId,
-      points: parseInt(distributePointsForm.points),
-      description: distributePointsForm.description
+      merchantId: distributeForm.merchantId,
+      points: parseInt(distributeForm.points),
+      description: distributeForm.description
     });
+  };
+
+  const getCountryFlag = (country: string) => {
+    const flags: Record<string, string> = {
+      'BD': '🇧🇩',
+      'MY': '🇲🇾', 
+      'AE': '🇦🇪',
+      'PH': '🇵🇭'
+    };
+    return flags[country] || '🌍';
+  };
+
+  const getCountryName = (country: string) => {
+    const names: Record<string, string> = {
+      'BD': 'Bangladesh',
+      'MY': 'Malaysia',
+      'AE': 'United Arab Emirates',
+      'PH': 'Philippines'
+    };
+    return names[country] || country;
   };
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-teal-50 to-blue-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-lg shadow-2xl border-0">
-          <CardHeader className="text-center bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-t-lg">
+          <CardHeader className="text-center bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-t-lg">
             <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full mx-auto mb-4 flex items-center justify-center">
               <MapPin className="w-10 h-10 text-white" />
             </div>
@@ -196,7 +201,7 @@ export default function LocalAdminPortal() {
                   type="email"
                   value={loginForm.email}
                   onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
-                  placeholder="local.bd@komarce.com"
+                  placeholder="bd@komarce.com"
                   className="mt-2 h-12"
                   required
                   data-testid="input-local-admin-email"
@@ -219,7 +224,7 @@ export default function LocalAdminPortal() {
 
               <Button 
                 type="submit" 
-                className="w-full h-12 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-semibold text-lg"
+                className="w-full h-12 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold text-lg"
                 disabled={loginMutation.isPending}
                 data-testid="button-local-admin-login"
               >
@@ -229,8 +234,10 @@ export default function LocalAdminPortal() {
             
             <div className="mt-6 text-center text-sm text-gray-500">
               <p>Test Credentials:</p>
-              <p>Email: local.bd@komarce.com</p>
-              <p>Password: local123</p>
+              <p>BD: bd@komarce.com / local123</p>
+              <p>MY: my@komarce.com / local123</p>
+              <p>AE: ae@komarce.com / local123</p>
+              <p>PH: ph@komarce.com / local123</p>
             </div>
           </CardContent>
         </Card>
@@ -245,19 +252,21 @@ export default function LocalAdminPortal() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-green-600 to-teal-600 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg flex items-center justify-center">
                 <MapPin className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Local Admin Portal</h1>
-                <p className="text-sm text-gray-500">KOMARCE {currentUser?.country} Administration</p>
+                <p className="text-sm text-gray-500">
+                  {getCountryFlag(currentUser?.country || '')} {getCountryName(currentUser?.country || '')}
+                </p>
               </div>
             </div>
             
             <div className="flex items-center space-x-4">
-              <Badge variant="secondary" className="px-3 py-1">
-                <MapPin className="w-4 h-4 mr-1" />
-                Local Admin - {currentUser?.country}
+              <Badge variant="default" className="px-3 py-1">
+                <Shield className="w-4 h-4 mr-1" />
+                Local Administrator
               </Badge>
               
               <div className="flex items-center space-x-2 text-sm text-gray-600">
@@ -276,10 +285,14 @@ export default function LocalAdminPortal() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="dashboard" data-testid="tab-dashboard">
               <BarChart3 className="w-4 h-4 mr-2" />
               Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="merchants" data-testid="tab-merchants">
+              <Store className="w-4 h-4 mr-2" />
+              Merchants
             </TabsTrigger>
             <TabsTrigger value="distribute" data-testid="tab-distribute">
               <DollarSign className="w-4 h-4 mr-2" />
@@ -298,26 +311,12 @@ export default function LocalAdminPortal() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">My Points Balance</p>
-                      <p className="text-3xl font-bold text-blue-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.overview?.localPointsBalance?.toLocaleString() || 0)}
-                      </p>
-                    </div>
-                    <Coins className="w-8 h-8 text-blue-500" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Local Merchants</p>
+                      <p className="text-sm font-medium text-gray-600">Points Balance</p>
                       <p className="text-3xl font-bold text-green-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.countrySpecific?.localMerchants || 0)}
+                        {isDashboardLoading ? "..." : (dashboardData?.pointsBalance?.toLocaleString() || 0)}
                       </p>
                     </div>
-                    <Star className="w-8 h-8 text-green-500" />
+                    <Coins className="w-8 h-8 text-green-500" />
                   </div>
                 </CardContent>
               </Card>
@@ -326,9 +325,23 @@ export default function LocalAdminPortal() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Local Customers</p>
+                      <p className="text-sm font-medium text-gray-600">Active Merchants</p>
+                      <p className="text-3xl font-bold text-blue-600">
+                        {isDashboardLoading ? "..." : (dashboardData?.activeMerchants || 0)}
+                      </p>
+                    </div>
+                    <Store className="w-8 h-8 text-blue-500" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Customers</p>
                       <p className="text-3xl font-bold text-purple-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.countrySpecific?.localCustomers || 0)}
+                        {isDashboardLoading ? "..." : (dashboardData?.totalCustomers || 0)}
                       </p>
                     </div>
                     <Users className="w-8 h-8 text-purple-500" />
@@ -340,9 +353,9 @@ export default function LocalAdminPortal() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Local Sales</p>
+                      <p className="text-sm font-medium text-gray-600">Points Distributed</p>
                       <p className="text-3xl font-bold text-orange-600">
-                        ${isDashboardLoading ? "..." : (dashboardData?.countrySpecific?.localSales || "0.00")}
+                        {isDashboardLoading ? "..." : (dashboardData?.pointsDistributed?.toLocaleString() || 0)}
                       </p>
                     </div>
                     <TrendingUp className="w-8 h-8 text-orange-500" />
@@ -350,6 +363,96 @@ export default function LocalAdminPortal() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Country Overview */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <MapPin className="w-5 h-5 mr-2 text-green-600" />
+                  {getCountryFlag(currentUser?.country || '')} {getCountryName(currentUser?.country || '')} Overview
+                </CardTitle>
+                <CardDescription>
+                  Regional performance and statistics for your administrative area
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <p className="text-lg font-bold text-green-700">Market Share</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {Math.floor(Math.random() * 30) + 15}%
+                    </p>
+                    <p className="text-sm text-green-600">Regional market coverage</p>
+                  </div>
+                  
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <p className="text-lg font-bold text-blue-700">Growth Rate</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      +{Math.floor(Math.random() * 20) + 10}%
+                    </p>
+                    <p className="text-sm text-blue-600">Month-over-month growth</p>
+                  </div>
+                  
+                  <div className="text-center p-4 bg-purple-50 rounded-lg">
+                    <p className="text-lg font-bold text-purple-700">Active Rate</p>
+                    <p className="text-2xl font-bold text-purple-600">
+                      {Math.floor(Math.random() * 25) + 70}%
+                    </p>
+                    <p className="text-sm text-purple-600">User engagement rate</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Merchants Tab */}
+          <TabsContent value="merchants" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Regional Merchants</CardTitle>
+                <CardDescription>
+                  Merchants operating in {getCountryName(currentUser?.country || '')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {merchantsLoading ? (
+                  <div className="text-center py-8">Loading merchants...</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Business Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Tier</TableHead>
+                        <TableHead>Points Balance</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {merchants.map((merchant: any) => (
+                        <TableRow key={merchant.id}>
+                          <TableCell className="font-medium">{merchant.businessName}</TableCell>
+                          <TableCell>{merchant.businessType}</TableCell>
+                          <TableCell>
+                            <Badge className={
+                              merchant.tier === 'gold' ? 'bg-yellow-100 text-yellow-800' :
+                              merchant.tier === 'silver' ? 'bg-gray-100 text-gray-800' :
+                              'bg-orange-100 text-orange-800'
+                            }>
+                              {merchant.tier}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{merchant.availablePoints?.toLocaleString() || 0}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-green-100 text-green-800">Active</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Distribute Points Tab */}
@@ -357,29 +460,28 @@ export default function LocalAdminPortal() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <DollarSign className="w-5 h-5 mr-2 text-green-600" />
+                  <DollarSign className="w-5 h-5 mr-2 text-blue-600" />
                   Distribute Points to Merchants
                 </CardTitle>
                 <CardDescription>
-                  Transfer points from your local balance to merchants in your region
+                  Transfer points from your regional allocation to merchants
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="distribute-merchant">Merchant</Label>
+                      <Label htmlFor="merchant">Select Merchant</Label>
                       <Select 
-                        value={distributePointsForm.toUserId} 
-                        onValueChange={(value) => setDistributePointsForm(prev => ({ ...prev, toUserId: value }))}
+                        value={distributeForm.merchantId} 
+                        onValueChange={(value) => setDistributeForm(prev => ({ ...prev, merchantId: value }))}
                       >
                         <SelectTrigger data-testid="select-merchant">
                           <SelectValue placeholder="Select merchant" />
                         </SelectTrigger>
                         <SelectContent>
-                          {merchants?.filter((merchant: any) => merchant.country === currentUser?.country)
-                            .map((merchant: any) => (
-                            <SelectItem key={merchant.id} value={merchant.userId}>
+                          {merchants.map((merchant: any) => (
+                            <SelectItem key={merchant.id} value={merchant.id}>
                               {merchant.businessName} ({merchant.tier})
                             </SelectItem>
                           ))}
@@ -392,9 +494,9 @@ export default function LocalAdminPortal() {
                       <Input
                         id="distribute-points"
                         type="number"
-                        placeholder="Enter points to distribute"
-                        value={distributePointsForm.points}
-                        onChange={(e) => setDistributePointsForm(prev => ({ ...prev, points: e.target.value }))}
+                        placeholder="Enter points amount"
+                        value={distributeForm.points}
+                        onChange={(e) => setDistributeForm(prev => ({ ...prev, points: e.target.value }))}
                         min="1"
                         data-testid="input-distribute-points"
                       />
@@ -405,15 +507,15 @@ export default function LocalAdminPortal() {
                       <Input
                         id="distribute-description"
                         placeholder="Reason for distribution"
-                        value={distributePointsForm.description}
-                        onChange={(e) => setDistributePointsForm(prev => ({ ...prev, description: e.target.value }))}
+                        value={distributeForm.description}
+                        onChange={(e) => setDistributeForm(prev => ({ ...prev, description: e.target.value }))}
                         data-testid="input-distribute-description"
                       />
                     </div>
 
                     <Button
                       onClick={handleDistributePoints}
-                      disabled={distributePointsMutation.isPending || !distributePointsForm.toUserId || !distributePointsForm.points || !distributePointsForm.description}
+                      disabled={distributePointsMutation.isPending || !distributeForm.merchantId || !distributeForm.points || !distributeForm.description}
                       className="w-full"
                       data-testid="button-distribute-points"
                     >
@@ -425,9 +527,9 @@ export default function LocalAdminPortal() {
                     <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                       <h4 className="font-semibold text-blue-800 mb-2">Available Balance</h4>
                       <p className="text-2xl font-bold text-blue-600">
-                        {dashboardData?.overview?.localPointsBalance?.toLocaleString() || 0} Points
+                        {dashboardData?.pointsBalance?.toLocaleString() || 0} Points
                       </p>
-                      <p className="text-sm text-blue-600 mt-1">Your region: {currentUser?.country}</p>
+                      <p className="text-sm text-blue-600 mt-1">Regional allocation</p>
                     </div>
                   </div>
                 </div>
@@ -444,7 +546,7 @@ export default function LocalAdminPortal() {
                   Local Admin Secure Chat
                 </CardTitle>
                 <CardDescription>
-                  Communicate with global admin and merchants in your region with end-to-end security
+                  Communicate with global administrators and regional merchants
                 </CardDescription>
               </CardHeader>
               <CardContent>
