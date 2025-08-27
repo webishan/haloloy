@@ -1,0 +1,195 @@
+# Implementation Plan
+
+**Note: For each task, run tests using `npm test -- --run` in the services/loyalty-service directory to validate implementation.**
+
+- [x] 1. Set up enhanced database schema and core data models
+
+
+
+
+
+  - Update database schema with all required tables for reward numbers, serial mappings, and commission tracking
+  - Create TypeScript interfaces for all core domain models (PointTransaction, RewardNumber, UserWallet, etc.)
+  - Implement database migration scripts with proper indexing for performance
+  - Add database constraints and triggers for data integrity
+  - **Test Command:** `npm test -- --run` (database schema and types validation)
+  - _Requirements: 1.7, 2.3, 4.6, 13.1_
+
+- [x] 2. Implement core point earning and transaction system
+
+
+
+
+
+  - Create enhanced PointSystemService with all transaction types (purchase, referral, ripple, cashback, etc.)
+  - Implement addPoints method with automatic reward number threshold checking
+  - Build transaction recording system with full metadata and audit trail
+  - Create wallet update mechanisms with balance validation and concurrency handling
+  - Write unit tests for all point earning scenarios and edge cases
+  - **Test Command:** `npm test -- --run pointSystemService.basic.test.ts pointSystemService.integration.test.ts`
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
+
+- [ ] 3. Build reward number generation and management system
+
+
+
+  - Implement createRewardNumber method with unique serial number generation
+  - Create StepUp tier management with configurable tier amounts and status tracking
+  - Build tier awarding logic with special handling for 32,200 tier (6,000 voucher reserve + 20,200 redeemable)
+  - Implement tier status updates and progression tracking
+  - Write comprehensive tests for reward number lifecycle and tier progression
+  - **Test Command:** `npm test -- --run rewardNumber.test.ts tierProgression.test.ts`
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [ ] 4. Implement three-wallet system with VAT handling
+  - Create wallet management service with three distinct wallet types (Reward Points, Income, Commerce)
+  - Implement wallet-to-wallet transfer functionality with transaction logging
+  - Build point-to-cash conversion system with 12.5% VAT and service charge deduction
+  - Create wallet balance validation and concurrency protection
+  - Write unit tests for all wallet operations and VAT calculations
+  - **Test Command:** `npm test -- --run walletService.test.ts vatCalculation.test.ts`
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
+
+- [ ] 5. Build affiliate referral commission system
+  - Implement referral tracking and relationship management
+  - Create 5% lifetime commission calculation and distribution logic
+  - Build automatic commission processing for all referred user point earnings
+  - Implement commission aggregation for multiple referrals
+  - Write tests for referral commission accuracy and edge cases
+  - **Test Command:** `npm test -- --run affiliateCommission.test.ts referralSystem.test.ts`
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+
+- [ ] 6. Implement ripple reward system
+  - Create ripple reward calculation with fixed amounts (50, 100, 150, 700 points)
+  - Build automatic ripple distribution when referred users reach StepUp tiers
+  - Implement ripple reward processing in addition to affiliate commissions
+  - Create ripple reward tracking and audit trail
+  - Write unit tests for all ripple reward scenarios
+  - **Test Command:** `npm test -- --run rippleReward.test.ts`
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+
+- [ ] 7. Build merchant commission and cashback system
+  - Implement 15% instant cashback for merchant point distributions
+  - Create 2% merchant referral commission system for referred merchants
+  - Build 1% shared royalty pool accumulation and monthly distribution logic
+  - Implement merchant commission audit trail and transaction recording
+  - Write comprehensive tests for all merchant commission scenarios
+  - **Test Command:** `npm test -- --run merchantCommission.test.ts cashbackSystem.test.ts`
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
+
+- [ ] 8. Create merchant point issuance system
+  - Implement manual point issuance mode for merchants
+  - Build automatic point issuance with fixed points per item and percentage-based calculations
+  - Create merchant configuration system for issuance mode selection
+  - Implement point-to-currency conversion using admin-configurable rates
+  - Write tests for both manual and automatic issuance modes
+  - **Test Command:** `npm test -- --run merchantIssuance.test.ts pointDistribution.test.ts`
+  - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+
+- [ ] 9. Implement QR code point transfer system
+  - Create QR code generation service for unique point transfer codes
+  - Build QR code scanning and validation system for instant transfers
+  - Implement point transfer processing with commission rule triggers
+  - Create QR transfer audit trail and transaction logging
+  - Write tests for QR code generation, validation, and transfer processing
+  - **Test Command:** `npm test -- --run qrTransfer.test.ts qrCodeGeneration.test.ts`
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
+
+- [ ] 10. Build admin configuration and control system
+  - Create admin settings management for all configurable parameters (thresholds, rates, percentages)
+  - Implement real-time configuration updates with immediate effect for new transactions
+  - Build admin audit logging for all configuration changes
+  - Create serial mapping management for global and local tier distribution
+  - Write tests for configuration management and audit trail accuracy
+  - **Test Command:** `npm test -- --run adminConfig.test.ts configurationService.test.ts`
+  - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
+
+- [ ] 11. Implement leaderboard and analytics system
+  - Create leaderboard calculation service with multiple sorting criteria (points, reward numbers, tiers)
+  - Build caching system for leaderboard performance with configurable refresh intervals
+  - Implement regional leaderboard separation (global vs local)
+  - Create leaderboard API endpoints with pagination and filtering
+  - Write tests for leaderboard accuracy and performance
+  - **Test Command:** `npm test -- --run leaderboard.test.ts analytics.test.ts`
+  - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
+
+- [ ] 12. Build comprehensive reporting and analytics system
+  - Create global analytics service tracking total points issued, users, merchants, and reward numbers
+  - Implement merchant-specific analytics with distribution and cashback tracking
+  - Build financial reporting for VAT collection, withdrawals, and commission payments
+  - Create time-based reporting (daily, weekly, monthly, yearly) with regional breakdown
+  - Write tests for all analytics calculations and report generation
+  - **Test Command:** `npm test -- --run reporting.test.ts analyticsService.test.ts`
+  - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+
+- [ ] 13. Implement security and compliance features
+  - Create transaction audit logging with complete financial trail
+  - Implement API authentication with 2FA and token-based security
+  - Build KYC compliance system for withdrawal requests
+  - Create fraud detection with unusual transaction flagging
+  - Write security tests for authentication, authorization, and fraud prevention
+  - **Test Command:** `npm test -- --run security.test.ts auditLogging.test.ts fraudDetection.test.ts`
+  - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
+
+- [ ] 14. Build customer dashboard and user interface
+  - Create customer dashboard showing all wallet balances and transaction history
+  - Implement reward number display with tier status and progression
+  - Build referral management interface with commission and ripple history
+  - Create QR code display for point transfers
+  - Write UI tests for all customer dashboard functionality
+  - **Test Command:** `npm test -- --run customerDashboard.test.ts userInterface.test.ts`
+  - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5_
+
+- [ ] 15. Build merchant dashboard and management interface
+  - Create merchant dashboard with point balance and distribution history
+  - Implement point issuance interface for manual and automatic mode configuration
+  - Build merchant referral tracking with commission display
+  - Create merchant analytics and reporting interface
+  - Write UI tests for all merchant dashboard functionality
+  - **Test Command:** `npm test -- --run merchantDashboard.test.ts merchantInterface.test.ts`
+  - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5_
+
+- [ ] 16. Implement API endpoints and webhook system
+  - Create REST API endpoints for all point system operations
+  - Build webhook system for external integrations (ecommerce, utility bills, VAT capture)
+  - Implement event emission system (points_earned, reward_number_created, tier_awarded, etc.)
+  - Create API documentation and integration guides
+  - Write integration tests for all API endpoints and webhook functionality
+  - **Test Command:** `npm test -- --run apiEndpoints.test.ts webhooks.test.ts integration.test.ts`
+  - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
+
+- [ ] 17. Build comprehensive test suite and validation
+  - Create end-to-end test scenarios covering complete user journeys from registration to reward number
+  - Implement performance tests for high-volume point transactions and concurrent operations
+  - Build integration tests for all service interactions and external dependencies
+  - Create data validation tests for financial accuracy and audit trail completeness
+  - Write load tests for scalability validation under expected user growth
+  - **Test Command:** `npm test -- --run e2e.test.ts performance.test.ts loadTest.test.ts`
+  - _Requirements: All requirements validation_
+
+- [ ] 18. Implement caching and performance optimization
+  - Create Redis caching layer for wallet balances, reward numbers, and system settings
+  - Implement database query optimization with proper indexing and connection pooling
+  - Build performance monitoring and alerting for transaction processing rates
+  - Create cache invalidation strategies for real-time data consistency
+  - Write performance tests to validate optimization effectiveness
+  - **Test Command:** `npm test -- --run caching.test.ts performance.test.ts optimization.test.ts`
+  - _Requirements: Performance and scalability support for all features_
+
+- [ ] 19. Set up monitoring, logging, and alerting systems
+  - Implement comprehensive application logging for all point system operations
+  - Create monitoring dashboards for transaction volumes, error rates, and system health
+  - Build alerting system for critical failures, wallet discrepancies, and commission errors
+  - Create audit log analysis tools for compliance and fraud detection
+  - Write monitoring tests to validate alert accuracy and response times
+  - **Test Command:** `npm test -- --run monitoring.test.ts logging.test.ts alerting.test.ts`
+  - _Requirements: 13.1, 13.4, 13.5 and operational excellence_
+
+- [ ] 20. Deploy and integrate complete loyalty points system
+  - Deploy all services to staging environment with full integration testing
+  - Create deployment scripts and database migration procedures
+  - Implement feature flags for gradual rollout and A/B testing capabilities
+  - Set up production monitoring and backup procedures
+  - Conduct final end-to-end validation of all system features and integrations
+  - **Test Command:** `npm test -- --run deployment.test.ts integration.test.ts e2e.test.ts`
+  - _Requirements: Complete system deployment and validation_

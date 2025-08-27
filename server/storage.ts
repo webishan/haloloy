@@ -7,7 +7,13 @@ import {
   type WishlistItem, type InsertWishlistItem, type Review, type InsertReview,
   type Admin, type InsertAdmin, type ChatMessage, type InsertChatMessage, 
   type ChatRoom, type InsertChatRoom, type Conversation, type InsertConversation,
-  type PointDistribution, type InsertPointDistribution
+  type PointDistribution, type InsertPointDistribution, type UserWallet,
+  type InsertUserWallet, type PointTransaction, type InsertPointTransaction,
+  type StepUpRewardNumber, type InsertStepUpRewardNumber, type Referral,
+  type InsertReferral, type CommissionTransaction, type InsertCommissionTransaction,
+  type MerchantTransaction, type InsertMerchantTransaction, type QRTransfer,
+  type InsertQRTransfer, type AdminSetting, type InsertAdminSetting,
+  type Leaderboard, type InsertLeaderboard
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
@@ -111,6 +117,47 @@ export interface IStorage {
   createChatRoom(room: InsertChatRoom): Promise<ChatRoom>;
   getOrdersByMerchant(merchantId: string): Promise<Order[]>;
   getProductsByMerchant(merchantId: string): Promise<Product[]>;
+  
+  // Loyalty system methods
+  // Wallet management
+  getUserWallet(userId: string, walletType: 'reward_points' | 'income' | 'commerce'): Promise<UserWallet | undefined>;
+  createUserWallet(wallet: InsertUserWallet): Promise<UserWallet>;
+  updateUserWallet(walletId: string, wallet: Partial<UserWallet>): Promise<UserWallet>;
+  
+  // Point transactions
+  getPointTransactions(userId: string): Promise<PointTransaction[]>;
+  createPointTransaction(transaction: InsertPointTransaction): Promise<PointTransaction>;
+  
+  // StepUp reward numbers
+  getActiveRewardNumbers(userId: string): Promise<StepUpRewardNumber[]>;
+  createStepUpRewardNumber(rewardNumber: InsertStepUpRewardNumber): Promise<StepUpRewardNumber>;
+  updateStepUpRewardNumber(id: string, rewardNumber: Partial<StepUpRewardNumber>): Promise<StepUpRewardNumber>;
+  
+  // Referral system
+  getReferralByReferee(refereeId: string): Promise<Referral | undefined>;
+  createReferral(referral: InsertReferral): Promise<Referral>;
+  updateReferral(id: string, referral: Partial<Referral>): Promise<Referral>;
+  
+  // Commission transactions
+  createCommissionTransaction(commission: InsertCommissionTransaction): Promise<CommissionTransaction>;
+  
+  // Merchant transactions
+  getMerchantTransactions(merchantId: string): Promise<MerchantTransaction[]>;
+  createMerchantTransaction(transaction: InsertMerchantTransaction): Promise<MerchantTransaction>;
+  
+  // QR transfers
+  getQRTransfer(qrCode: string): Promise<QRTransfer | undefined>;
+  createQRTransfer(transfer: InsertQRTransfer): Promise<QRTransfer>;
+  updateQRTransfer(id: string, transfer: Partial<QRTransfer>): Promise<QRTransfer>;
+  
+  // Admin settings
+  getAdminSetting(settingKey: string): Promise<AdminSetting | undefined>;
+  createAdminSetting(setting: InsertAdminSetting): Promise<AdminSetting>;
+  updateAdminSetting(id: string, setting: Partial<AdminSetting>): Promise<AdminSetting>;
+  
+  // Leaderboards
+  getLeaderboard(type: 'global' | 'local', country?: string): Promise<Leaderboard[]>;
+  createLeaderboard(leaderboard: InsertLeaderboard): Promise<Leaderboard>;
 }
 
 export class MemStorage implements IStorage {
@@ -123,6 +170,17 @@ export class MemStorage implements IStorage {
   private orders: Map<string, Order> = new Map();
   private rewardTransactions: Map<string, RewardTransaction> = new Map();
   private rewardNumbers: Map<string, RewardNumber> = new Map();
+  
+  // New loyalty system storage
+  private userWallets: Map<string, UserWallet> = new Map();
+  private pointTransactions: Map<string, PointTransaction> = new Map();
+  private stepUpRewardNumbers: Map<string, StepUpRewardNumber> = new Map();
+  private referrals: Map<string, Referral> = new Map();
+  private commissionTransactions: Map<string, CommissionTransaction> = new Map();
+  private merchantTransactions: Map<string, MerchantTransaction> = new Map();
+  private qrTransfers: Map<string, QRTransfer> = new Map();
+  private adminSettings: Map<string, AdminSetting> = new Map();
+  private leaderboards: Map<string, Leaderboard> = new Map();
   private cartItems: Map<string, CartItem> = new Map();
   private wishlistItems: Map<string, WishlistItem> = new Map();
   private reviews: Map<string, Review> = new Map();
@@ -1264,6 +1322,286 @@ export class MemStorage implements IStorage {
 
   async getChatMessage(id: string): Promise<ChatMessage | undefined> {
     return this.chatMessages.get(id);
+  }
+
+  // =================== LOYALTY SYSTEM METHODS ===================
+
+  // Wallet management
+  async getUserWallet(userId: string, walletType: 'reward_points' | 'income' | 'commerce'): Promise<UserWallet | undefined> {
+    return Array.from(this.userWallets.values())
+      .find(wallet => wallet.userId === userId && wallet.walletType === walletType);
+  }
+
+  async createUserWallet(wallet: InsertUserWallet): Promise<UserWallet> {
+    const id = randomUUID();
+    const newWallet: UserWallet = {
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true,
+      balance: '0.00',
+      totalReceived: '0.00',
+      totalSpent: '0.00',
+      ...wallet
+    };
+    this.userWallets.set(id, newWallet);
+    return newWallet;
+  }
+
+  async updateUserWallet(walletId: string, wallet: Partial<UserWallet>): Promise<UserWallet> {
+    const existing = this.userWallets.get(walletId);
+    if (!existing) throw new Error("Wallet not found");
+    
+    const updated: UserWallet = {
+      ...existing,
+      ...wallet,
+      updatedAt: new Date()
+    };
+    this.userWallets.set(walletId, updated);
+    return updated;
+  }
+
+  // Point transactions
+  async getPointTransactions(userId: string): Promise<PointTransaction[]> {
+    return Array.from(this.pointTransactions.values())
+      .filter(transaction => transaction.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async createPointTransaction(transaction: InsertPointTransaction): Promise<PointTransaction> {
+    const id = randomUUID();
+    const newTransaction: PointTransaction = {
+      id,
+      createdAt: new Date(),
+      status: 'completed',
+      metadata: {},
+      auditTrail: [],
+      fromUserId: null,
+      toUserId: null,
+      fromWalletType: null,
+      toWalletType: null,
+      orderId: null,
+      merchantId: null,
+      description: null,
+      commissionRate: null,
+      vatAmount: null,
+      serviceCharge: null,
+      finalAmount: null,
+      ...transaction
+    };
+    this.pointTransactions.set(id, newTransaction);
+    return newTransaction;
+  }
+
+  // StepUp reward numbers
+  async getActiveRewardNumbers(userId: string): Promise<StepUpRewardNumber[]> {
+    return Array.from(this.stepUpRewardNumbers.values())
+      .filter(rn => rn.userId === userId && !rn.isCompleted);
+  }
+
+  async createStepUpRewardNumber(rewardNumber: InsertStepUpRewardNumber): Promise<StepUpRewardNumber> {
+    const id = randomUUID();
+    const newRewardNumber: StepUpRewardNumber = {
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tier1Status: 'active',
+      tier1Amount: 800,
+      tier1CompletedAt: null,
+      tier2Status: 'locked',
+      tier2Amount: 1500,
+      tier2CompletedAt: null,
+      tier3Status: 'locked',
+      tier3Amount: 3500,
+      tier3CompletedAt: null,
+      tier4Status: 'locked',
+      tier4Amount: 32200,
+      tier4VoucherReserve: 6000,
+      tier4RedeemableAmount: 20200,
+      tier4CompletedAt: null,
+      currentPoints: 0,
+      totalPointsRequired: 37000,
+      isCompleted: false,
+      completedAt: null,
+      ...rewardNumber
+    };
+    this.stepUpRewardNumbers.set(id, newRewardNumber);
+    return newRewardNumber;
+  }
+
+  async updateStepUpRewardNumber(id: string, rewardNumber: Partial<StepUpRewardNumber>): Promise<StepUpRewardNumber> {
+    const existing = this.stepUpRewardNumbers.get(id);
+    if (!existing) throw new Error("Reward number not found");
+    
+    const updated: StepUpRewardNumber = {
+      ...existing,
+      ...rewardNumber,
+      updatedAt: new Date()
+    };
+    this.stepUpRewardNumbers.set(id, updated);
+    return updated;
+  }
+
+  // Referral system
+  async getReferralByReferee(refereeId: string): Promise<Referral | undefined> {
+    return Array.from(this.referrals.values())
+      .find(referral => referral.refereeId === refereeId);
+  }
+
+  async createReferral(referral: InsertReferral): Promise<Referral> {
+    const id = randomUUID();
+    const newReferral: Referral = {
+      id,
+      createdAt: new Date(),
+      lifetimeCommissionEarned: '0.00',
+      totalRippleRewards: 0,
+      isActive: true,
+      ...referral
+    };
+    this.referrals.set(id, newReferral);
+    return newReferral;
+  }
+
+  async updateReferral(id: string, referral: Partial<Referral>): Promise<Referral> {
+    const existing = this.referrals.get(id);
+    if (!existing) throw new Error("Referral not found");
+    
+    const updated: Referral = { ...existing, ...referral };
+    this.referrals.set(id, updated);
+    return updated;
+  }
+
+  // Commission transactions
+  async createCommissionTransaction(commission: InsertCommissionTransaction): Promise<CommissionTransaction> {
+    const id = randomUUID();
+    const newCommission: CommissionTransaction = {
+      id,
+      createdAt: new Date(),
+      commissionRate: null,
+      rippleLevel: null,
+      rippleAmount: null,
+      ...commission
+    };
+    this.commissionTransactions.set(id, newCommission);
+    return newCommission;
+  }
+
+  // Merchant transactions
+  async getMerchantTransactions(merchantId: string): Promise<MerchantTransaction[]> {
+    return Array.from(this.merchantTransactions.values())
+      .filter(transaction => transaction.merchantId === merchantId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async createMerchantTransaction(transaction: InsertMerchantTransaction): Promise<MerchantTransaction> {
+    const id = randomUUID();
+    const newTransaction: MerchantTransaction = {
+      id,
+      createdAt: new Date(),
+      pointsInvolved: null,
+      customerId: null,
+      referredMerchantId: null,
+      cashbackRate: null,
+      commissionRate: null,
+      royaltyPoolContribution: null,
+      monthlyDistribution: false,
+      distributionMonth: null,
+      ...transaction
+    };
+    this.merchantTransactions.set(id, newTransaction);
+    return newTransaction;
+  }
+
+  // QR transfers
+  async getQRTransfer(qrCode: string): Promise<QRTransfer | undefined> {
+    return Array.from(this.qrTransfers.values())
+      .find(transfer => transfer.qrCode === qrCode);
+  }
+
+  async createQRTransfer(transfer: InsertQRTransfer): Promise<QRTransfer> {
+    const id = randomUUID();
+    const newTransfer: QRTransfer = {
+      id,
+      createdAt: new Date(),
+      receiverId: null,
+      isUsed: false,
+      usedAt: null,
+      transferType: 'direct',
+      ...transfer
+    };
+    this.qrTransfers.set(id, newTransfer);
+    return newTransfer;
+  }
+
+  async updateQRTransfer(id: string, transfer: Partial<QRTransfer>): Promise<QRTransfer> {
+    const existing = this.qrTransfers.get(id);
+    if (!existing) throw new Error("QR transfer not found");
+    
+    const updated: QRTransfer = { ...existing, ...transfer };
+    this.qrTransfers.set(id, updated);
+    return updated;
+  }
+
+  // Admin settings
+  async getAdminSetting(settingKey: string): Promise<AdminSetting | undefined> {
+    return Array.from(this.adminSettings.values())
+      .find(setting => setting.settingKey === settingKey);
+  }
+
+  async createAdminSetting(setting: InsertAdminSetting): Promise<AdminSetting> {
+    const id = randomUUID();
+    const newSetting: AdminSetting = {
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      description: null,
+      category: null,
+      isActive: true,
+      lastUpdatedBy: null,
+      ...setting
+    };
+    this.adminSettings.set(id, newSetting);
+    return newSetting;
+  }
+
+  async updateAdminSetting(id: string, setting: Partial<AdminSetting>): Promise<AdminSetting> {
+    const existing = this.adminSettings.get(id);
+    if (!existing) throw new Error("Admin setting not found");
+    
+    const updated: AdminSetting = {
+      ...existing,
+      ...setting,
+      updatedAt: new Date()
+    };
+    this.adminSettings.set(id, updated);
+    return updated;
+  }
+
+  // Leaderboards
+  async getLeaderboard(type: 'global' | 'local', country?: string): Promise<Leaderboard[]> {
+    return Array.from(this.leaderboards.values())
+      .filter(entry => {
+        if (entry.leaderboardType !== type) return false;
+        if (type === 'local' && country && entry.country !== country) return false;
+        return true;
+      })
+      .sort((a, b) => (a.rank || 0) - (b.rank || 0));
+  }
+
+  async createLeaderboard(leaderboard: InsertLeaderboard): Promise<Leaderboard> {
+    const id = randomUUID();
+    const newLeaderboard: Leaderboard = {
+      id,
+      createdAt: new Date(),
+      calculatedAt: new Date(),
+      totalPoints: 0,
+      rewardNumbersCount: 0,
+      completedTiers: 0,
+      rank: null,
+      ...leaderboard
+    };
+    this.leaderboards.set(id, newLeaderboard);
+    return newLeaderboard;
   }
 
   async createChatRoom(room: InsertChatRoom): Promise<ChatRoom> {

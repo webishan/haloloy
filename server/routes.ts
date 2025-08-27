@@ -978,6 +978,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAdminRoutes(app);
   setupMerchantRoutes(app);
   setupChatRoutes(app);
+  
+  // Import and register loyalty routes
+  const { registerLoyaltyRoutes } = await import("./loyalty-routes");
+  registerLoyaltyRoutes(app);
 
   // Admin Portal API Routes
   

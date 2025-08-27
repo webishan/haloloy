@@ -259,6 +259,172 @@ export const pointDistributions = pgTable("point_distributions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Three-wallet system for users (Reward Points, Income, Commerce)
+export const userWallets = pgTable("user_wallets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  walletType: text("wallet_type", { enum: ["reward_points", "income", "commerce"] }).notNull(),
+  balance: decimal("balance", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalReceived: decimal("total_received", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalSpent: decimal("total_spent", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Point transactions with comprehensive tracking
+export const pointTransactions = pgTable("point_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  points: integer("points").notNull(),
+  transactionType: text("transaction_type", { 
+    enum: ["purchase", "referral_commission", "ripple_reward", "cashback", "admin_manual", "transfer_in", "transfer_out", "wallet_conversion", "withdrawal", "qr_transfer"]
+  }).notNull(),
+  fromUserId: varchar("from_user_id"),
+  toUserId: varchar("to_user_id"), 
+  fromWalletType: text("from_wallet_type", { enum: ["reward_points", "income", "commerce"] }),
+  toWalletType: text("to_wallet_type", { enum: ["reward_points", "income", "commerce"] }),
+  orderId: varchar("order_id"),
+  merchantId: varchar("merchant_id"),
+  description: text("description"),
+  metadata: jsonb("metadata").default({}),
+  balanceBefore: integer("balance_before").notNull(),
+  balanceAfter: integer("balance_after").notNull(),
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 4 }),
+  vatAmount: decimal("vat_amount", { precision: 10, scale: 2 }),
+  serviceCharge: decimal("service_charge", { precision: 10, scale: 2 }),
+  finalAmount: decimal("final_amount", { precision: 10, scale: 2 }),
+  status: text("status", { enum: ["pending", "completed", "failed", "cancelled"] }).default("completed"),
+  auditTrail: jsonb("audit_trail").default([]),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Enhanced reward numbers with StepUp tier system
+export const stepUpRewardNumbers = pgTable("stepup_reward_numbers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  rewardNumber: integer("reward_number").notNull().unique(),
+  serialNumber: varchar("serial_number").notNull().unique(),
+  type: text("type", { enum: ["global", "local"] }).notNull(),
+  
+  // Tier progression tracking
+  tier1Status: text("tier1_status", { enum: ["active", "completed"] }).default("active"),
+  tier1Amount: integer("tier1_amount").default(800),
+  tier1CompletedAt: timestamp("tier1_completed_at"),
+  
+  tier2Status: text("tier2_status", { enum: ["locked", "active", "completed"] }).default("locked"),
+  tier2Amount: integer("tier2_amount").default(1500),
+  tier2CompletedAt: timestamp("tier2_completed_at"),
+  
+  tier3Status: text("tier3_status", { enum: ["locked", "active", "completed"] }).default("locked"),
+  tier3Amount: integer("tier3_amount").default(3500),
+  tier3CompletedAt: timestamp("tier3_completed_at"),
+  
+  tier4Status: text("tier4_status", { enum: ["locked", "active", "completed"] }).default("locked"),
+  tier4Amount: integer("tier4_amount").default(32200),
+  tier4VoucherReserve: integer("tier4_voucher_reserve").default(6000), // Special handling for tier 4
+  tier4RedeemableAmount: integer("tier4_redeemable_amount").default(20200),
+  tier4CompletedAt: timestamp("tier4_completed_at"),
+  
+  currentPoints: integer("current_points").notNull().default(0),
+  totalPointsRequired: integer("total_points_required").default(37000), // Sum of all tiers
+  isCompleted: boolean("is_completed").notNull().default(false),
+  completedAt: timestamp("completed_at"),
+  country: text("country").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Referral system tracking
+export const referrals = pgTable("referrals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  referrerId: varchar("referrer_id").notNull(),
+  refereeId: varchar("referee_id").notNull().unique(),
+  referralCode: text("referral_code").notNull(),
+  referralType: text("referral_type", { enum: ["customer", "merchant"] }).notNull(),
+  lifetimeCommissionEarned: decimal("lifetime_commission_earned", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalRippleRewards: integer("total_ripple_rewards").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Commission tracking for affiliates
+export const commissionTransactions = pgTable("commission_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  referrerId: varchar("referrer_id").notNull(),
+  refereeId: varchar("referee_id").notNull(),
+  transactionType: text("transaction_type", { enum: ["affiliate_commission", "ripple_reward", "merchant_referral"] }).notNull(),
+  originalTransactionId: varchar("original_transaction_id").notNull(),
+  baseAmount: integer("base_amount").notNull(), // Original points earned by referee
+  commissionAmount: decimal("commission_amount", { precision: 15, scale: 2 }).notNull(), // 5% or fixed ripple amount
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 4 }), // 0.05 for 5%
+  rippleLevel: integer("ripple_level"), // For ripple rewards: 1, 2, 3, 4
+  rippleAmount: integer("ripple_amount"), // Fixed amounts: 50, 100, 150, 700
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Merchant commission and cashback tracking  
+export const merchantTransactions = pgTable("merchant_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  merchantId: varchar("merchant_id").notNull(),
+  transactionType: text("transaction_type", { 
+    enum: ["instant_cashback", "referral_commission", "royalty_pool_distribution", "point_purchase", "point_distribution"] 
+  }).notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  pointsInvolved: integer("points_involved"),
+  customerId: varchar("customer_id"), // For point distribution tracking
+  referredMerchantId: varchar("referred_merchant_id"), // For merchant referral commissions
+  cashbackRate: decimal("cashback_rate", { precision: 5, scale: 4 }), // 15% = 0.15
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 4 }), // 2% = 0.02
+  royaltyPoolContribution: decimal("royalty_pool_contribution", { precision: 15, scale: 2 }), // 1%
+  monthlyDistribution: boolean("monthly_distribution").default(false),
+  distributionMonth: text("distribution_month"), // YYYY-MM format
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// QR code point transfers
+export const qrTransfers = pgTable("qr_transfers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  qrCode: varchar("qr_code").notNull().unique(),
+  senderId: varchar("sender_id").notNull(),
+  receiverId: varchar("receiver_id"),
+  points: integer("points").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  isUsed: boolean("is_used").notNull().default(false),
+  usedAt: timestamp("used_at"),
+  transferType: text("transfer_type", { enum: ["direct", "anonymous"] }).default("direct"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Admin configuration settings
+export const adminSettings = pgTable("admin_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  settingKey: text("setting_key").notNull().unique(),
+  settingValue: jsonb("setting_value").notNull(),
+  settingType: text("setting_type", { enum: ["number", "boolean", "string", "object"] }).notNull(),
+  description: text("description"),
+  category: text("category"), // thresholds, rates, percentages, limits
+  isActive: boolean("is_active").notNull().default(true),
+  lastUpdatedBy: varchar("last_updated_by"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// System leaderboards
+export const leaderboards = pgTable("leaderboards", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  userType: text("user_type", { enum: ["customer", "merchant"] }).notNull(),
+  country: text("country").notNull(),
+  totalPoints: integer("total_points").notNull().default(0),
+  rewardNumbersCount: integer("reward_numbers_count").notNull().default(0),
+  completedTiers: integer("completed_tiers").notNull().default(0),
+  rank: integer("rank"),
+  leaderboardType: text("leaderboard_type", { enum: ["global", "local"] }).notNull(),
+  calculatedAt: timestamp("calculated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertAdminSchema = createInsertSchema(admins).omit({ id: true, createdAt: true });
@@ -277,6 +443,17 @@ export const insertRewardNumberSchema = createInsertSchema(rewardNumbers).omit({
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true, createdAt: true });
 export const insertWishlistItemSchema = createInsertSchema(wishlistItems).omit({ id: true, createdAt: true });
 export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
+
+// New loyalty system insert schemas
+export const insertUserWalletSchema = createInsertSchema(userWallets).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPointTransactionSchema = createInsertSchema(pointTransactions).omit({ id: true, createdAt: true });
+export const insertStepUpRewardNumberSchema = createInsertSchema(stepUpRewardNumbers).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertReferralSchema = createInsertSchema(referrals).omit({ id: true, createdAt: true });
+export const insertCommissionTransactionSchema = createInsertSchema(commissionTransactions).omit({ id: true, createdAt: true });
+export const insertMerchantTransactionSchema = createInsertSchema(merchantTransactions).omit({ id: true, createdAt: true });
+export const insertQRTransferSchema = createInsertSchema(qrTransfers).omit({ id: true, createdAt: true });
+export const insertAdminSettingSchema = createInsertSchema(adminSettings).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertLeaderboardSchema = createInsertSchema(leaderboards).omit({ id: true, createdAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -313,3 +490,23 @@ export type Conversation = typeof conversations.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type PointDistribution = typeof pointDistributions.$inferSelect;
 export type InsertPointDistribution = z.infer<typeof insertPointDistributionSchema>;
+
+// New loyalty system types
+export type UserWallet = typeof userWallets.$inferSelect;
+export type InsertUserWallet = z.infer<typeof insertUserWalletSchema>;
+export type PointTransaction = typeof pointTransactions.$inferSelect;
+export type InsertPointTransaction = z.infer<typeof insertPointTransactionSchema>;
+export type StepUpRewardNumber = typeof stepUpRewardNumbers.$inferSelect;
+export type InsertStepUpRewardNumber = z.infer<typeof insertStepUpRewardNumberSchema>;
+export type Referral = typeof referrals.$inferSelect;
+export type InsertReferral = z.infer<typeof insertReferralSchema>;
+export type CommissionTransaction = typeof commissionTransactions.$inferSelect;
+export type InsertCommissionTransaction = z.infer<typeof insertCommissionTransactionSchema>;
+export type MerchantTransaction = typeof merchantTransactions.$inferSelect;
+export type InsertMerchantTransaction = z.infer<typeof insertMerchantTransactionSchema>;
+export type QRTransfer = typeof qrTransfers.$inferSelect;
+export type InsertQRTransfer = z.infer<typeof insertQRTransferSchema>;
+export type AdminSetting = typeof adminSettings.$inferSelect;
+export type InsertAdminSetting = z.infer<typeof insertAdminSettingSchema>;
+export type Leaderboard = typeof leaderboards.$inferSelect;
+export type InsertLeaderboard = z.infer<typeof insertLeaderboardSchema>;

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import io from "socket.io-client";
 import SecureChat from "@/components/SecureChat";
+import PointsManagementPanel from "@/components/PointsManagementPanel";
 
 interface GlobalAdminUser {
   id: string;
@@ -385,9 +386,9 @@ export default function GlobalAdminPortal() {
               <BarChart3 className="w-4 h-4 mr-2" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="add-points" data-testid="tab-add-points">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Points
+            <TabsTrigger value="points-management" data-testid="tab-points-management">
+              <Coins className="w-4 h-4 mr-2" />
+              Points Management
             </TabsTrigger>
             <TabsTrigger value="distribute" data-testid="tab-distribute">
               <DollarSign className="w-4 h-4 mr-2" />
@@ -533,6 +534,11 @@ export default function GlobalAdminPortal() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Points Management Tab */}
+          <TabsContent value="points-management" className="space-y-6">
+            <PointsManagementPanel currentUser={currentUser} />
           </TabsContent>
 
           {/* Distribute Points Tab */}
