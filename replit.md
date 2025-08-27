@@ -1,6 +1,16 @@
 # Overview
 
-KOMARCE is a unified e-commerce and loyalty ecosystem focused on sustainability. The platform connects customers, merchants, and administrators in a marketplace where every transaction contributes to environmental goals while earning reward points. Users can shop for products, earn loyalty points, and participate in a reward system that promotes sustainable practices.
+KOMARCE is a complete loyalty marketplace platform featuring hierarchical point distribution, secure messaging, QR code transfers, and StepUp reward numbers. The system implements a strict admin hierarchy (Global → Local → Merchant → Customer) with comprehensive portals for each role. All features are fully functional with test data pre-loaded for immediate demonstration.
+
+## Recent Implementation Status (August 27, 2025)
+✅ Complete loyalty ecosystem with all requested features implemented
+✅ Four distinct portals with role-based authentication and authorization  
+✅ Three-wallet system (reward_points, income, commerce) for each user
+✅ QR code point transfer system for secure P2P transactions
+✅ StepUp reward numbers with 3-tier completion tracking
+✅ Secure multi-role messaging with hierarchical communication
+✅ Multi-country support (BD, MY, AE, PH) with regional management
+✅ Comprehensive test data: 1 Global + 4 Local Admins + 12 Merchants + 20 Customers
 
 # User Preferences
 
