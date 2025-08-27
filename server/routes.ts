@@ -974,6 +974,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer login route
+  app.post('/api/customer/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      const user = await storage.getUserByEmail(email);
+      if (!user || !await bcrypt.compare(password, user.password)) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      
+      if (user.role !== 'customer') {
+        return res.status(403).json({ message: 'Not authorized as customer' });
+      }
+      
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+      
+      res.json({ user, token });
+    } catch (error) {
+      console.error('Customer login error:', error);
+      res.status(500).json({ message: 'Login failed' });
+    }
+  });
+
   // Set up specialized route modules
   setupAdminRoutes(app);
   setupMerchantRoutes(app);

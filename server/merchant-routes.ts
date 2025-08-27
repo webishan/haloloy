@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { storage } from "./storage";
 import { insertChatMessageSchema } from "@shared/schema";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 
 const JWT_SECRET = process.env.JWT_SECRET || "komarce-secret-key";
 
@@ -32,6 +33,33 @@ function authorizeRole(roles: string[]) {
 }
 
 export function setupMerchantRoutes(app: Express) {
+  // Merchant login route
+  app.post('/api/merchant/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      const user = await storage.getUserByEmail(email);
+      if (!user || !await bcrypt.compare(password, user.password)) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      
+      if (user.role !== 'merchant') {
+        return res.status(403).json({ message: 'Not authorized as merchant' });
+      }
+      
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+      
+      res.json({ user, token });
+    } catch (error) {
+      console.error('Merchant login error:', error);
+      res.status(500).json({ message: 'Login failed' });
+    }
+  });
+
   // Merchant dashboard
   app.get('/api/merchant/dashboard', authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
