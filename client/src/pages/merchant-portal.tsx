@@ -91,19 +91,22 @@ export default function MerchantPortal() {
   // Dashboard data query
   const { data: dashboardData, isLoading: isDashboardLoading } = useQuery({
     queryKey: ['/api/merchant/dashboard', currentUser?.id],
-    enabled: isAuthenticated && !!currentUser
+    enabled: isAuthenticated && !!currentUser,
+    select: (data: any) => data || {}
   });
 
   // Merchant profile query
   const { data: merchantProfile, isLoading: profileLoading } = useQuery({
     queryKey: ['/api/merchant/profile', currentUser?.id],
-    enabled: isAuthenticated && !!currentUser
+    enabled: isAuthenticated && !!currentUser,
+    select: (data: any) => data || {}
   });
 
   // Customer transactions query
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
     queryKey: ['/api/merchant/transactions', currentUser?.id],
-    enabled: isAuthenticated && !!currentUser
+    enabled: isAuthenticated && !!currentUser,
+    select: (data: any) => Array.isArray(data) ? data : []
   });
 
   // Points distribution mutation
@@ -260,16 +263,16 @@ export default function MerchantPortal() {
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Merchant Portal</h1>
                 <p className="text-sm text-gray-500">
-                  {getCountryFlag(currentUser?.country || '')} {merchantProfile?.businessName || 'Your Business'}
+                  {getCountryFlag(currentUser?.country || '')} {(merchantProfile as any)?.businessName || 'Your Business'}
                 </p>
               </div>
             </div>
             
             <div className="flex items-center space-x-4">
-              {merchantProfile && (
-                <Badge className={getTierColor(merchantProfile.tier)}>
+              {merchantProfile && (merchantProfile as any).tier && (
+                <Badge className={getTierColor((merchantProfile as any).tier)}>
                   <Award className="w-4 h-4 mr-1" />
-                  {merchantProfile.tier.toUpperCase()} TIER
+                  {(merchantProfile as any).tier.toUpperCase()} TIER
                 </Badge>
               )}
               
@@ -321,7 +324,7 @@ export default function MerchantPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Balance</p>
                       <p className="text-3xl font-bold text-blue-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.availablePoints?.toLocaleString() || 0)}
+                        {isDashboardLoading ? "..." : ((dashboardData as any)?.availablePoints?.toLocaleString() || 0)}
                       </p>
                     </div>
                     <Coins className="w-8 h-8 text-blue-500" />
@@ -335,7 +338,7 @@ export default function MerchantPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Customers</p>
                       <p className="text-3xl font-bold text-green-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.totalCustomers || 0)}
+                        {isDashboardLoading ? "..." : ((dashboardData as any)?.totalCustomers || 0)}
                       </p>
                     </div>
                     <Users className="w-8 h-8 text-green-500" />
@@ -349,7 +352,7 @@ export default function MerchantPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Distributed</p>
                       <p className="text-3xl font-bold text-purple-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.totalPointsDistributed?.toLocaleString() || 0)}
+                        {isDashboardLoading ? "..." : ((dashboardData as any)?.totalPointsDistributed?.toLocaleString() || 0)}
                       </p>
                     </div>
                     <TrendingUp className="w-8 h-8 text-purple-500" />

@@ -83,25 +83,29 @@ export default function CustomerPortal() {
   // Dashboard data query
   const { data: dashboardData, isLoading: isDashboardLoading } = useQuery({
     queryKey: ['/api/customer/dashboard', currentUser?.id],
-    enabled: isAuthenticated && !!currentUser
+    enabled: isAuthenticated && !!currentUser,
+    select: (data: any) => data || {}
   });
 
   // Customer profile query
   const { data: customerProfile, isLoading: profileLoading } = useQuery({
     queryKey: ['/api/customer/profile', currentUser?.id],
-    enabled: isAuthenticated && !!currentUser
+    enabled: isAuthenticated && !!currentUser,
+    select: (data: any) => data || {}
   });
 
   // Transaction history query
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
     queryKey: ['/api/customer/transactions', currentUser?.id],
-    enabled: isAuthenticated && !!currentUser
+    enabled: isAuthenticated && !!currentUser,
+    select: (data: any) => Array.isArray(data) ? data : []
   });
 
   // Reward numbers query
   const { data: rewardNumbers = [], isLoading: rewardNumbersLoading } = useQuery({
     queryKey: ['/api/customer/reward-numbers', currentUser?.id],
-    enabled: isAuthenticated && !!currentUser
+    enabled: isAuthenticated && !!currentUser,
+    select: (data: any) => Array.isArray(data) ? data : []
   });
 
   const handleLogin = (e: React.FormEvent) => {
@@ -220,10 +224,10 @@ export default function CustomerPortal() {
             </div>
             
             <div className="flex items-center space-x-4">
-              {customerProfile && (
-                <Badge className={getTierColor(customerProfile.currentTier || 'bronze')}>
+              {customerProfile && (customerProfile as any).currentTier && (
+                <Badge className={getTierColor((customerProfile as any).currentTier || 'bronze')}>
                   <Star className="w-4 h-4 mr-1" />
-                  {(customerProfile.currentTier || 'bronze').toUpperCase()} MEMBER
+                  {((customerProfile as any).currentTier || 'bronze').toUpperCase()} MEMBER
                 </Badge>
               )}
               
@@ -275,7 +279,7 @@ export default function CustomerPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Points</p>
                       <p className="text-3xl font-bold text-pink-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.totalPoints?.toLocaleString() || 0)}
+                        {isDashboardLoading ? "..." : ((dashboardData as any)?.totalPoints?.toLocaleString() || 0)}
                       </p>
                     </div>
                     <Coins className="w-8 h-8 text-pink-500" />
@@ -289,7 +293,7 @@ export default function CustomerPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Accumulated Points</p>
                       <p className="text-3xl font-bold text-purple-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.accumulatedPoints?.toLocaleString() || 0)}
+                        {isDashboardLoading ? "..." : ((dashboardData as any)?.accumulatedPoints?.toLocaleString() || 0)}
                       </p>
                     </div>
                     <TrendingUp className="w-8 h-8 text-purple-500" />
@@ -303,7 +307,7 @@ export default function CustomerPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Reward Numbers</p>
                       <p className="text-3xl font-bold text-blue-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.rewardNumbers || 0)}
+                        {isDashboardLoading ? "..." : ((dashboardData as any)?.rewardNumbers || 0)}
                       </p>
                     </div>
                     <Trophy className="w-8 h-8 text-blue-500" />
@@ -317,7 +321,7 @@ export default function CustomerPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Orders</p>
                       <p className="text-3xl font-bold text-green-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.totalOrders || 0)}
+                        {isDashboardLoading ? "..." : ((dashboardData as any)?.totalOrders || 0)}
                       </p>
                     </div>
                     <ShoppingBag className="w-8 h-8 text-green-500" />
