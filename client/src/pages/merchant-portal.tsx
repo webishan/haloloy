@@ -63,7 +63,7 @@ export default function MerchantPortal() {
   // Login mutation
   const loginMutation = useMutation({
     mutationFn: async (credentials: { email: string; password: string; role: string }) => {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/merchant/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials)
