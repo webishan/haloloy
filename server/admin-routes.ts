@@ -530,49 +530,63 @@ export function setupAdminRoutes(app: Express) {
       }
 
       const token = authHeader.substring(7);
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+      let decoded: any;
+      
+      try {
+        decoded = jwt.verify(token, JWT_SECRET);
+      } catch (jwtError) {
+        console.error('JWT verification failed:', jwtError);
+        return res.status(401).json({ message: 'Invalid token' });
+      }
       
       console.log(`Fetching merchants for country: ${country}, requested by: ${decoded.email}`);
       
-      // Get all merchant users for this country
-      const merchantUsers = await storage.getUsersByRole('merchant');
-      const countryMerchants = merchantUsers.filter(user => user.country === country);
+      // Get all users with merchant role
+      const allUsers = await storage.getAllUsers();
+      const merchantUsers = allUsers.filter(user => user.role === 'merchant' && user.country === country);
       
-      console.log(`Found ${countryMerchants.length} merchant users in ${country}:`, countryMerchants.map(u => u.email));
+      console.log(`Found ${merchantUsers.length} merchant users in ${country}:`, merchantUsers.map(u => u.email));
       
       // Get merchant profiles for these users, create if missing
-      const merchantsData = await Promise.all(countryMerchants.map(async (user) => {
-        let merchant = await storage.getMerchantByUserId(user.id);
-        
-        // Create merchant profile if it doesn't exist
-        if (!merchant) {
-          console.log(`Creating merchant profile for user: ${user.email}`);
-          merchant = await storage.createMerchant({
-            userId: user.id,
-            businessName: `${user.firstName}'s Store`,
-            businessType: 'retail',
-            tier: 'bronze',
-            isActive: true
-          });
-        }
-        
-        return {
-          ...merchant,
-          user: {
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            country: user.country,
-            isActive: user.isActive
+      const merchantsData = [];
+      
+      for (const user of merchantUsers) {
+        try {
+          let merchant = await storage.getMerchantByUserId(user.id);
+          
+          // Create merchant profile if it doesn't exist
+          if (!merchant) {
+            console.log(`Creating merchant profile for user: ${user.email}`);
+            merchant = await storage.createMerchant({
+              userId: user.id,
+              businessName: `${user.firstName}'s Store`,
+              businessType: 'retail',
+              tier: 'bronze',
+              isActive: true
+            });
           }
-        };
-      }));
+          
+          merchantsData.push({
+            ...merchant,
+            user: {
+              firstName: user.firstName,
+              lastName: user.lastName,
+              email: user.email,
+              country: user.country,
+              isActive: user.isActive
+            }
+          });
+        } catch (merchantError) {
+          console.error(`Error processing merchant ${user.email}:`, merchantError);
+          // Continue with other merchants
+        }
+      }
       
       console.log(`Returning ${merchantsData.length} merchants for ${country}`);
       res.json(merchantsData);
     } catch (error) {
       console.error('Get merchants by country error:', error);
-      res.status(500).json({ message: 'Failed to fetch merchants' });
+      res.status(500).json({ message: 'Failed to fetch merchants', error: error.message });
     }
   });
 
