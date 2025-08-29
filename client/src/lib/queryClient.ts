@@ -12,7 +12,14 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
+  // Check for all possible token types
+  const globalToken = localStorage.getItem('globalAdminToken');
+  const localToken = localStorage.getItem('localAdminToken');
+  const merchantToken = localStorage.getItem('merchantToken');
+  const userToken = localStorage.getItem('token');
+  const adminToken = localStorage.getItem('adminToken');
+  
+  const token = globalToken || localToken || merchantToken || userToken || adminToken;
   const headers: Record<string, string> = {};
   
   if (data) {
@@ -40,7 +47,14 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
+    // Check for all possible token types
+    const globalToken = localStorage.getItem('globalAdminToken');
+    const localToken = localStorage.getItem('localAdminToken');
+    const merchantToken = localStorage.getItem('merchantToken');
+    const userToken = localStorage.getItem('token');
+    const adminToken = localStorage.getItem('adminToken');
+    
+    const token = globalToken || localToken || merchantToken || userToken || adminToken;
     const headers: Record<string, string> = {};
     
     if (token) {

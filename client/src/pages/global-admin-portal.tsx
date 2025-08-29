@@ -490,7 +490,7 @@ export default function GlobalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Balance</p>
                       <p className="text-3xl font-bold text-blue-600">
-                        {adminBalance ? adminBalance.balance.toLocaleString() : (isDashboardLoading ? "..." : 0)}
+                        {adminBalance ? (adminBalance as any).balance.toLocaleString() : (isDashboardLoading ? "..." : 0)}
                       </p>
                     </div>
                     <Coins className="w-8 h-8 text-blue-500" />
@@ -607,7 +607,7 @@ export default function GlobalAdminPortal() {
                     <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
                       <h4 className="font-semibold text-green-800 mb-2">Current Balance</h4>
                       <p className="text-2xl font-bold text-green-600">
-                        {adminBalance ? adminBalance.balance.toLocaleString() : 0} Points
+                        {adminBalance ? (adminBalance as any).balance.toLocaleString() : 0} Points
                       </p>
                       <p className="text-sm text-green-600 mt-1">Available for distribution</p>
                     </div>
@@ -647,9 +647,8 @@ export default function GlobalAdminPortal() {
                           <SelectValue placeholder="Select local admin" />
                         </SelectTrigger>
                         <SelectContent>
-                          {adminsList?.filter((admin: any) => admin.role === 'local_admin')
-                            .map((admin: any) => (
-                            <SelectItem key={admin.id} value={admin.userId}>
+                          {adminsList?.map((admin: any) => (
+                            <SelectItem key={admin.id || admin.userId} value={admin.userId}>
                               {admin.firstName} {admin.lastName} ({admin.country})
                             </SelectItem>
                           ))}
@@ -695,7 +694,7 @@ export default function GlobalAdminPortal() {
                     <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                       <h4 className="font-semibold text-blue-800 mb-2">Available Balance</h4>
                       <p className="text-2xl font-bold text-blue-600">
-                        {adminBalance ? adminBalance.balance.toLocaleString() : 0} Points
+                        {adminBalance ? (adminBalance as any).balance.toLocaleString() : 0} Points
                       </p>
                       <p className="text-sm text-blue-600 mt-1">Ready for distribution</p>
                     </div>
