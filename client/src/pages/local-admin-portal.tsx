@@ -60,50 +60,21 @@ export default function LocalAdminPortal() {
     }
   }, []);
 
-  // Mock local admin balance tracking
-  const [localAdminBalance, setLocalAdminBalance] = useState(0);
+  // Real-time balance from database API
+  const { data: adminBalance, refetch: refetchBalance } = useQuery({
+    queryKey: ['/api/admin/balance'],
+    enabled: isAuthenticated,
+    refetchInterval: 5000, // Poll every 5 seconds for real-time updates
+    retry: false
+  });
 
-  // Update balance when currentUser changes
-  useEffect(() => {
-    if (currentUser) {
-      const balances = localStorage.getItem('localAdminBalances');
-      if (balances) {
-        const parsedBalances = JSON.parse(balances);
-        const userIdMap: Record<string, string> = {
-          'BD': 'local-bd-user',
-          'MY': 'local-my-user', 
-          'AE': 'local-ae-user',
-          'PH': 'local-ph-user'
-        };
-        const userId = userIdMap[currentUser.country];
-        const currentBalance = parsedBalances[userId] || 0;
-        setLocalAdminBalance(currentBalance);
-      }
-    }
-  }, [currentUser]);
-
-  // Poll for balance updates every 5 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (currentUser) {
-        const balances = localStorage.getItem('localAdminBalances');
-        if (balances) {
-          const parsedBalances = JSON.parse(balances);
-          const userIdMap: Record<string, string> = {
-            'BD': 'local-bd-user',
-            'MY': 'local-my-user',
-            'AE': 'local-ae-user', 
-            'PH': 'local-ph-user'
-          };
-          const userId = userIdMap[currentUser.country];
-          const currentBalance = parsedBalances[userId] || 0;
-          setLocalAdminBalance(currentBalance);
-        }
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [currentUser]);
+  // Get current user's country dashboard data  
+  const { data: localDashboard, isLoading: isDashboardLoading } = useQuery({
+    queryKey: ['/api/admin/local-dashboard', currentUser?.country],
+    enabled: isAuthenticated && !!currentUser?.country,
+    refetchInterval: 30000, // Refresh every 30 seconds
+    retry: false
+  });
 
   // Login mutation
   const loginMutation = useMutation({
@@ -133,16 +104,11 @@ export default function LocalAdminPortal() {
     }
   });
 
-  // Dashboard data query
-  const { data: dashboardData, isLoading: isDashboardLoading } = useQuery({
-    queryKey: ['/api/admin/local-dashboard', currentUser?.country],
-    enabled: isAuthenticated && !!currentUser
-  });
-
   // Merchants query for the current country
   const { data: merchants = [], isLoading: merchantsLoading } = useQuery({
     queryKey: ['/api/admin/merchants', currentUser?.country],
-    enabled: isAuthenticated && !!currentUser
+    enabled: isAuthenticated && !!currentUser?.country,
+    retry: false
   });
 
   // Point distribution mutation
@@ -369,11 +335,11 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Balance</p>
                       <p className="text-3xl font-bold text-green-600">
-                        {localAdminBalance > 0 ? localAdminBalance.toLocaleString() : (isDashboardLoading ? "..." : (dashboardData?.pointsBalance?.toLocaleString() || 0))}
+                        {adminBalance?.balance ? adminBalance.balance.toLocaleString() : "0"}
                       </p>
-                      {localAdminBalance > 0 && (
+                      {adminBalance?.balance > 0 && (
                         <p className="text-xs text-green-600 mt-1">
-                          Received from Global Admin
+                          Ready for distribution
                         </p>
                       )}
                     </div>
@@ -388,7 +354,7 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Active Merchants</p>
                       <p className="text-3xl font-bold text-blue-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.activeMerchants || 0)}
+                        {localDashboard?.activeMerchants || 0}
                       </p>
                     </div>
                     <Store className="w-8 h-8 text-blue-500" />
@@ -402,7 +368,7 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Customers</p>
                       <p className="text-3xl font-bold text-purple-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.totalCustomers || 0)}
+                        {localDashboard?.totalCustomers || 0}
                       </p>
                     </div>
                     <Users className="w-8 h-8 text-purple-500" />
@@ -416,7 +382,7 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Distributed</p>
                       <p className="text-3xl font-bold text-orange-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.pointsDistributed?.toLocaleString() || 0)}
+                        {localDashboard?.pointsDistributed?.toLocaleString() || 0}
                       </p>
                     </div>
                     <TrendingUp className="w-8 h-8 text-orange-500" />
