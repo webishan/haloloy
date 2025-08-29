@@ -240,16 +240,7 @@ export default function GlobalAdminPortal() {
     }
   });
 
-  // Mock local admin balances storage
-  const [localAdminBalances, setLocalAdminBalances] = useState(() => {
-    const stored = localStorage.getItem('localAdminBalances');
-    return stored ? JSON.parse(stored) : {
-      'local-bd-user': 0,
-      'local-my-user': 0, 
-      'local-ae-user': 0,
-      'local-ph-user': 0
-    };
-  });
+  // Remove localStorage dependency - now using database
 
   // Point distribution mutation
   const distributePointsMutation = useMutation({
@@ -616,10 +607,7 @@ export default function GlobalAdminPortal() {
                     <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
                       <h4 className="font-semibold text-green-800 mb-2">Current Balance</h4>
                       <p className="text-2xl font-bold text-green-600">
-                        {currentUser?.email === 'global@komarce.com' 
-                          ? (localAdminProfile.pointsBalance?.toLocaleString() || 0)
-                          : (adminProfile?.pointsBalance?.toLocaleString() || 0)
-                        } Points
+                        {adminBalance ? adminBalance.balance.toLocaleString() : 0} Points
                       </p>
                       <p className="text-sm text-green-600 mt-1">Available for distribution</p>
                     </div>
