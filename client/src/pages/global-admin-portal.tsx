@@ -168,10 +168,10 @@ export default function GlobalAdminPortal() {
   // Login mutation for global admin
   const loginMutation = useMutation({
     mutationFn: async (credentials: { email: string; password: string }) => {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...credentials, userType: 'global_admin' })
+        body: JSON.stringify({ ...credentials, adminType: 'global' })
       });
       
       if (!response.ok) {
