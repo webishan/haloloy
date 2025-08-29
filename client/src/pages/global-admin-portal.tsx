@@ -71,19 +71,21 @@ export default function GlobalAdminPortal() {
     description: ""
   });
 
-  // Check authentication on mount and clear old tokens
+  // Check authentication on mount
   useEffect(() => {
-    // Force clear old tokens to ensure fresh login with 30-day tokens
-    localStorage.removeItem('globalAdminToken');
-    localStorage.removeItem('globalAdminUser');
-    
     const token = localStorage.getItem('globalAdminToken');
     const user = localStorage.getItem('globalAdminUser');
     if (token && user) {
-      const userData = JSON.parse(user);
-      if (userData.role === 'global_admin') {
-        setIsAuthenticated(true);
-        setCurrentUser(userData);
+      try {
+        const userData = JSON.parse(user);
+        if (userData.role === 'global_admin') {
+          setIsAuthenticated(true);
+          setCurrentUser(userData);
+        }
+      } catch (error) {
+        // Clear malformed tokens
+        localStorage.removeItem('globalAdminToken');
+        localStorage.removeItem('globalAdminUser');
       }
     }
   }, []);
@@ -141,11 +143,6 @@ export default function GlobalAdminPortal() {
     },
     onSuccess: (data) => {
       if (data.user.role === 'global_admin') {
-        // Clear any old tokens first
-        localStorage.removeItem('globalAdminToken');
-        localStorage.removeItem('globalAdminUser');
-        
-        // Set new 30-day tokens
         localStorage.setItem('globalAdminToken', data.token);
         localStorage.setItem('globalAdminUser', JSON.stringify(data.user));
         setIsAuthenticated(true);

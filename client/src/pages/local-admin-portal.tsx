@@ -49,12 +49,8 @@ export default function LocalAdminPortal() {
     description: ""
   });
 
-  // Check authentication on mount and clear old tokens
+  // Check authentication on mount
   useEffect(() => {
-    // Force clear old tokens to ensure fresh login with 30-day tokens
-    localStorage.removeItem('localAdminToken');
-    localStorage.removeItem('localAdminUser');
-    
     const token = localStorage.getItem('localAdminToken');
     const user = localStorage.getItem('localAdminUser');
     
@@ -97,11 +93,6 @@ export default function LocalAdminPortal() {
       return response.json();
     },
     onSuccess: (data) => {
-      // Clear any old tokens first  
-      localStorage.removeItem('localAdminToken');
-      localStorage.removeItem('localAdminUser');
-      
-      // Set new 30-day tokens
       localStorage.setItem('localAdminToken', data.token);
       localStorage.setItem('localAdminUser', JSON.stringify(data.user));
       setIsAuthenticated(true);
