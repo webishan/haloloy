@@ -60,6 +60,51 @@ export default function LocalAdminPortal() {
     }
   }, []);
 
+  // Mock local admin balance tracking
+  const [localAdminBalance, setLocalAdminBalance] = useState(0);
+
+  // Update balance when currentUser changes
+  useEffect(() => {
+    if (currentUser) {
+      const balances = localStorage.getItem('localAdminBalances');
+      if (balances) {
+        const parsedBalances = JSON.parse(balances);
+        const userIdMap: Record<string, string> = {
+          'BD': 'local-bd-user',
+          'MY': 'local-my-user', 
+          'AE': 'local-ae-user',
+          'PH': 'local-ph-user'
+        };
+        const userId = userIdMap[currentUser.country];
+        const currentBalance = parsedBalances[userId] || 0;
+        setLocalAdminBalance(currentBalance);
+      }
+    }
+  }, [currentUser]);
+
+  // Poll for balance updates every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (currentUser) {
+        const balances = localStorage.getItem('localAdminBalances');
+        if (balances) {
+          const parsedBalances = JSON.parse(balances);
+          const userIdMap: Record<string, string> = {
+            'BD': 'local-bd-user',
+            'MY': 'local-my-user',
+            'AE': 'local-ae-user', 
+            'PH': 'local-ph-user'
+          };
+          const userId = userIdMap[currentUser.country];
+          const currentBalance = parsedBalances[userId] || 0;
+          setLocalAdminBalance(currentBalance);
+        }
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   // Login mutation
   const loginMutation = useMutation({
     mutationFn: async (credentials: { email: string; password: string; adminType: string }) => {
@@ -313,8 +358,13 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Balance</p>
                       <p className="text-3xl font-bold text-green-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.pointsBalance?.toLocaleString() || 0)}
+                        {localAdminBalance > 0 ? localAdminBalance.toLocaleString() : (isDashboardLoading ? "..." : (dashboardData?.pointsBalance?.toLocaleString() || 0))}
                       </p>
+                      {localAdminBalance > 0 && (
+                        <p className="text-xs text-green-600 mt-1">
+                          Received from Global Admin
+                        </p>
+                      )}
                     </div>
                     <Coins className="w-8 h-8 text-green-500" />
                   </div>
@@ -524,13 +574,29 @@ export default function LocalAdminPortal() {
                   </div>
 
                   <div className="space-y-4">
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                      <h4 className="font-semibold text-blue-800 mb-2">Available Balance</h4>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {dashboardData?.pointsBalance?.toLocaleString() || 0} Points
+                    <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                      <h4 className="font-semibold text-green-800 mb-2">Available Balance</h4>
+                      <p className="text-2xl font-bold text-green-600">
+                        {localAdminBalance > 0 ? localAdminBalance.toLocaleString() : (dashboardData?.pointsBalance?.toLocaleString() || 0)} Points
                       </p>
-                      <p className="text-sm text-blue-600 mt-1">Regional allocation</p>
+                      <p className="text-sm text-green-600 mt-1">
+                        {localAdminBalance > 0 ? "Received from Global Admin" : "Regional allocation"}
+                      </p>
                     </div>
+
+                    {localAdminBalance > 0 && (
+                      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                        <div className="flex items-center">
+                          <CheckCircle className="w-5 h-5 text-blue-600 mr-2" />
+                          <div>
+                            <p className="font-semibold text-blue-800">Points Received!</p>
+                            <p className="text-sm text-blue-700">
+                              {localAdminBalance.toLocaleString()} points transferred from Global Admin for {getCountryName(currentUser?.country || '')} region
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
