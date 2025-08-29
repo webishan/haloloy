@@ -88,16 +88,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Generate token with longer expiration and proper user structure
+      // Generate token
       const token = jwt.sign(
-        { 
-          id: user.id, 
-          userId: user.id, // Add userId field for admin routes
-          email: user.email, 
-          role: user.role 
-        }, 
+        { id: user.id, email: user.email, role: user.role }, 
         JWT_SECRET,
-        { expiresIn: '30d' } // Extended to 30 days to prevent frequent expiration
+        { expiresIn: '7d' }
       );
 
       res.json({ 
@@ -124,14 +119,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const token = jwt.sign(
-        { 
-          id: user.id, 
-          userId: user.id, // Add userId field for admin routes
-          email: user.email, 
-          role: user.role 
-        }, 
+        { id: user.id, email: user.email, role: user.role }, 
         JWT_SECRET,
-        { expiresIn: '30d' } // Extended to 30 days
+        { expiresIn: '7d' }
       );
 
       res.json({ 

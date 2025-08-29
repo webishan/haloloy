@@ -76,16 +76,10 @@ export default function GlobalAdminPortal() {
     const token = localStorage.getItem('globalAdminToken');
     const user = localStorage.getItem('globalAdminUser');
     if (token && user) {
-      try {
-        const userData = JSON.parse(user);
-        if (userData.role === 'global_admin') {
-          setIsAuthenticated(true);
-          setCurrentUser(userData);
-        }
-      } catch (error) {
-        // Clear malformed tokens
-        localStorage.removeItem('globalAdminToken');
-        localStorage.removeItem('globalAdminUser');
+      const userData = JSON.parse(user);
+      if (userData.role === 'global_admin') {
+        setIsAuthenticated(true);
+        setCurrentUser(userData);
       }
     }
   }, []);
