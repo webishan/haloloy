@@ -11,12 +11,20 @@ function authenticateToken(req: Request, res: Response, next: Function) {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ message: 'Access token required' });
+    return res.status(401).json({ message: 'No token provided' });
   }
 
   jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) return res.status(403).json({ message: 'Invalid or expired token' });
-    req.user = user;
+    if (err) {
+      console.error('JWT verification error:', err.message);
+      return res.status(403).json({ message: 'Invalid or expired token' });
+    }
+    
+    // Ensure proper user structure for admin routes
+    req.user = {
+      ...user,
+      userId: user.userId || user.id // Fallback for compatibility
+    };
     next();
   });
 }
