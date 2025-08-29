@@ -823,7 +823,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId: customerId,
             name: `${user?.firstName} ${user?.lastName}`,
             email: user?.email,
-            mobile: user?.mobile,
+            mobile: user?.phone,
             totalPoints: customer?.totalPoints || 0,
             pointsFromMerchant: totalPoints,
             hasRewardNumber: (customer?.accumulatedPoints || 0) >= 1500,
@@ -1112,10 +1112,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create admin profile if it doesn't exist
         admin = await storage.createAdmin({
           userId: req.user.userId,
-          role: 'global_admin',
+          adminType: 'global',
           country: 'GLOBAL',
           pointsBalance: 0,
-          totalPointsGenerated: 0,
+          totalPointsReceived: 0,
+          totalPointsDistributed: 0,
           isActive: true
         });
       }
@@ -1123,7 +1124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newBalance = (admin.pointsBalance || 0) + points;
       await storage.updateAdmin(req.user.userId, {
         pointsBalance: newBalance,
-        totalPointsGenerated: (admin.totalPointsGenerated || 0) + points
+        totalPointsReceived: (admin.totalPointsReceived || 0) + points
       });
 
       // Log the point generation transaction
@@ -1157,10 +1158,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create admin profile if it doesn't exist for global admin
         admin = await storage.createAdmin({
           userId: req.user.userId,
-          role: 'global_admin',
+          adminType: 'global',
           country: 'GLOBAL',
           pointsBalance: 0,
-          totalPointsGenerated: 0,
+          totalPointsReceived: 0,
+          totalPointsDistributed: 0,
           isActive: true
         });
       }

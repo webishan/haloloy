@@ -251,7 +251,7 @@ export const pointDistributions = pgTable("point_distributions", {
   fromUserId: varchar("from_user_id").notNull(),
   toUserId: varchar("to_user_id").notNull(),
   points: integer("points").notNull(),
-  distributionType: text("distribution_type", { enum: ["admin_to_admin", "admin_to_merchant", "merchant_to_customer"] }).notNull(),
+  distributionType: text("distribution_type", { enum: ["admin_to_admin", "admin_to_merchant", "merchant_to_customer", "point_generation", "manual_addition"] }).notNull(),
   description: text("description"),
   status: text("status", { enum: ["pending", "completed", "failed"] }).default("pending"),
   approvedBy: varchar("approved_by"),

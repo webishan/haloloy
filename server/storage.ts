@@ -41,6 +41,9 @@ export interface IStorage {
   updateMerchant(userId: string, merchant: Partial<Merchant>): Promise<Merchant>;
   getMerchants(country?: string): Promise<Merchant[]>;
   
+  // User utility methods
+  getAllUsers(): Promise<User[]>;
+  
   // Category management
   getCategories(): Promise<Category[]>;
   getCategory(id: string): Promise<Category | undefined>;
@@ -425,6 +428,10 @@ export class MemStorage implements IStorage {
   }
 
   // User methods
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }

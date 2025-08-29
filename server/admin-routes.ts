@@ -70,7 +70,6 @@ export function setupAdminRoutes(app: Express) {
         points,
         description: description || 'Manual points addition by global admin',
         distributionType: 'manual_addition',
-        toUserType: 'global_admin',
         status: 'completed'
       });
       
@@ -304,7 +303,6 @@ export function setupAdminRoutes(app: Express) {
         points,
         description,
         distributionType,
-        toUserType,
         status: 'completed'
       };
       
@@ -370,7 +368,7 @@ export function setupAdminRoutes(app: Express) {
         res.json(messages);
       } else {
         // Get all messages for the current user
-        const messages = await storage.getAllChatMessages(userId);
+        const messages = await storage.getChatMessages(userId);
         res.json(messages);
       }
     } catch (error) {
