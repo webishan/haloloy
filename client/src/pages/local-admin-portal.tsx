@@ -62,9 +62,9 @@ export default function LocalAdminPortal() {
 
   // Real-time balance from database API
   const { data: adminBalance, refetch: refetchBalance } = useQuery({
-    queryKey: ['/api/admin/balance', currentUser?.id || 'local-admin'],
+    queryKey: ['/api/admin/balance'],
     enabled: isAuthenticated,
-    refetchInterval: 5000, // Poll every 5 seconds for real-time updates
+    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
     retry: false,
     staleTime: 0, // Always fetch fresh data
     cacheTime: 0 // Don't cache the results
