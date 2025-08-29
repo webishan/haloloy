@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
 import { useCart } from '@/hooks/use-cart';
@@ -17,9 +17,41 @@ import {
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [adminUser, setAdminUser] = useState<any>(null);
   const { user, logout } = useAuth();
   const { cartItems } = useCart();
   const [location] = useLocation();
+
+  // Check for admin authentication
+  useEffect(() => {
+    const checkAdminAuth = () => {
+      const globalAdminToken = localStorage.getItem('globalAdminToken');
+      const localAdminToken = localStorage.getItem('localAdminToken');
+      const globalAdminUser = localStorage.getItem('globalAdminUser');
+      const localAdminUser = localStorage.getItem('localAdminUser');
+
+      if (globalAdminToken && globalAdminUser) {
+        try {
+          setAdminUser({ ...JSON.parse(globalAdminUser), type: 'global' });
+        } catch (e) {
+          setAdminUser(null);
+        }
+      } else if (localAdminToken && localAdminUser) {
+        try {
+          setAdminUser({ ...JSON.parse(localAdminUser), type: 'local' });
+        } catch (e) {
+          setAdminUser(null);
+        }
+      } else {
+        setAdminUser(null);
+      }
+    };
+
+    checkAdminAuth();
+    // Check again when localStorage changes
+    window.addEventListener('storage', checkAdminAuth);
+    return () => window.removeEventListener('storage', checkAdminAuth);
+  }, []);
 
   const cartItemCount = Array.isArray(cartItems) ? cartItems.reduce((total: number, item: any) => total + (item.quantity || 0), 0) : 0;
 
@@ -35,6 +67,16 @@ export default function Header() {
 
   const handleLogout = () => {
     logout();
+    window.location.href = '/';
+  };
+
+  const handleAdminLogout = () => {
+    // Clear admin tokens and user data
+    localStorage.removeItem('globalAdminToken');
+    localStorage.removeItem('localAdminToken');
+    localStorage.removeItem('globalAdminUser');
+    localStorage.removeItem('localAdminUser');
+    setAdminUser(null);
     window.location.href = '/';
   };
 
@@ -102,32 +144,59 @@ export default function Header() {
               </Link>
             )}
 
-            {/* Admin Portal Links - Quick Access */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 hover:from-blue-700 hover:to-indigo-700">
-                  <Shield className="w-4 h-4 mr-1" />
-                  Admin Access
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <Link href="/global-admin-portal">
-                  <DropdownMenuItem className="cursor-pointer">
-                    <Shield className="w-4 h-4 mr-2" />
-                    Global Admin Portal
-                  </DropdownMenuItem>
-                </Link>
-                <Link href="/local-admin-portal">
-                  <DropdownMenuItem className="cursor-pointer">
-                    <Users className="w-4 h-4 mr-2" />
-                    Local Admin Portal
-                  </DropdownMenuItem>
-                </Link>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Admin Portal Links - Only show if admin is NOT logged in */}
+            {!adminUser && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 hover:from-blue-700 hover:to-indigo-700">
+                    <Shield className="w-4 h-4 mr-1" />
+                    Admin Access
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <Link href="/global-admin-portal">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Shield className="w-4 h-4 mr-2" />
+                      Global Admin Portal
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/local-admin-portal">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Users className="w-4 h-4 mr-2" />
+                      Local Admin Portal
+                    </DropdownMenuItem>
+                  </Link>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
-            {/* User Menu */}
-            {user ? (
+            {/* Admin User Menu */}
+            {adminUser ? (
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="hidden md:block">
+                    <div className="text-sm font-semibold text-gray-900">
+                      {adminUser.firstName} {adminUser.lastName}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {adminUser.type === 'global' ? 'Global Admin' : 'Local Admin'}
+                    </div>
+                  </div>
+                </div>
+                <Button 
+                  onClick={handleAdminLogout}
+                  variant="outline" 
+                  size="sm" 
+                  className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 flex items-center"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </Button>
+              </div>
+            ) : user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="flex items-center space-x-2">
@@ -158,7 +227,7 @@ export default function Header() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : (
+            ) : !adminUser ? (
               <div className="flex items-center space-x-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -193,7 +262,7 @@ export default function Header() {
                   </Button>
                 </Link>
               </div>
-            )}
+            ) : null}
 
             {/* Mobile Menu Toggle */}
             <Button
