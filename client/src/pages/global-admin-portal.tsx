@@ -324,29 +324,6 @@ export default function GlobalAdminPortal() {
       return;
     }
     
-    // Development testing bypass - works immediately
-    if (loginForm.email === 'global@komarce.com' && loginForm.password === 'global123') {
-      const mockUser = {
-        id: '99b53650-5e9b-4ba2-a1c0-b3b782149468',
-        username: 'global_admin',
-        email: 'global@komarce.com',
-        firstName: 'Global',
-        lastName: 'Administrator',
-        role: 'global_admin' as const,
-        country: 'GLOBAL',
-        isActive: true,
-        createdAt: new Date().toISOString()
-      };
-      const mockToken = 'global-dev-token-' + Date.now();
-      
-      localStorage.setItem('globalAdminToken', mockToken);
-      localStorage.setItem('globalAdminUser', JSON.stringify(mockUser));
-      setIsAuthenticated(true);
-      setCurrentUser(mockUser);
-      toast({ title: "Welcome!", description: "Successfully logged into Global Admin Portal" });
-      return;
-    }
-    
     loginMutation.mutate(loginForm);
   };
 
