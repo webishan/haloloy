@@ -364,9 +364,26 @@ export default function GlobalAdminPortal() {
       return;
     }
     
+    const points = parseInt(distributePointsForm.points);
+    const availableBalance = (adminBalance as any)?.balance || 0;
+    
+    if (points <= 0) {
+      toast({ title: "Error", description: "Points must be greater than 0", variant: "destructive" });
+      return;
+    }
+    
+    if (points > availableBalance) {
+      toast({ 
+        title: "Insufficient Balance", 
+        description: `You only have ${availableBalance.toLocaleString()} points available. Please enter a lower amount.`,
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     distributePointsMutation.mutate({
       toUserId: distributePointsForm.toUserId,
-      points: parseInt(distributePointsForm.points),
+      points: points,
       description: distributePointsForm.description
     });
   };
