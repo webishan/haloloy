@@ -12,7 +12,7 @@ const authenticateToken = (req: any, res: any, next: any) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'komarce-secret-key') as any;
     req.user = decoded;
     next();
   } catch (error) {
