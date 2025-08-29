@@ -187,37 +187,26 @@ export default function GlobalAdminPortal() {
     retry: false
   });
 
-  // Mock admin profile for development
-  const [localAdminProfile, setLocalAdminProfile] = useState(() => {
-    const stored = localStorage.getItem('globalAdminProfile');
-    return stored ? JSON.parse(stored) : { pointsBalance: 0 };
+  // Real-time admin balance from database
+  const { data: adminBalance, refetch: refetchBalance } = useQuery({
+    queryKey: ['/api/admin/balance'],
+    enabled: isAuthenticated,
+    refetchInterval: 5000, // Poll every 5 seconds
+    retry: false
   });
 
-  const { data: adminProfile, refetch: refetchProfile } = useQuery({
-    queryKey: ['/api/admin/profile'],
-    enabled: isAuthenticated && currentUser?.email !== 'global@komarce.com',
-    retry: false,
-    refetchInterval: 5000,
-    initialData: currentUser?.email === 'global@komarce.com' ? localAdminProfile : undefined
+  // Transaction history from database
+  const { data: transactionHistory, refetch: refetchTransactions } = useQuery({
+    queryKey: ['/api/admin/transactions'],
+    enabled: isAuthenticated,
+    refetchInterval: 10000, // Poll every 10 seconds
+    retry: false
   });
 
   // Point generation mutation (global admin only)
   const addPointsMutation = useMutation({
     mutationFn: async (data: { points: number; description: string }) => {
-      // For development bypass, simulate successful point generation
-      if (currentUser?.email === 'global@komarce.com') {
-        const currentBalance = localAdminProfile?.pointsBalance || 0;
-        const simulatedResponse = {
-          message: 'Points generated successfully',
-          pointsGenerated: data.points,
-          newBalance: currentBalance + data.points,
-          transaction: { id: 'dev-' + Date.now(), ...data }
-        };
-        
-        return Promise.resolve(simulatedResponse);
-      }
-      
-      const response = await fetch('/api/admin/generate-points', {
+      const response = await fetch('/api/admin/add-points', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -236,19 +225,13 @@ export default function GlobalAdminPortal() {
     onSuccess: (data) => {
       toast({ 
         title: "Points Generated Successfully", 
-        description: `${data.pointsGenerated?.toLocaleString()} points added. New balance: ${data.newBalance?.toLocaleString()}` 
+        description: `${data.points?.toLocaleString()} points added to your balance` 
       });
       
-      // Update local admin profile for development bypass
-      if (currentUser?.email === 'global@komarce.com') {
-        const updatedProfile = { pointsBalance: data.newBalance };
-        setLocalAdminProfile(updatedProfile);
-        localStorage.setItem('globalAdminProfile', JSON.stringify(updatedProfile));
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/profile'] });
-        refetchProfile();
-      }
+      // Refresh balance and transaction history
+      refetchBalance();
+      refetchTransactions();
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
       
       setAddPointsForm({ points: "", description: "" });
     },
@@ -271,23 +254,6 @@ export default function GlobalAdminPortal() {
   // Point distribution mutation
   const distributePointsMutation = useMutation({
     mutationFn: async (data: { toUserId: string; points: number; description: string }) => {
-      // For development bypass, simulate point distribution
-      if (currentUser?.email === 'global@komarce.com') {
-        const currentGlobalBalance = localAdminProfile?.pointsBalance || 0;
-        const pointsToDistribute = parseInt(data.points.toString());
-        
-        if (pointsToDistribute > currentGlobalBalance) {
-          throw new Error('Insufficient balance for distribution');
-        }
-        
-        return Promise.resolve({
-          message: 'Points distributed successfully',
-          pointsDistributed: pointsToDistribute,
-          recipientBalance: (localAdminBalances[data.toUserId] || 0) + pointsToDistribute,
-          senderBalance: currentGlobalBalance - pointsToDistribute
-        });
-      }
-      
       const response = await fetch('/api/admin/distribute-points', {
         method: 'POST',
         headers: {
@@ -298,49 +264,27 @@ export default function GlobalAdminPortal() {
       });
       
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to distribute points');
       }
       
       return response.json();
     },
-    onSuccess: (data, variables) => {
-      // For development bypass, update local storage
-      if (currentUser?.email === 'global@komarce.com') {
-        const pointsToDistribute = parseInt(variables.points.toString());
-        const currentGlobalBalance = localAdminProfile?.pointsBalance || 0;
-        const newGlobalBalance = currentGlobalBalance - pointsToDistribute;
-        
-        // Update global admin balance
-        setLocalAdminProfile({ pointsBalance: newGlobalBalance });
-        localStorage.setItem('globalAdminProfile', JSON.stringify({ pointsBalance: newGlobalBalance }));
-        
-        // Update local admin balance
-        const currentLocalBalance = localAdminBalances[variables.toUserId] || 0;
-        const newLocalBalance = currentLocalBalance + pointsToDistribute;
-        const updatedLocalBalances = {
-          ...localAdminBalances,
-          [variables.toUserId]: newLocalBalance
-        };
-        setLocalAdminBalances(updatedLocalBalances);
-        localStorage.setItem('localAdminBalances', JSON.stringify(updatedLocalBalances));
-      }
-      
-      const selectedAdmin = adminsList?.find((admin: any) => admin.userId === variables.toUserId);
-      
+    onSuccess: (data) => {
       toast({ 
         title: "Points Distributed Successfully", 
-        description: `${variables.points} points sent to ${selectedAdmin?.firstName} ${selectedAdmin?.lastName} (${selectedAdmin?.country})` 
+        description: `${data.distribution?.points?.toLocaleString()} points distributed. Remaining balance: ${data.remainingBalance?.toLocaleString()}` 
       });
-      setDistributePointsForm({ toUserId: "", points: "", description: "" });
       
-      if (currentUser?.email !== 'global@komarce.com') {
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/point-distributions'] });
-      }
+      // Refresh balance and transaction history
+      refetchBalance();
+      refetchTransactions();
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+      
+      setDistributePointsForm({ toUserId: "", points: "", description: "" });
     },
     onError: (error: Error) => {
-      toast({ title: "Distribution Failed", description: error.message, variant: "destructive" });
+      toast({ title: "Point Distribution Failed", description: error.message, variant: "destructive" });
     }
   });
 
@@ -555,10 +499,7 @@ export default function GlobalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Balance</p>
                       <p className="text-3xl font-bold text-blue-600">
-                        {currentUser?.email === 'global@komarce.com' 
-                          ? (localAdminProfile.pointsBalance?.toLocaleString() || 0)
-                          : (adminProfile ? (adminProfile.pointsBalance?.toLocaleString() || 0) : (isDashboardLoading ? "..." : 0))
-                        }
+                        {adminBalance ? adminBalance.balance.toLocaleString() : (isDashboardLoading ? "..." : 0)}
                       </p>
                     </div>
                     <Coins className="w-8 h-8 text-blue-500" />
@@ -766,10 +707,7 @@ export default function GlobalAdminPortal() {
                     <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                       <h4 className="font-semibold text-blue-800 mb-2">Available Balance</h4>
                       <p className="text-2xl font-bold text-blue-600">
-                        {currentUser?.email === 'global@komarce.com' 
-                          ? (localAdminProfile.pointsBalance?.toLocaleString() || 0)
-                          : ((dashboardData as any)?.overview?.globalPointsBalance?.toLocaleString() || 0)
-                        } Points
+                        {adminBalance ? adminBalance.balance.toLocaleString() : 0} Points
                       </p>
                       <p className="text-sm text-blue-600 mt-1">Ready for distribution</p>
                     </div>

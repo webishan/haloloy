@@ -530,4 +530,78 @@ export function setupAdminRoutes(app: Express) {
       res.status(500).json({ message: 'Failed to fetch point distributions' });
     }
   });
+
+  // Get transaction history for admin
+  app.get('/api/admin/transactions', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      
+      // Get distributions where user is sender or receiver
+      const distributions = await storage.getPointDistributionsByUser(userId);
+      
+      // Get admin data for balance info
+      const adminData = await storage.getAdmin(userId);
+      
+      const transactionHistory = distributions.map(dist => ({
+        id: dist.id,
+        type: dist.fromUserId === userId ? 'sent' : 'received',
+        points: dist.points,
+        description: dist.description,
+        distributionType: dist.distributionType,
+        status: dist.status,
+        createdAt: dist.createdAt,
+        otherUserId: dist.fromUserId === userId ? dist.toUserId : dist.fromUserId,
+        otherUserType: dist.fromUserId === userId ? dist.toUserType : 'admin'
+      }));
+      
+      res.json({
+        transactions: transactionHistory,
+        currentBalance: adminData?.pointsBalance || 0,
+        totalReceived: adminData?.totalPointsReceived || 0,
+        totalDistributed: adminData?.totalPointsDistributed || 0
+      });
+      
+    } catch (error) {
+      console.error('Transaction history error:', error);
+      res.status(500).json({ message: 'Failed to load transaction history' });
+    }
+  });
+
+  // Get real-time admin balance
+  app.get('/api/admin/balance', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const adminData = await storage.getAdmin(userId);
+      
+      if (!adminData) {
+        // Create admin record if it doesn't exist
+        const user = await storage.getUser(userId);
+        const newAdmin = await storage.createAdmin({
+          userId,
+          adminType: req.user.role === 'global_admin' ? 'global' : 'local',
+          country: user?.country || 'Global',
+          pointsBalance: 0,
+          totalPointsReceived: 0,
+          totalPointsDistributed: 0,
+          isActive: true
+        });
+        
+        return res.json({
+          balance: 0,
+          totalReceived: 0,
+          totalDistributed: 0
+        });
+      }
+      
+      res.json({
+        balance: adminData.pointsBalance || 0,
+        totalReceived: adminData.totalPointsReceived || 0,
+        totalDistributed: adminData.totalPointsDistributed || 0
+      });
+      
+    } catch (error) {
+      console.error('Balance error:', error);
+      res.status(500).json({ message: 'Failed to load balance' });
+    }
+  });
 }
