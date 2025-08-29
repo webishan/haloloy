@@ -227,10 +227,12 @@ export default function GlobalAdminPortal() {
 
   // Real-time admin balance from database
   const { data: adminBalance, refetch: refetchBalance } = useQuery({
-    queryKey: ['/api/admin/balance'],
+    queryKey: ['/api/admin/balance', currentUser?.id || 'global-admin'],
     enabled: isAuthenticated,
     refetchInterval: 5000, // Poll every 5 seconds
-    retry: false
+    retry: false,
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 0 // Don't cache the results
   });
 
   // Transaction history from database
