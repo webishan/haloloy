@@ -186,6 +186,16 @@ export default function Header() {
                     </div>
                   </div>
                 </div>
+                <Link href={adminUser.type === 'global' ? '/global-admin-portal' : '/local-admin-portal'}>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-blue-600 border-blue-300 hover:bg-blue-50 hover:border-blue-400 flex items-center"
+                  >
+                    <Shield className="w-4 h-4 mr-2" />
+                    Dashboard
+                  </Button>
+                </Link>
                 <Button 
                   onClick={handleAdminLogout}
                   variant="outline" 
