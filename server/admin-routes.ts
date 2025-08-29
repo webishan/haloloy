@@ -530,7 +530,7 @@ export function setupAdminRoutes(app: Express) {
       }
 
       const token = authHeader.substring(7);
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
       
       console.log(`Fetching merchants for country: ${country}, requested by: ${decoded.email}`);
       
