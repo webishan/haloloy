@@ -120,7 +120,11 @@ export default function LocalAdminPortal() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}`
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+          toUserId: data.merchantId,
+          points: data.points,
+          description: data.description
+        })
       });
       
       if (!response.ok) {
@@ -132,8 +136,10 @@ export default function LocalAdminPortal() {
     },
     onSuccess: () => {
       toast({ title: "Points Distributed", description: "Points have been distributed to merchant successfully!" });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/local-dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/merchants'] });
+      refetchBalance(); // Force immediate balance update
       setDistributeForm({ merchantId: "", points: "", description: "" });
     },
     onError: (error: Error) => {
@@ -507,11 +513,17 @@ export default function LocalAdminPortal() {
                           <SelectValue placeholder="Select merchant" />
                         </SelectTrigger>
                         <SelectContent>
-                          {merchants.map((merchant: any) => (
-                            <SelectItem key={merchant.id} value={merchant.id}>
-                              {merchant.businessName} ({merchant.tier})
-                            </SelectItem>
-                          ))}
+                          {merchantsLoading ? (
+                            <SelectItem value="loading" disabled>Loading merchants...</SelectItem>
+                          ) : merchants && merchants.length > 0 ? (
+                            merchants.map((merchant: any) => (
+                              <SelectItem key={merchant.id || merchant.userId} value={merchant.userId || merchant.id}>
+                                {merchant.businessName || `Merchant ${merchant.id?.slice(0, 8)}`} - {merchant.tier || 'Bronze'} Tier
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="no-merchants" disabled>No merchants available in {currentUser?.country}</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
