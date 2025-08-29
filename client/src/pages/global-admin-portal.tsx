@@ -163,23 +163,15 @@ export default function GlobalAdminPortal() {
     refetchInterval: 30000
   });
 
-  // Mock local admins for development bypass
-  const mockLocalAdmins = [
-    { id: 'local-bd', userId: 'local-bd-user', firstName: 'Local Admin', lastName: 'Bangladesh', country: 'BD', role: 'local_admin', email: 'local.bd@komarce.com' },
-    { id: 'local-my', userId: 'local-my-user', firstName: 'Local Admin', lastName: 'Malaysia', country: 'MY', role: 'local_admin', email: 'local.my@komarce.com' },
-    { id: 'local-ae', userId: 'local-ae-user', firstName: 'Local Admin', lastName: 'UAE', country: 'AE', role: 'local_admin', email: 'local.ae@komarce.com' },
-    { id: 'local-ph', userId: 'local-ph-user', firstName: 'Local Admin', lastName: 'Philippines', country: 'PH', role: 'local_admin', email: 'local.ph@komarce.com' }
-  ];
-
-  const { data: localAdmins } = useQuery({
+  // Get local admins from database
+  const { data: localAdminsFromDB } = useQuery({
     queryKey: ['/api/admin/admins'],
-    enabled: isAuthenticated && currentUser?.email !== 'global@komarce.com',
-    retry: false,
-    initialData: currentUser?.email === 'global@komarce.com' ? mockLocalAdmins : undefined
+    enabled: isAuthenticated,
+    retry: false
   });
 
-  // Use mock data for development bypass
-  const adminsList = currentUser?.email === 'global@komarce.com' ? mockLocalAdmins : localAdmins;
+  // Use local admins from database for dropdown
+  const adminsList = localAdminsFromDB || [];
 
   const { data: chatUsers } = useQuery({
     queryKey: ['/api/admin/chat-users'],
@@ -648,8 +640,8 @@ export default function GlobalAdminPortal() {
                         </SelectTrigger>
                         <SelectContent>
                           {adminsList?.map((admin: any) => (
-                            <SelectItem key={admin.id || admin.userId} value={admin.userId}>
-                              {admin.firstName} {admin.lastName} ({admin.country})
+                            <SelectItem key={admin.id || admin.userId} value={admin.id || admin.userId}>
+                              {admin.user?.firstName || admin.firstName} {admin.user?.lastName || admin.lastName} ({admin.user?.country || admin.country})
                             </SelectItem>
                           ))}
                         </SelectContent>
