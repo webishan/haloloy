@@ -554,21 +554,21 @@ export default function LocalAdminPortal() {
                     <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
                       <h4 className="font-semibold text-green-800 mb-2">Available Balance</h4>
                       <p className="text-2xl font-bold text-green-600">
-                        {localAdminBalance > 0 ? localAdminBalance.toLocaleString() : (dashboardData?.pointsBalance?.toLocaleString() || 0)} Points
+                        {adminBalance?.balance ? adminBalance.balance.toLocaleString() : "0"} Points
                       </p>
                       <p className="text-sm text-green-600 mt-1">
-                        {localAdminBalance > 0 ? "Received from Global Admin" : "Regional allocation"}
+                        {adminBalance?.balance > 0 ? "Ready for distribution" : "Regional allocation"}
                       </p>
                     </div>
 
-                    {localAdminBalance > 0 && (
+                    {adminBalance?.balance > 0 && (
                       <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                         <div className="flex items-center">
                           <CheckCircle className="w-5 h-5 text-blue-600 mr-2" />
                           <div>
                             <p className="font-semibold text-blue-800">Points Received!</p>
                             <p className="text-sm text-blue-700">
-                              {localAdminBalance.toLocaleString()} points transferred from Global Admin for {getCountryName(currentUser?.country || '')} region
+                              {adminBalance.balance.toLocaleString()} points transferred from Global Admin for {getCountryName(currentUser?.country || '')} region
                             </p>
                           </div>
                         </div>
