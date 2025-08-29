@@ -254,8 +254,10 @@ export function setupAdminRoutes(app: Express) {
       
       if (distributorRole === 'global_admin') {
         // Global admin can distribute to local admins
-        // For development, allow distribution to any user with local_admin role
+        console.log('Distribution attempt - toUserId:', toUserId);
         const toUser = await storage.getUser(toUserId);
+        console.log('Found user:', toUser ? `${toUser.email} (${toUser.role})` : 'null');
+        
         if (!toUser) {
           return res.status(400).json({ message: 'Target user not found' });
         }
@@ -461,24 +463,26 @@ export function setupAdminRoutes(app: Express) {
   // Get admins list (for global admin)
   app.get('/api/admin/admins', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
     try {
-      const admins = await storage.getAdminsByType('local');
+      // Get local admin users directly from users table since admin records may not exist yet
+      const localAdminUsers = await storage.getUsersByRole('local_admin');
       
-      // Enhance with user details
-      const enhancedAdmins = await Promise.all(admins.map(async (admin) => {
-        const user = await storage.getUser(admin.userId);
-        return {
-          ...admin,
-          user: user ? { 
-            firstName: user.firstName, 
-            lastName: user.lastName, 
-            email: user.email,
-            country: user.country,
-            isActive: user.isActive 
-          } : null
-        };
+      const adminsData = localAdminUsers.map(user => ({
+        id: user.id,
+        userId: user.id, // Use user.id as userId for consistency
+        user: {
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          country: user.country,
+          isActive: user.isActive
+        },
+        adminType: 'local',
+        country: user.country,
+        role: user.role
       }));
       
-      res.json(enhancedAdmins);
+      console.log('Returning local admins:', adminsData.map(a => `${a.id} - ${a.user.email}`));
+      res.json(adminsData);
     } catch (error) {
       console.error('Get admins error:', error);
       res.status(500).json({ message: 'Failed to fetch admins' });
