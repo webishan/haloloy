@@ -77,6 +77,7 @@ export default function GlobalAdminPortal() {
       const token = localStorage.getItem('globalAdminToken');
       if (!token) {
         setIsAuthenticated(false);
+        setCurrentUser(null);
         return;
       }
 
@@ -92,16 +93,29 @@ export default function GlobalAdminPortal() {
             if (userData.role === 'global_admin') {
               setIsAuthenticated(true);
               setCurrentUser(userData);
+            } else {
+              setIsAuthenticated(false);
+              setCurrentUser(null);
             }
+          } else {
+            setIsAuthenticated(false);
+            setCurrentUser(null);
           }
         } else {
-          // Token is invalid, clear storage
+          // Token is invalid, clear storage and force re-login
+          console.log('Token validation failed, clearing storage');
           localStorage.removeItem('globalAdminToken');
           localStorage.removeItem('globalAdminUser');
           setIsAuthenticated(false);
           setCurrentUser(null);
+          toast({ 
+            title: "Session Expired", 
+            description: "Please log in again",
+            variant: "destructive" 
+          });
         }
       } catch (error) {
+        console.log('Auth verification error:', error);
         localStorage.removeItem('globalAdminToken');
         localStorage.removeItem('globalAdminUser');
         setIsAuthenticated(false);
