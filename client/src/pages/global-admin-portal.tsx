@@ -227,7 +227,7 @@ export default function GlobalAdminPortal() {
 
   // Real-time admin balance from database
   const { data: adminBalance, refetch: refetchBalance } = useQuery({
-    queryKey: ['/api/admin/balance', currentUser?.id || 'global-admin'],
+    queryKey: ['/api/admin/balance'],
     enabled: isAuthenticated,
     refetchInterval: 5000, // Poll every 5 seconds
     retry: false,
@@ -655,7 +655,7 @@ export default function GlobalAdminPortal() {
                     <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
                       <h4 className="font-semibold text-green-800 mb-2">Current Balance</h4>
                       <p className="text-2xl font-bold text-green-600">
-                        {adminBalance ? (adminBalance as any).balance.toLocaleString() : 0} Points
+                        {adminBalance?.balance ? adminBalance.balance.toLocaleString() : '0'} Points
                       </p>
                       <p className="text-sm text-green-600 mt-1">Available for distribution</p>
                     </div>
