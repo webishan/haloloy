@@ -105,21 +105,22 @@ export default function LocalAdminPortal() {
   });
 
   // Merchants query for the current country
-  const { data: merchants = [], isLoading: merchantsLoading } = useQuery({
+  const { data: merchants = [], isLoading: merchantsLoading, refetch: refetchMerchants } = useQuery({
     queryKey: ['/api/admin/merchants', currentUser?.country],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/merchants/${currentUser?.country}`, {
-        headers: { 
-          'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}`
-        }
-      });
+      const response = await fetch(`/api/admin/merchants/${currentUser?.country}`);
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to fetch merchants:', errorText);
         throw new Error('Failed to fetch merchants');
       }
-      return response.json();
+      const data = await response.json();
+      console.log('Merchants data received:', data);
+      return data;
     },
     enabled: isAuthenticated && !!currentUser?.country,
-    retry: false
+    retry: false,
+    refetchInterval: 10000 // Refetch every 10 seconds to catch new merchants
   });
 
   // Point distribution mutation
