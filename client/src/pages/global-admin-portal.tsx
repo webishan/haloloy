@@ -71,17 +71,45 @@ export default function GlobalAdminPortal() {
     description: ""
   });
 
-  // Check authentication on mount
+  // Check authentication on mount - always verify with server
   useEffect(() => {
-    const token = localStorage.getItem('globalAdminToken');
-    const user = localStorage.getItem('globalAdminUser');
-    if (token && user) {
-      const userData = JSON.parse(user);
-      if (userData.role === 'global_admin') {
-        setIsAuthenticated(true);
-        setCurrentUser(userData);
+    const verifyAuth = async () => {
+      const token = localStorage.getItem('globalAdminToken');
+      if (!token) {
+        setIsAuthenticated(false);
+        return;
       }
-    }
+
+      try {
+        const response = await fetch('/api/admin/balance', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+          const user = localStorage.getItem('globalAdminUser');
+          if (user) {
+            const userData = JSON.parse(user);
+            if (userData.role === 'global_admin') {
+              setIsAuthenticated(true);
+              setCurrentUser(userData);
+            }
+          }
+        } else {
+          // Token is invalid, clear storage
+          localStorage.removeItem('globalAdminToken');
+          localStorage.removeItem('globalAdminUser');
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+        }
+      } catch (error) {
+        localStorage.removeItem('globalAdminToken');
+        localStorage.removeItem('globalAdminUser');
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      }
+    };
+
+    verifyAuth();
   }, []);
 
   // Socket connection for real-time chat
