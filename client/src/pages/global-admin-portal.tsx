@@ -695,7 +695,7 @@ export default function GlobalAdminPortal() {
                         <SelectContent>
                           {adminsList?.map((admin: any) => (
                             <SelectItem key={admin.id || admin.userId} value={admin.id || admin.userId}>
-                              {admin.user?.firstName || admin.firstName} {admin.user?.lastName || admin.lastName} ({admin.user?.country || admin.country})
+                              {admin.user?.firstName || admin.firstName} {admin.user?.lastName || admin.lastName} ({admin.user?.country || admin.country}) - {admin.user?.email || 'No email'}
                             </SelectItem>
                           ))}
                         </SelectContent>
