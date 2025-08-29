@@ -520,10 +520,19 @@ export function setupAdminRoutes(app: Express) {
   });
 
   // Get merchants by country (for local admin)
-  app.get('/api/admin/merchants/:country', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+  app.get('/api/admin/merchants/:country', async (req, res) => {
     try {
       const { country } = req.params;
-      console.log(`Fetching merchants for country: ${country}`);
+      const authHeader = req.headers.authorization;
+      
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'No token provided' });
+      }
+
+      const token = authHeader.substring(7);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+      
+      console.log(`Fetching merchants for country: ${country}, requested by: ${decoded.email}`);
       
       // Get all merchant users for this country
       const merchantUsers = await storage.getUsersByRole('merchant');

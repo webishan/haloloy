@@ -107,6 +107,17 @@ export default function LocalAdminPortal() {
   // Merchants query for the current country
   const { data: merchants = [], isLoading: merchantsLoading } = useQuery({
     queryKey: ['/api/admin/merchants', currentUser?.country],
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/merchants/${currentUser?.country}`, {
+        headers: { 
+          'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch merchants');
+      }
+      return response.json();
+    },
     enabled: isAuthenticated && !!currentUser?.country,
     retry: false
   });
