@@ -62,10 +62,12 @@ export default function LocalAdminPortal() {
 
   // Real-time balance from database API
   const { data: adminBalance, refetch: refetchBalance } = useQuery({
-    queryKey: ['/api/admin/balance'],
+    queryKey: ['/api/admin/balance', currentUser?.id || 'local-admin'],
     enabled: isAuthenticated,
     refetchInterval: 5000, // Poll every 5 seconds for real-time updates
-    retry: false
+    retry: false,
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 0 // Don't cache the results
   });
 
   // Get current user's country dashboard data  
@@ -173,6 +175,8 @@ export default function LocalAdminPortal() {
     setIsAuthenticated(false);
     setCurrentUser(null);
     setActiveTab("dashboard");
+    // Clear query cache to prevent stale data
+    queryClient.clear();
     toast({ title: "Logged Out", description: "You have been logged out successfully." });
   };
 
