@@ -278,11 +278,16 @@ export default function LocalAdminPortal() {
             </form>
             
             <div className="mt-6 text-center text-sm text-gray-500">
-              <p>Test Credentials:</p>
-              <p>BD: bd@komarce.com / local123</p>
-              <p>MY: my@komarce.com / local123</p>
-              <p>AE: ae@komarce.com / local123</p>
-              <p>PH: ph@komarce.com / local123</p>
+              <p className="font-semibold mb-2">Available Local Admin Portals:</p>
+              <div className="space-y-1">
+                <p>🇧🇩 Bangladesh: bd@komarce.com / local123</p>
+                <p>🇲🇾 Malaysia: my@komarce.com / local123</p>
+                <p>🇦🇪 UAE: ae@komarce.com / local123</p>
+                <p>🇵🇭 Philippines: ph@komarce.com / local123</p>
+              </div>
+              <p className="text-xs mt-3 text-green-600">
+                💡 Use logout button to switch between regional portals
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -318,7 +323,13 @@ export default function LocalAdminPortal() {
                 <span>{currentUser?.firstName} {currentUser?.lastName}</span>
               </div>
               
-              <Button onClick={handleLogout} variant="outline" size="sm" data-testid="button-local-admin-logout">
+              <Button 
+                onClick={handleLogout} 
+                variant="destructive" 
+                size="sm" 
+                className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                data-testid="button-local-admin-logout"
+              >
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>
