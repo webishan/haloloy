@@ -178,6 +178,9 @@ export default function GlobalAdminPortal() {
     initialData: currentUser?.email === 'global@komarce.com' ? mockLocalAdmins : undefined
   });
 
+  // Use mock data for development bypass
+  const adminsList = currentUser?.email === 'global@komarce.com' ? mockLocalAdmins : localAdmins;
+
   const { data: chatUsers } = useQuery({
     queryKey: ['/api/admin/chat-users'],
     enabled: isAuthenticated,
@@ -323,9 +326,7 @@ export default function GlobalAdminPortal() {
         localStorage.setItem('localAdminBalances', JSON.stringify(updatedLocalBalances));
       }
       
-      const selectedAdmin = currentUser?.email === 'global@komarce.com' 
-        ? mockLocalAdmins.find(admin => admin.userId === variables.toUserId)
-        : localAdmins?.find((admin: any) => admin.userId === variables.toUserId);
+      const selectedAdmin = adminsList?.find((admin: any) => admin.userId === variables.toUserId);
       
       toast({ 
         title: "Points Distributed Successfully", 
@@ -358,7 +359,7 @@ export default function GlobalAdminPortal() {
         email: 'global@komarce.com',
         firstName: 'Global',
         lastName: 'Administrator',
-        role: 'global_admin',
+        role: 'global_admin' as const,
         country: 'GLOBAL',
         isActive: true,
         createdAt: new Date().toISOString()
@@ -571,7 +572,7 @@ export default function GlobalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Merchants</p>
                       <p className="text-3xl font-bold text-green-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.overview?.totalMerchants || 0)}
+                        {isDashboardLoading ? "..." : ((dashboardData as any)?.overview?.totalMerchants || 0)}
                       </p>
                     </div>
                     <Star className="w-8 h-8 text-green-500" />
@@ -585,7 +586,7 @@ export default function GlobalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Customers</p>
                       <p className="text-3xl font-bold text-purple-600">
-                        {isDashboardLoading ? "..." : (dashboardData?.overview?.totalCustomers || 0)}
+                        {isDashboardLoading ? "..." : ((dashboardData as any)?.overview?.totalCustomers || 0)}
                       </p>
                     </div>
                     <Users className="w-8 h-8 text-purple-500" />
@@ -599,7 +600,7 @@ export default function GlobalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Sales</p>
                       <p className="text-3xl font-bold text-orange-600">
-                        ${isDashboardLoading ? "..." : (dashboardData?.overview?.totalSales || "0.00")}
+                        ${isDashboardLoading ? "..." : ((dashboardData as any)?.overview?.totalSales || "0.00")}
                       </p>
                     </div>
                     <TrendingUp className="w-8 h-8 text-orange-500" />
@@ -717,7 +718,7 @@ export default function GlobalAdminPortal() {
                           <SelectValue placeholder="Select local admin" />
                         </SelectTrigger>
                         <SelectContent>
-                          {localAdmins?.filter((admin: any) => admin.role === 'local_admin')
+                          {adminsList?.filter((admin: any) => admin.role === 'local_admin')
                             .map((admin: any) => (
                             <SelectItem key={admin.id} value={admin.userId}>
                               {admin.firstName} {admin.lastName} ({admin.country})
@@ -767,7 +768,7 @@ export default function GlobalAdminPortal() {
                       <p className="text-2xl font-bold text-blue-600">
                         {currentUser?.email === 'global@komarce.com' 
                           ? (localAdminProfile.pointsBalance?.toLocaleString() || 0)
-                          : (dashboardData?.overview?.globalPointsBalance?.toLocaleString() || 0)
+                          : ((dashboardData as any)?.overview?.globalPointsBalance?.toLocaleString() || 0)
                         } Points
                       </p>
                       <p className="text-sm text-blue-600 mt-1">Ready for distribution</p>
