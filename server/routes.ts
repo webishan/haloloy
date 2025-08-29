@@ -82,7 +82,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createMerchant({
           userId: user.id,
           businessName: req.body.businessName || `${user.firstName}'s Store`,
-          tier: "merchant"
+          businessType: req.body.businessType || 'retail',
+          tier: 'bronze',
+          isActive: true
         });
       }
 

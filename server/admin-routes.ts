@@ -519,6 +519,54 @@ export function setupAdminRoutes(app: Express) {
     }
   });
 
+  // Get merchants by country (for local admin)
+  app.get('/api/admin/merchants/:country', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const { country } = req.params;
+      console.log(`Fetching merchants for country: ${country}`);
+      
+      // Get all merchant users for this country
+      const merchantUsers = await storage.getUsersByRole('merchant');
+      const countryMerchants = merchantUsers.filter(user => user.country === country);
+      
+      console.log(`Found ${countryMerchants.length} merchant users in ${country}:`, countryMerchants.map(u => u.email));
+      
+      // Get merchant profiles for these users, create if missing
+      const merchantsData = await Promise.all(countryMerchants.map(async (user) => {
+        let merchant = await storage.getMerchantByUserId(user.id);
+        
+        // Create merchant profile if it doesn't exist
+        if (!merchant) {
+          console.log(`Creating merchant profile for user: ${user.email}`);
+          merchant = await storage.createMerchant({
+            userId: user.id,
+            businessName: `${user.firstName}'s Store`,
+            businessType: 'retail',
+            tier: 'bronze',
+            isActive: true
+          });
+        }
+        
+        return {
+          ...merchant,
+          user: {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            country: user.country,
+            isActive: user.isActive
+          }
+        };
+      }));
+      
+      console.log(`Returning ${merchantsData.length} merchants for ${country}`);
+      res.json(merchantsData);
+    } catch (error) {
+      console.error('Get merchants by country error:', error);
+      res.status(500).json({ message: 'Failed to fetch merchants' });
+    }
+  });
+
   // Get point distributions with enhanced details
   app.get('/api/admin/point-distributions', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
     try {
