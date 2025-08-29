@@ -163,10 +163,19 @@ export default function GlobalAdminPortal() {
     refetchInterval: 30000
   });
 
+  // Mock local admins for development bypass
+  const mockLocalAdmins = [
+    { id: 'local-bd', userId: 'local-bd-user', firstName: 'Local Admin', lastName: 'Bangladesh', country: 'BD', role: 'local_admin', email: 'local.bd@komarce.com' },
+    { id: 'local-my', userId: 'local-my-user', firstName: 'Local Admin', lastName: 'Malaysia', country: 'MY', role: 'local_admin', email: 'local.my@komarce.com' },
+    { id: 'local-ae', userId: 'local-ae-user', firstName: 'Local Admin', lastName: 'UAE', country: 'AE', role: 'local_admin', email: 'local.ae@komarce.com' },
+    { id: 'local-ph', userId: 'local-ph-user', firstName: 'Local Admin', lastName: 'Philippines', country: 'PH', role: 'local_admin', email: 'local.ph@komarce.com' }
+  ];
+
   const { data: localAdmins } = useQuery({
     queryKey: ['/api/admin/admins'],
-    enabled: isAuthenticated,
-    retry: false
+    enabled: isAuthenticated && currentUser?.email !== 'global@komarce.com',
+    retry: false,
+    initialData: currentUser?.email === 'global@komarce.com' ? mockLocalAdmins : undefined
   });
 
   const { data: chatUsers } = useQuery({
@@ -194,19 +203,13 @@ export default function GlobalAdminPortal() {
     mutationFn: async (data: { points: number; description: string }) => {
       // For development bypass, simulate successful point generation
       if (currentUser?.email === 'global@komarce.com') {
+        const currentBalance = localAdminProfile?.pointsBalance || 0;
         const simulatedResponse = {
           message: 'Points generated successfully',
           pointsGenerated: data.points,
-          newBalance: (adminProfile?.pointsBalance || 0) + data.points,
+          newBalance: currentBalance + data.points,
           transaction: { id: 'dev-' + Date.now(), ...data }
         };
-        
-        // Update local storage to persist the balance
-        const updatedProfile = {
-          ...adminProfile,
-          pointsBalance: simulatedResponse.newBalance
-        };
-        localStorage.setItem('globalAdminProfile', JSON.stringify(updatedProfile));
         
         return Promise.resolve(simulatedResponse);
       }
@@ -251,9 +254,37 @@ export default function GlobalAdminPortal() {
     }
   });
 
+  // Mock local admin balances storage
+  const [localAdminBalances, setLocalAdminBalances] = useState(() => {
+    const stored = localStorage.getItem('localAdminBalances');
+    return stored ? JSON.parse(stored) : {
+      'local-bd-user': 0,
+      'local-my-user': 0, 
+      'local-ae-user': 0,
+      'local-ph-user': 0
+    };
+  });
+
   // Point distribution mutation
   const distributePointsMutation = useMutation({
     mutationFn: async (data: { toUserId: string; points: number; description: string }) => {
+      // For development bypass, simulate point distribution
+      if (currentUser?.email === 'global@komarce.com') {
+        const currentGlobalBalance = localAdminProfile?.pointsBalance || 0;
+        const pointsToDistribute = parseInt(data.points.toString());
+        
+        if (pointsToDistribute > currentGlobalBalance) {
+          throw new Error('Insufficient balance for distribution');
+        }
+        
+        return Promise.resolve({
+          message: 'Points distributed successfully',
+          pointsDistributed: pointsToDistribute,
+          recipientBalance: (localAdminBalances[data.toUserId] || 0) + pointsToDistribute,
+          senderBalance: currentGlobalBalance - pointsToDistribute
+        });
+      }
+      
       const response = await fetch('/api/admin/distribute-points', {
         method: 'POST',
         headers: {
@@ -270,11 +301,42 @@ export default function GlobalAdminPortal() {
       
       return response.json();
     },
-    onSuccess: () => {
-      toast({ title: "Points Distributed", description: "Points have been distributed successfully!" });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/point-distributions'] });
+    onSuccess: (data, variables) => {
+      // For development bypass, update local storage
+      if (currentUser?.email === 'global@komarce.com') {
+        const pointsToDistribute = parseInt(variables.points.toString());
+        const currentGlobalBalance = localAdminProfile?.pointsBalance || 0;
+        const newGlobalBalance = currentGlobalBalance - pointsToDistribute;
+        
+        // Update global admin balance
+        setLocalAdminProfile({ pointsBalance: newGlobalBalance });
+        localStorage.setItem('globalAdminProfile', JSON.stringify({ pointsBalance: newGlobalBalance }));
+        
+        // Update local admin balance
+        const currentLocalBalance = localAdminBalances[variables.toUserId] || 0;
+        const newLocalBalance = currentLocalBalance + pointsToDistribute;
+        const updatedLocalBalances = {
+          ...localAdminBalances,
+          [variables.toUserId]: newLocalBalance
+        };
+        setLocalAdminBalances(updatedLocalBalances);
+        localStorage.setItem('localAdminBalances', JSON.stringify(updatedLocalBalances));
+      }
+      
+      const selectedAdmin = currentUser?.email === 'global@komarce.com' 
+        ? mockLocalAdmins.find(admin => admin.userId === variables.toUserId)
+        : localAdmins?.find((admin: any) => admin.userId === variables.toUserId);
+      
+      toast({ 
+        title: "Points Distributed Successfully", 
+        description: `${variables.points} points sent to ${selectedAdmin?.firstName} ${selectedAdmin?.lastName} (${selectedAdmin?.country})` 
+      });
       setDistributePointsForm({ toUserId: "", points: "", description: "" });
+      
+      if (currentUser?.email !== 'global@komarce.com') {
+        queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/admin/point-distributions'] });
+      }
     },
     onError: (error: Error) => {
       toast({ title: "Distribution Failed", description: error.message, variant: "destructive" });
@@ -703,8 +765,12 @@ export default function GlobalAdminPortal() {
                     <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                       <h4 className="font-semibold text-blue-800 mb-2">Available Balance</h4>
                       <p className="text-2xl font-bold text-blue-600">
-                        {dashboardData?.overview?.globalPointsBalance?.toLocaleString() || 0} Points
+                        {currentUser?.email === 'global@komarce.com' 
+                          ? (localAdminProfile.pointsBalance?.toLocaleString() || 0)
+                          : (dashboardData?.overview?.globalPointsBalance?.toLocaleString() || 0)
+                        } Points
                       </p>
+                      <p className="text-sm text-blue-600 mt-1">Ready for distribution</p>
                     </div>
                   </div>
                 </div>
