@@ -525,16 +525,16 @@ export function setupAdminRoutes(app: Express) {
       const { country } = req.params;
       console.log(`Fetching merchants for country: ${country}`);
       
-      // Get all users with merchant role and country
-      const allUsers = await storage.getAllUsers();
-      const merchantUsers = allUsers.filter(user => user.role === 'merchant' && user.country === country);
+      // Get users with merchant role and country
+      const merchantUsers = await storage.getUsersByRole('merchant');
+      const countryMerchants = merchantUsers.filter(user => user.country === country);
       
-      console.log(`Found ${merchantUsers.length} merchant users in ${country}:`, merchantUsers.map(u => u.email));
+      console.log(`Found ${countryMerchants.length} merchant users in ${country}:`, countryMerchants.map(u => u.email));
       
       // Get merchant profiles for these users, create if missing
       const merchantsData = [];
       
-      for (const user of merchantUsers) {
+      for (const user of countryMerchants) {
         try {
           let merchant = await storage.getMerchantByUserId(user.id);
           
