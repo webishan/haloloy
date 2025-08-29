@@ -44,6 +44,7 @@ interface ChatMessage {
 export default function GlobalAdminPortal() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<GlobalAdminUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [socket, setSocket] = useState<any>(null);
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
@@ -74,10 +75,13 @@ export default function GlobalAdminPortal() {
   // Check authentication on mount - always verify with server
   useEffect(() => {
     const verifyAuth = async () => {
+      setAuthLoading(true);
       const token = localStorage.getItem('globalAdminToken');
+      
       if (!token) {
         setIsAuthenticated(false);
         setCurrentUser(null);
+        setAuthLoading(false);
         return;
       }
 
@@ -102,10 +106,9 @@ export default function GlobalAdminPortal() {
             setCurrentUser(null);
           }
         } else {
-          // Token is invalid, clear storage and force re-login
+          // Token is invalid, clear everything and force re-login
           console.log('Token validation failed, clearing storage');
-          localStorage.removeItem('globalAdminToken');
-          localStorage.removeItem('globalAdminUser');
+          localStorage.clear(); // Clear all localStorage
           setIsAuthenticated(false);
           setCurrentUser(null);
           toast({ 
@@ -116,11 +119,12 @@ export default function GlobalAdminPortal() {
         }
       } catch (error) {
         console.log('Auth verification error:', error);
-        localStorage.removeItem('globalAdminToken');
-        localStorage.removeItem('globalAdminUser');
+        localStorage.clear(); // Clear all localStorage
         setIsAuthenticated(false);
         setCurrentUser(null);
       }
+      
+      setAuthLoading(false);
     };
 
     verifyAuth();
@@ -389,6 +393,20 @@ export default function GlobalAdminPortal() {
       description: distributePointsForm.description
     });
   };
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg shadow-2xl border-0">
+          <CardContent className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Verifying authentication...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
