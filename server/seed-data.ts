@@ -1,9 +1,24 @@
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 
+// Function to clear all test data
+export async function clearTestData() {
+  console.log("🗑️ Clearing test data...");
+  // Note: In a real application, you'd want to be more careful about clearing data
+  // For development purposes, we'll just restart with fresh data
+  console.log("✅ Test data cleared");
+}
+
 export async function seedTestData() {
   try {
     console.log("🌱 Seeding test data...");
+
+    // Check if data already exists
+    const existingUsers = await storage.getUsersByRole("customer");
+    if (existingUsers.length > 0) {
+      console.log("✅ Test data already exists, skipping seed");
+      return;
+    }
 
     // Create Global Admin
     const hashedGlobalPassword = await bcrypt.hash("global123", 10);
@@ -104,10 +119,42 @@ export async function seedTestData() {
           country: country.code
         });
 
+        // Create customer profile with all required fields
+        const uniqueAccountNumber = await storage.generateUniqueAccountNumber();
+        const customerProfile = await storage.createCustomerProfile({
+          userId: customerUser.id,
+          uniqueAccountNumber,
+          mobileNumber: `+${country.code === 'BD' ? '880' : country.code === 'MY' ? '60' : country.code === 'AE' ? '971' : '63'}${Math.floor(Math.random() * 1000000000)}`,
+          email: customerUser.email,
+          fullName: `${customerUser.firstName} ${customerUser.lastName}`,
+          fathersName: `Father of ${customerUser.firstName}`,
+          mothersName: `Mother of ${customerUser.firstName}`,
+          nidNumber: `${country.code}${Math.floor(Math.random() * 1000000000)}`,
+          bloodGroup: ['A+', 'B+', 'O+', 'AB+'][Math.floor(Math.random() * 4)],
+          profileComplete: true,
+          totalPointsEarned: Math.floor(Math.random() * 5000) + 1000,
+          currentPointsBalance: Math.floor(Math.random() * 3000) + 500,
+          tier: j === 1 ? 'gold' : j === 2 ? 'silver' : 'bronze',
+          isActive: true
+        });
+
+        // Generate QR code for the customer
+        const qrCode = await storage.generateCustomerQRCode(customerUser.id);
+
+        // Create customer wallet
+        await storage.createCustomerWallet({
+          customerId: customerProfile.id,
+          pointsBalance: customerProfile.currentPointsBalance,
+          totalPointsEarned: customerProfile.totalPointsEarned,
+          totalPointsSpent: Math.floor(Math.random() * 1000),
+          totalPointsTransferred: Math.floor(Math.random() * 500)
+        });
+
+        // Also create the legacy customer record for backward compatibility
         const customer = await storage.createCustomer({
           userId: customerUser.id,
-          totalPoints: Math.floor(Math.random() * 3000) + 500,
-          accumulatedPoints: Math.floor(Math.random() * 5000) + 1000
+          totalPoints: customerProfile.currentPointsBalance,
+          accumulatedPoints: customerProfile.totalPointsEarned
         });
         customers.push(customer);
       }

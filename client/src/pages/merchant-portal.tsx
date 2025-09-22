@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import SecureChat from "@/components/SecureChat";
 import QRTransferComponent from "@/components/QRTransferComponent";
+import { apiRequest } from "@/lib/queryClient";
 
 interface MerchantUser {
   id: string;
@@ -25,6 +26,190 @@ interface MerchantUser {
   country: string;
   isActive: boolean;
   createdAt: string;
+}
+
+// Customer QR Scanner Component for Merchants
+function CustomerQRScanner({ currentUser }: { currentUser: MerchantUser | null }) {
+  const { toast } = useToast();
+  const [scannedQR, setScannedQR] = useState('');
+  const [customerInfo, setCustomerInfo] = useState<any>(null);
+  const [pointsToTransfer, setPointsToTransfer] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
+
+  // Scan QR code mutation
+  const scanQRMutation = useMutation({
+    mutationFn: async (qrCode: string) => {
+      return await apiRequest('/api/customer/qr-scan', {
+        method: 'POST',
+        body: JSON.stringify({ qrCode }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+    },
+    onSuccess: (data) => {
+      setCustomerInfo(data.customer);
+      toast({
+        title: "Customer Found",
+        description: `Found customer: ${data.customer.fullName}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "QR Scan Failed",
+        description: error.message || "Invalid QR code",
+        variant: "destructive",
+      });
+      setCustomerInfo(null);
+    }
+  });
+
+  // Transfer points mutation
+  const transferPointsMutation = useMutation({
+    mutationFn: async (data: { customerId: string; points: number; description: string }) => {
+      return await apiRequest('/api/merchant/transfer-points', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' }
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Points Transferred",
+        description: `Successfully transferred ${pointsToTransfer} points`,
+      });
+      setPointsToTransfer('');
+      setCustomerInfo(null);
+      setScannedQR('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Transfer Failed",
+        description: error.message || "Failed to transfer points",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleScanQR = () => {
+    if (!scannedQR.trim()) {
+      toast({
+        title: "QR Code Required",
+        description: "Please enter a QR code",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsScanning(true);
+    scanQRMutation.mutate(scannedQR.trim());
+  };
+
+  const handleTransferPoints = () => {
+    const points = parseInt(pointsToTransfer);
+    if (!points || points <= 0) {
+      toast({
+        title: "Invalid Points",
+        description: "Please enter a valid number of points",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!customerInfo) {
+      toast({
+        title: "No Customer Selected",
+        description: "Please scan a customer QR code first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    transferPointsMutation.mutate({
+      customerId: customerInfo.id,
+      points: points,
+      description: `Points transferred via QR code scan`
+    });
+  };
+
+  if (!currentUser) {
+    return <div className="text-center py-8 text-gray-500">Please log in to scan QR codes</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* QR Code Input */}
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="qr-input">Customer QR Code</Label>
+          <Input
+            id="qr-input"
+            placeholder="Enter or paste customer QR code here"
+            value={scannedQR}
+            onChange={(e) => setScannedQR(e.target.value)}
+            className="mt-2"
+          />
+        </div>
+        
+        <Button 
+          onClick={handleScanQR}
+          disabled={scanQRMutation.isPending || !scannedQR.trim()}
+          className="w-full"
+        >
+          {scanQRMutation.isPending ? "Scanning..." : "Scan QR Code"}
+        </Button>
+      </div>
+
+      {/* Customer Info Display */}
+      {customerInfo && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <Users className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-green-800">{customerInfo.fullName}</h3>
+                <p className="text-sm text-green-600">Account: {customerInfo.accountNumber}</p>
+                <p className="text-sm text-green-600">Mobile: {customerInfo.mobileNumber}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Points Transfer Form */}
+      {customerInfo && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Transfer Points</CardTitle>
+            <CardDescription>
+              Enter the number of points to transfer to this customer
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="points-amount">Points Amount</Label>
+              <Input
+                id="points-amount"
+                type="number"
+                placeholder="Enter points to transfer"
+                value={pointsToTransfer}
+                onChange={(e) => setPointsToTransfer(e.target.value)}
+                min="1"
+                className="mt-2"
+              />
+            </div>
+            
+            <Button 
+              onClick={handleTransferPoints}
+              disabled={transferPointsMutation.isPending || !pointsToTransfer}
+              className="w-full"
+            >
+              {transferPointsMutation.isPending ? "Transferring..." : "Transfer Points"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 }
 
 export default function MerchantPortal() {
@@ -599,6 +784,23 @@ export default function MerchantPortal() {
 
           {/* QR Transfer Tab */}
           <TabsContent value="qr-transfer" className="space-y-6">
+            {/* Customer QR Scanner */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <QrCode className="w-5 h-5 mr-2" />
+                  Scan Customer QR Code
+                </CardTitle>
+                <CardDescription>
+                  Scan a customer's QR code to transfer points instantly
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CustomerQRScanner currentUser={currentUser} />
+              </CardContent>
+            </Card>
+
+            {/* QR Transfer Component */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">

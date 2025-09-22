@@ -42,7 +42,7 @@ export default function ProductDetail() {
 
   const addReviewMutation = useMutation({
     mutationFn: async ({ rating, comment }: { rating: number; comment: string }) => {
-      const response = await apiRequest('POST', `/api/products/${product.id}/reviews`, {
+      const response = await apiRequest(`/api/products/${product.id}/reviews`, 'POST', {
         rating,
         comment
       });

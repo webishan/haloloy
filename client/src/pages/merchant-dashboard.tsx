@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import jsQR from 'jsqr';
 import { Link } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { 
@@ -21,19 +23,215 @@ import {
   Star, Award, Calendar, Eye, Settings, Target, Copy,
   CreditCard, Wallet, Send, Download, Gift, Crown,
   ArrowUpRight, ArrowDownRight, Filter, Search, MoreHorizontal,
-  QrCode, UserPlus, Activity, PieChart, LineChart, Bell
+  QrCode, UserPlus, Activity, PieChart, LineChart, Bell,
+  Menu, X as XIcon, Home, Infinity, Trophy, User, Zap,
+  AlertCircle, Percent, Calculator, Building2, Upload
 } from 'lucide-react';
 import { ResponsiveContainer, LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
          BarChart as RechartsBar, Bar, PieChart as RechartsPie, Pie, Cell } from 'recharts';
+
+// QR Code Scan Component
+function QRScanComponent({ onCustomerScanned, onError }: { 
+  onCustomerScanned: (customer: any) => void; 
+  onError: (error: string) => void; 
+}) {
+  const [scanMode, setScanMode] = useState<'camera' | 'upload'>('camera');
+  const [isScanning, setIsScanning] = useState(false);
+  const [qrCodeInput, setQrCodeInput] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const scanQRCode = async (qrCode: string) => {
+    try {
+      setIsScanning(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        onError('Please log in to scan QR codes');
+        return;
+      }
+
+      const response = await fetch('/api/merchant/scan-customer', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ qrCode })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to scan QR code');
+      }
+
+      const result = await response.json();
+      onCustomerScanned(result.customer);
+    } catch (error: any) {
+      onError(error.message || 'Failed to scan QR code');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type.startsWith('image/')) {
+      // Handle image files - decode QR code
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            onError('Failed to process image');
+            return;
+          }
+          
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          
+          if (code) {
+            setQrCodeInput(code.data);
+            // Auto-scan the decoded QR code
+            setTimeout(() => {
+              scanQRCode(code.data);
+            }, 500);
+          } else {
+            onError('No QR code found in the image');
+          }
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    } else {
+      // For text files, read the content
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setQrCodeInput(result.trim());
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleManualInput = () => {
+    if (qrCodeInput.trim()) {
+      scanQRCode(qrCodeInput.trim());
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Mode Selection */}
+      <div className="flex space-x-2">
+        <Button
+          variant={scanMode === 'camera' ? 'default' : 'outline'}
+          onClick={() => setScanMode('camera')}
+          className="flex-1"
+        >
+          <QrCode className="w-4 h-4 mr-2" />
+          Camera Scan
+        </Button>
+        <Button
+          variant={scanMode === 'upload' ? 'default' : 'outline'}
+          onClick={() => setScanMode('upload')}
+          className="flex-1"
+        >
+          <Upload className="w-4 h-4 mr-2" />
+          Upload Image
+        </Button>
+      </div>
+
+      {scanMode === 'camera' ? (
+        <div className="space-y-4">
+          <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
+            <QrCode className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+            <p className="text-gray-600 mb-4">Camera scanning not implemented yet</p>
+            <p className="text-sm text-gray-500">Please use manual input or upload option</p>
+          </div>
+          
+          {/* Manual QR Code Input */}
+          <div className="space-y-2">
+            <Label htmlFor="qrInput">Or enter QR code manually:</Label>
+            <Input
+              id="qrInput"
+              placeholder="KOMARCE:CUSTOMER:..."
+              value={qrCodeInput}
+              onChange={(e) => setQrCodeInput(e.target.value)}
+            />
+            <Button 
+              onClick={handleManualInput}
+              disabled={!qrCodeInput.trim() || isScanning}
+              className="w-full"
+            >
+              {isScanning ? 'Scanning...' : 'Scan QR Code'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
+            <Upload className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+            <p className="text-gray-600 mb-2">Upload QR code image or text file</p>
+            <p className="text-sm text-gray-500 mb-4">Supports PNG, JPG, GIF, TXT, JSON</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.txt,.json"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button 
+              onClick={() => fileInputRef.current?.click()}
+              variant="outline"
+            >
+              Choose File
+            </Button>
+          </div>
+          
+          {/* Manual QR Code Input */}
+          <div className="space-y-2">
+            <Label htmlFor="qrInputUpload">Or enter QR code manually:</Label>
+            <Input
+              id="qrInputUpload"
+              placeholder="KOMARCE:CUSTOMER:..."
+              value={qrCodeInput}
+              onChange={(e) => setQrCodeInput(e.target.value)}
+            />
+            <Button 
+              onClick={handleManualInput}
+              disabled={!qrCodeInput.trim() || isScanning}
+              className="w-full"
+            >
+              {isScanning ? 'Scanning...' : 'Scan QR Code'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function MerchantDashboard() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showSendPointsDialog, setShowSendPointsDialog] = useState(false);
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showRechargeDialog, setShowRechargeDialog] = useState(false);
+  const [showSaleDialog, setShowSaleDialog] = useState(false);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [showQRScanDialog, setShowQRScanDialog] = useState(false);
 
   const { data: dashboardData = {}, isLoading } = useQuery({
     queryKey: ['/api/dashboard/merchant'],
@@ -41,12 +239,12 @@ export default function MerchantDashboard() {
   });
 
   const { data: walletData = {}, isLoading: walletsLoading } = useQuery({
-    queryKey: ['/api/merchant/wallets'],
+    queryKey: ['/api/merchant/wallet'],
     enabled: !!user && user.role === 'merchant'
   });
 
   const { data: customers = [] } = useQuery({
-    queryKey: ['/api/merchant/customers'],
+    queryKey: ['/api/merchant/scanned-customers'],
     enabled: !!user && user.role === 'merchant'
   });
 
@@ -60,32 +258,24 @@ export default function MerchantDashboard() {
     enabled: !!user && user.role === 'merchant'
   });
 
-  const { data: categories = [] } = useQuery({
-    queryKey: ['/api/categories']
-  });
-
-  const { data: brands = [] } = useQuery({
-    queryKey: ['/api/brands']
-  });
-
-  // Mutations for merchant actions
+  // Mutations
   const sendPointsMutation = useMutation({
-    mutationFn: async (data: { customerEmail: string; points: number; description?: string }) => {
+    mutationFn: (data: { customerId: string; points: number; description: string }) => {
       return apiRequest('/api/merchant/rewards/send', 'POST', data);
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Points sent successfully!" });
       queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallets'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/merchant/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
       setShowSendPointsDialog(false);
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to send points", variant: "destructive" });
+      toast({ title: "Error", description: error.message || "Failed to send points" });
     }
   });
 
   const purchasePointsMutation = useMutation({
-    mutationFn: async (data: { points: number; amount: number; paymentMethod: string }) => {
+    mutationFn: (data: { amount: number; paymentMethod: string }) => {
       return apiRequest('/api/merchant/points/purchase', 'POST', data);
     },
     onSuccess: () => {
@@ -94,27 +284,27 @@ export default function MerchantDashboard() {
       setShowPurchaseDialog(false);
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to purchase points", variant: "destructive" });
+      toast({ title: "Error", description: error.message || "Failed to purchase points" });
     }
   });
 
   const withdrawMutation = useMutation({
-    mutationFn: async (data: { amount: number; paymentMethod: string; accountDetails?: string }) => {
+    mutationFn: (data: { amount: number; bankAccount: string }) => {
       return apiRequest('/api/merchant/wallet/withdraw', 'POST', data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Withdrawal request submitted successfully!" });
+      toast({ title: "Success", description: "Withdrawal request submitted!" });
       queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallets'] });
       setShowWithdrawDialog(false);
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to process withdrawal", variant: "destructive" });
+      toast({ title: "Error", description: error.message || "Failed to process withdrawal" });
     }
   });
 
   if (isLoading) {
     return (
-      <div className="pt-20 min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-8">
           <div className="animate-pulse space-y-8">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
@@ -129,16 +319,25 @@ export default function MerchantDashboard() {
     );
   }
 
-  // Mock data for demo - in real app this would come from API
+  // Merchant data from API
   const merchantData = {
-    loyaltyPoints: 1000,
-    totalCashback: 0,
-    balance: 1000,
-    registeredCustomers: 1,
-    merchantName: "Star Merchant",
+    loyaltyPoints: walletData?.rewardPointBalance || 1000,
+    totalCashback: walletData?.cashbackIncome || 0,
+    balance: walletData?.commerceWalletBalance || 1000,
+    incomeBalance: walletData?.incomeWalletBalance || 0,
+    registeredCustomers: customers?.length || 0,
+    merchantName: merchantProfile?.user?.businessName || "Tech Store",
     tier: "Star Merchant",
     joinedDate: "Aug 2025",
-    referralLink: "komarce.com/ref/m001"
+    referralLink: "komarce.com/ref/m001",
+    // Wallet breakdown
+    rewardPointBalance: walletData?.rewardPointBalance || 0,
+    totalPointsIssued: walletData?.totalPointsIssued || 0,
+    cashbackIncome: walletData?.cashbackIncome || 0,
+    referralIncome: walletData?.referralIncome || 0,
+    royaltyIncome: walletData?.royaltyIncome || 0,
+    totalDeposited: walletData?.totalDeposited || 0,
+    totalWithdrawn: walletData?.totalWithdrawn || 0
   };
 
   const pointDistributionData = [
@@ -168,7 +367,7 @@ export default function MerchantDashboard() {
     engagementRate: 7.2
   };
 
-  const leaderboardData = [
+  const leaderboardData = leaderboard || [
     { rank: 1, name: "Ahmed Hassan", code: "AH01", points: 15420, customers: 247, revenue: 45600, tier: "Co Founder" },
     { rank: 2, name: "Sarah Khan", code: "SK02", points: 14250, customers: 198, revenue: 38900, tier: "Regional Manager" },
     { rank: 3, name: "Mohammad Ali", code: "MA03", points: 13890, customers: 176, revenue: 35200, tier: "Business Manager" },
@@ -178,11 +377,11 @@ export default function MerchantDashboard() {
   // Render Main Dashboard
   const renderDashboard = () => (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Welcome Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Merchant Dashboard</h1>
-          <p className="text-gray-600">Welcome back</p>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
+          <p className="text-gray-600">Here's what's happening with your business today</p>
         </div>
         <div className="relative">
           <Bell className="w-6 h-6 text-gray-600" />
@@ -206,7 +405,7 @@ export default function MerchantDashboard() {
                 </p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center">
-                <Coins className="w-6 h-6 text-purple-600" />
+                <Infinity className="w-6 h-6 text-purple-600" />
               </div>
             </div>
           </CardContent>
@@ -242,10 +441,7 @@ export default function MerchantDashboard() {
                   <span className="text-green-600">৳</span>
                   <p className="text-2xl font-bold text-gray-900">{merchantData.balance}</p>
                 </div>
-                <p className="text-xs text-green-600 flex items-center mt-1">
-                  <ArrowUpRight className="w-3 h-3 mr-1" />
-                  After VAT & Service Charge
-                </p>
+                <p className="text-xs text-gray-500 mt-1">After VAT & Service Charge</p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center">
                 <Wallet className="w-6 h-6 text-green-600" />
@@ -275,47 +471,28 @@ export default function MerchantDashboard() {
         </Card>
       </div>
 
-      {/* Chart and Quick Actions Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Point Distribution Chart */}
-        <Card className="lg:col-span-2">
+      {/* Charts and Actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Point Distribution Trend */}
+        <Card>
           <CardHeader>
-            <CardTitle className="text-lg font-semibold">Point Distribution Trend</CardTitle>
+            <CardTitle>Point Distribution Trend</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <RechartsLine data={pointDistributionData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
-                <YAxis stroke="#6b7280" fontSize={12} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e5e7eb', 
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                  }} 
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="points" 
-                  stroke="#3b82f6" 
-                  strokeWidth={3}
-                  dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
-                />
-              </RechartsLine>
-            </ResponsiveContainer>
-            
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="text-center p-3 bg-gray-50 rounded-lg">
-                <p className="text-2xl font-bold text-gray-900">0</p>
-                <p className="text-sm text-gray-600">Points Distributed Today</p>
-              </div>
-              <div className="text-center p-3 bg-gray-50 rounded-lg">
-                <p className="text-2xl font-bold text-gray-900">0</p>
-                <p className="text-sm text-gray-600">Monthly Total</p>
-              </div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsLine data={pointDistributionData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="points" stroke="#8884d8" strokeWidth={2} />
+                </RechartsLine>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-4 flex justify-between text-sm text-gray-600">
+              <span>0 Points Distributed Today</span>
+              <span>0 Monthly Total</span>
             </div>
           </CardContent>
         </Card>
@@ -323,26 +500,33 @@ export default function MerchantDashboard() {
         {/* Quick Actions */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
+            <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+            <Button 
+              onClick={() => setShowQRScanDialog(true)}
+              className="w-full justify-start bg-purple-600 hover:bg-purple-700"
+            >
+              <QrCode className="w-4 h-4 mr-2" />
+              Scan Customer QR
+            </Button>
             <Button 
               onClick={() => setShowSendPointsDialog(true)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full justify-start bg-blue-600 hover:bg-blue-700"
             >
               <Send className="w-4 h-4 mr-2" />
               Transfer Points
             </Button>
             <Button 
               onClick={() => setShowPurchaseDialog(true)}
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
+              className="w-full justify-start bg-green-600 hover:bg-green-700"
             >
               <Plus className="w-4 h-4 mr-2" />
               Purchase Points
             </Button>
             <Button 
               onClick={() => setShowWithdrawDialog(true)}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full justify-start bg-orange-600 hover:bg-orange-700"
             >
               <Wallet className="w-4 h-4 mr-2" />
               Withdraw Balance
@@ -353,30 +537,20 @@ export default function MerchantDashboard() {
 
       {/* Referral Program */}
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+        <CardHeader>
+          <CardTitle>Referral Program</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <h3 className="text-lg font-semibold mb-2">Referral Program</h3>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm text-gray-600">Referred Merchants</p>
-                  <p className="text-2xl font-bold">0</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Commission Earned</p>
-                  <p className="text-2xl font-bold">৳0</p>
-                </div>
-              </div>
-              <div className="mt-4">
-                <p className="text-sm text-gray-600 mb-2">Your Referral Link</p>
-                <div className="flex items-center space-x-2">
-                  <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm">{merchantData.referralLink}</code>
-                  <Button size="sm" variant="outline">
-                    <Copy className="w-4 h-4" />
-                    Copy
-                  </Button>
-                </div>
-              </div>
+              <p className="text-sm text-gray-600">Referred Merchants: 0</p>
+              <p className="text-sm text-gray-600">Commission Earned: ৳0</p>
+            </div>
+            <div>
+              <Button variant="outline" className="w-full">
+                <Copy className="w-4 h-4 mr-2" />
+                Your Referral Link
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -384,217 +558,44 @@ export default function MerchantDashboard() {
     </div>
   );
 
-  // Render Loyalty Points Management
+  // Render Loyalty Points Section
   const renderLoyaltyPoints = () => (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Loyalty Points Management</h1>
-        <p className="text-gray-600">Manage your reward points and track distribution</p>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Reward Point Wallet</h2>
+        <Button onClick={() => setShowSendPointsDialog(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Issue Points
+        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Available Points</p>
-              <p className="text-3xl font-bold text-gray-900">0</p>
-              <p className="text-xs text-gray-500 mt-1">↗ +5.2% from last week</p>
+              <p className="text-3xl font-bold text-purple-600">{merchantData.rewardPointBalance}</p>
+              <p className="text-sm text-gray-600">Available Points</p>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Total Distributed</p>
-              <p className="text-3xl font-bold text-gray-900">0</p>
-              <p className="text-xs text-gray-500 mt-1">↗ +12.5% from last month</p>
+              <p className="text-3xl font-bold text-green-600">{merchantData.totalPointsIssued}</p>
+              <p className="text-sm text-gray-600">Total Points Issued</p>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Today's Distribution</p>
-              <p className="text-3xl font-bold text-gray-900">0</p>
-              <p className="text-xs text-gray-500 mt-1">↗ Points distributed today</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Monthly Total</p>
-              <p className="text-3xl font-bold text-gray-900">0</p>
-              <p className="text-xs text-gray-500 mt-1">↗ This month's total</p>
+              <p className="text-3xl font-bold text-blue-600">0</p>
+              <p className="text-sm text-gray-600">Points Issued Today</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Distribution Chart and Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Point Distribution</CardTitle>
-            <div className="flex items-center space-x-2">
-              <Select defaultValue="manual">
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">Manual Mode</SelectItem>
-                  <SelectItem value="auto">Auto Mode</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="sm">
-                <QrCode className="w-4 h-4 mr-2" />
-                QR Transfer
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-4">
-              <h3 className="font-semibold mb-3">Weekly Point Distribution</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <RechartsBar data={weeklyDistributionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="day" stroke="#6b7280" fontSize={12} />
-                  <YAxis stroke="#6b7280" fontSize={12} />
-                  <Tooltip />
-                  <Bar dataKey="points" fill="#1f2937" radius={[4, 4, 0, 0]} />
-                </RechartsBar>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Distribution Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button 
-              onClick={() => setShowSendPointsDialog(true)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              Send Points
-            </Button>
-            <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
-              <QrCode className="w-4 h-4 mr-2" />
-              QR Code Transfer
-            </Button>
-            <Button 
-              onClick={() => setShowPurchaseDialog(true)}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-            >
-              <Package className="w-4 h-4 mr-2" />
-              Purchase Points
-            </Button>
-            
-            <Separator />
-            
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">Distribution Settings</h4>
-              <div className="space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span>Current Mode:</span>
-                  <span className="font-medium">Manual</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Min Points:</span>
-                  <span className="font-medium">1</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Max Points:</span>
-                  <span className="font-medium">10,000</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Purchase History and Distribution Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Purchase History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium">1,000 Points</p>
-                  <p className="text-sm text-gray-600">Jan 15, 2024</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">৳1,000</p>
-                  <Badge variant="default" className="bg-green-100 text-green-800">Completed</Badge>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium">2,500 Points</p>
-                  <p className="text-sm text-gray-600">Jan 18, 2024</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">৳2,500</p>
-                  <Badge variant="default" className="bg-green-100 text-green-800">Completed</Badge>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium">5,000 Points</p>
-                  <p className="text-sm text-gray-600">Jan 5, 2024</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">৳5,000</p>
-                  <Badge variant="default" className="bg-green-100 text-green-800">Completed</Badge>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Distribution Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">Total Points Purchased</span>
-                <span className="font-bold text-lg">25,000</span>
-              </div>
-              
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">Total Points Distributed</span>
-                <span className="font-bold text-lg">0</span>
-              </div>
-              
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">Remaining Points</span>
-                <span className="font-bold text-lg">0</span>
-              </div>
-
-              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                <span className="text-sm font-medium">Efficiency Rate</span>
-                <span className="font-bold text-lg text-green-600">95.2%</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Transactions */}
       <Card>
         <CardHeader>
           <CardTitle>Recent Point Transactions</CardTitle>
@@ -604,17 +605,15 @@ export default function MerchantDashboard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>Customer</TableHead>
                 <TableHead>Points</TableHead>
-                <TableHead>Amount</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Description</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                  No transactions found
+                <TableCell colSpan={4} className="text-center text-gray-500">
+                  No recent transactions
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -624,321 +623,573 @@ export default function MerchantDashboard() {
     </div>
   );
 
-  // Render Cashback Management  
-  const renderCashback = () => (
+  // Render Income Wallet Section
+  const renderIncomeWallet = () => (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Cashback Management</h1>
-        <p className="text-gray-600">Track and manage your cashback earnings from all sources</p>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Income Wallet</h2>
+        <Button onClick={() => setShowTransferDialog(true)}>
+          <Send className="w-4 h-4 mr-2" />
+          Transfer to Commerce
+        </Button>
       </div>
 
-      {/* Cashback Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Total Cashback</p>
-              <div className="flex items-center justify-center space-x-1">
-                <span className="text-orange-600">৳</span>
-                <p className="text-3xl font-bold text-gray-900">0</p>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">↗ +11.3% from last month</p>
+              <p className="text-3xl font-bold text-green-600">৳{merchantData.incomeBalance}</p>
+              <p className="text-sm text-gray-600">Total Income Balance</p>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">15% Instant Cashback</p>
-              <div className="flex items-center justify-center space-x-1">
-                <span className="text-orange-600">৳</span>
-                <p className="text-3xl font-bold text-gray-900">0</p>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">↗ From point transfers</p>
+              <p className="text-3xl font-bold text-orange-600">৳{merchantData.cashbackIncome}</p>
+              <p className="text-sm text-gray-600">15% Cashback Income</p>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">2% Referral Commission</p>
-              <div className="flex items-center justify-center space-x-1">
-                <span className="text-green-600">৳</span>
-                <p className="text-3xl font-bold text-gray-900">0</p>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">↗ From 0 referral</p>
+              <p className="text-3xl font-bold text-blue-600">৳{merchantData.referralIncome}</p>
+              <p className="text-sm text-gray-600">2% Referral Income</p>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">1% Royalty Bonus</p>
-              <div className="flex items-center justify-center space-x-1">
-                <span className="text-blue-600">৳</span>
-                <p className="text-3xl font-bold text-gray-900">0</p>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">↗ Monthly merchant bonus</p>
+              <p className="text-3xl font-bold text-purple-600">৳{merchantData.royaltyIncome}</p>
+              <p className="text-sm text-gray-600">1% Royalty Income</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Cashback Breakdown</CardTitle>
+            <CardTitle>Income Breakdown</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <RechartsBar data={[
-                { name: '15% Instant', value: 4, color: '#8b5cf6' },
-                { name: '2% Referral', value: 3, color: '#10b981' },
-                { name: '1% Royalty', value: 2, color: '#f59e0b' }
-              ]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
-                <YAxis stroke="#6b7280" fontSize={12} />
-                <Tooltip />
-                <Bar dataKey="value" fill="#8884d8" radius={[4, 4, 0, 0]} />
-              </RechartsBar>
-            </ResponsiveContainer>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">15% Cashback (on 1500+ Taka discount)</span>
+                <span className="font-semibold">৳{merchantData.cashbackIncome}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">2% Referral (per 1000 Taka sales)</span>
+                <span className="font-semibold">৳{merchantData.referralIncome}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">1% Royalty (monthly distribution)</span>
+                <span className="font-semibold">৳{merchantData.royaltyIncome}</span>
+              </div>
+              <Separator />
+              <div className="flex justify-between items-center font-bold">
+                <span>Total Income</span>
+                <span>৳{merchantData.incomeBalance}</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Monthly Cashback Trend</CardTitle>
+            <CardTitle>Transfer to Commerce Wallet</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <RechartsLine data={[
-                { month: 'Jan', cashback: 0 },
-                { month: 'Feb', cashback: 1000 },
-                { month: 'Mar', cashback: 750 },
-                { month: 'Apr', cashback: 500 },
-                { month: 'May', cashback: 1250 },
-                { month: 'Jun', cashback: 950 },
-                { month: 'Jul', cashback: 0 }
-              ]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
-                <YAxis stroke="#6b7280" fontSize={12} />
-                <Tooltip />
-                <Line 
-                  type="monotone" 
-                  dataKey="cashback" 
-                  stroke="#10b981" 
-                  strokeWidth={3}
-                  dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
-                />
-              </RechartsLine>
-            </ResponsiveContainer>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Transfer funds from Income Wallet to Commerce Wallet. 
+                A 12.5% VAT and service charge will be applied during transfer.
+              </p>
+              <Button 
+                onClick={() => setShowTransferDialog(true)}
+                className="w-full"
+                disabled={merchantData.incomeBalance <= 0}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                Transfer to Commerce Wallet
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
 
-      {/* Cashback Sources */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="border-l-4 border-purple-500">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-              <DollarSign className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Instant Cashback (15%)</h3>
-              <p className="text-sm text-gray-600">Earned from point transfers to customers</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>This Month:</span>
-                <span className="font-medium">৳2,850</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Active Referrals:</span>
-                <span className="font-medium">0</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Your Share:</span>
-                <span className="font-medium">1%</span>
-              </div>
+  // Render Commerce Wallet Section
+  const renderCommerceWallet = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Commerce Wallet</h2>
+        <div className="flex space-x-2">
+          <Button onClick={() => setShowPurchaseDialog(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Balance
+          </Button>
+          <Button onClick={() => setShowWithdrawDialog(true)}>
+            <Wallet className="w-4 h-4 mr-2" />
+            Withdraw
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-green-600">৳{merchantData.balance}</p>
+              <p className="text-sm text-gray-600">Available Balance</p>
             </div>
           </CardContent>
         </Card>
-
-        <Card className="border-l-4 border-green-500">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3">
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-              <Users className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Referral Commission (2%)</h3>
-              <p className="text-sm text-gray-600">From 0 referred merchants</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>This Month:</span>
-                <span className="font-medium">৳1,240</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Active Referrals:</span>
-                <span className="font-medium">0</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Your Share:</span>
-                <span className="font-medium">1%</span>
-              </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-blue-600">৳{merchantData.totalDeposited}</p>
+              <p className="text-sm text-gray-600">Total Deposited</p>
             </div>
           </CardContent>
         </Card>
-
-        <Card className="border-l-4 border-blue-500">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-              <Crown className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Royalty Bonus (1%)</h3>
-              <p className="text-sm text-gray-600">Monthly share from all merchants</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>This Month:</span>
-                <span className="font-medium">৳2,090</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Available Balance:</span>
-                <span className="font-medium">৳500</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Your Share:</span>
-                <span className="font-medium">1%</span>
-              </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-orange-600">৳{merchantData.totalWithdrawn}</p>
+              <p className="text-sm text-gray-600">Total Withdrawn</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Merchant Incentive Program */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Wallet Features</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <Plus className="w-4 h-4 text-green-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Add Balance</p>
+                  <p className="text-sm text-gray-600">Deposit from bank or mobile financial services</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Send className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Transfer from Income</p>
+                  <p className="text-sm text-gray-600">Transfer from Income Wallet (12.5% VAT applies)</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                  <Wallet className="w-4 h-4 text-orange-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Withdraw</p>
+                  <p className="text-sm text-gray-600">Withdraw to bank account (profile required)</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Withdrawal Requirements</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">Complete your profile to enable withdrawals:</p>
+              <ul className="text-sm space-y-1">
+                <li className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                  <span>Father's name</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                  <span>Mother's name</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                  <span>NID/Passport number</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                  <span>Nominee details</span>
+                </li>
+              </ul>
+              <Button variant="outline" size="sm" className="mt-3">
+                <Edit className="w-4 h-4 mr-2" />
+                Update Profile
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+
+  // Render Customers Section
+  const renderCustomers = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Customer Management</h2>
+        <Button onClick={() => setShowQRScanDialog(true)}>
+          <QrCode className="w-4 h-4 mr-2" />
+          Scan Customer QR
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-blue-600">{merchantData.registeredCustomers}</p>
+              <p className="text-sm text-gray-600">Total Customers</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-green-600">0</p>
+              <p className="text-sm text-gray-600">Active Today</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-purple-600">0</p>
+              <p className="text-sm text-gray-600">New This Week</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-orange-600">0</p>
+              <p className="text-sm text-gray-600">Points Redeemed</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Merchant Incentive Program</CardTitle>
+          <CardTitle>Customer List</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="text-center p-4 border rounded-lg bg-blue-50">
-              <div className="flex items-center justify-center mb-2">
-                <Star className="w-6 h-6 text-yellow-500" />
-                <span className="ml-2 font-semibold">Star Merchant</span>
-              </div>
-              <p className="text-sm text-gray-600">Achieve 1,000 points distribution monthly</p>
-              <div className="mt-2 bg-blue-200 rounded-full h-2">
-                <div className="bg-blue-600 h-2 rounded-full" style={{ width: '75%' }}></div>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Progress: 750/1,000</p>
-              <Badge variant="default" className="mt-2">Current</Badge>
-            </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Account Number</TableHead>
+                <TableHead>Mobile</TableHead>
+                <TableHead>Current Points</TableHead>
+                <TableHead>Tier</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {customers.length > 0 ? customers.map((customer: any) => (
+                <TableRow key={customer.id}>
+                  <TableCell className="font-medium">{customer.fullName}</TableCell>
+                  <TableCell>{customer.accountNumber}</TableCell>
+                  <TableCell>{customer.mobileNumber}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-green-600">
+                      {customer.currentPointsBalance} pts
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={customer.tier === 'gold' ? 'default' : customer.tier === 'silver' ? 'secondary' : 'outline'}>
+                      {customer.tier}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setShowSendPointsDialog(true);
+                        // Pre-select this customer in the form
+                        setTimeout(() => {
+                          const select = document.querySelector('select[name="customerId"]') as HTMLSelectElement;
+                          if (select) select.value = customer.id;
+                        }, 100);
+                      }}
+                    >
+                      <Send className="w-4 h-4 mr-1" />
+                      Send Points
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                    <div className="flex flex-col items-center space-y-2">
+                      <QrCode className="w-8 h-8 text-gray-400" />
+                      <p>No scanned customers yet</p>
+                      <p className="text-sm">Scan customer QR codes to add them to your list</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
-            <div className="text-center p-4 border rounded-lg">
-              <div className="flex items-center justify-center mb-2">
-                <Star className="w-6 h-6 text-yellow-500" />
-                <Star className="w-6 h-6 text-yellow-500" />
-                <span className="ml-2 font-semibold">Super Star Merchant</span>
-              </div>
-              <p className="text-sm text-gray-600">Achieve 2,000 points distribution monthly</p>
-              <Badge variant="outline" className="mt-2">Next</Badge>
-              <p className="text-xs text-green-600 mt-1">Bonus: +5% Cashback</p>
-            </div>
+  // Render Leaderboard Section
+  const renderLeaderboard = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Merchant Leaderboard</h2>
+        <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+          <Star className="w-4 h-4 mr-1" />
+          {merchantData.tier}
+        </Badge>
+      </div>
 
-            <div className="text-center p-4 border rounded-lg">
-              <div className="flex items-center justify-center mb-2">
-                <Crown className="w-6 h-6 text-purple-600" />
-                <span className="ml-2 font-semibold">Co Founder</span>
-              </div>
-              <p className="text-sm text-gray-600">Exclusive partnership benefits</p>
-              <Badge variant="outline" className="mt-2">Premium</Badge>
-              <p className="text-xs text-purple-600 mt-1">Revenue Share: +5% Cashback</p>
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Performers</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Rank</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Points</TableHead>
+                <TableHead>Customers</TableHead>
+                <TableHead>Revenue</TableHead>
+                <TableHead>Tier</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {leaderboardData.map((merchant: any) => (
+                <TableRow key={merchant.rank}>
+                  <TableCell>
+                    <Badge variant={merchant.rank <= 3 ? "default" : "secondary"}>
+                      #{merchant.rank}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-medium">{merchant.name}</TableCell>
+                  <TableCell>{merchant.code}</TableCell>
+                  <TableCell>{merchant.points.toLocaleString()}</TableCell>
+                  <TableCell>{merchant.customers}</TableCell>
+                  <TableCell>৳{merchant.revenue.toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{merchant.tier}</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
-            <div className="text-center p-4 border rounded-lg">
-              <div className="flex items-center justify-center mb-2">
-                <Award className="w-6 h-6 text-green-600" />
-                <span className="ml-2 font-semibold">Executive</span>
-              </div>
-              <p className="text-sm text-gray-600">Highest tier benefits</p>
-              <Badge variant="outline" className="mt-2">Elite</Badge>
-              <p className="text-xs text-green-600 mt-1">Revenue Share: 14%</p>
+  // Render Profile Section
+  const renderProfile = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-gray-900">Profile Settings</h2>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Business Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="businessName">Business Name</Label>
+              <Input id="businessName" value={merchantData.merchantName} readOnly />
+            </div>
+            <div>
+              <Label htmlFor="tier">Current Tier</Label>
+              <Input id="tier" value={merchantData.tier} readOnly />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="joinedDate">Joined Date</Label>
+              <Input id="joinedDate" value={merchantData.joinedDate} readOnly />
+            </div>
+            <div>
+              <Label htmlFor="referralLink">Referral Link</Label>
+              <Input id="referralLink" value={merchantData.referralLink} readOnly />
             </div>
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
 
-      {/* VAT & Service Charges and Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  // Render Point Recharge Section
+  const renderPointRecharge = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Point Recharge System</h2>
+        <Button onClick={() => setShowRechargeDialog(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Request Recharge
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <DollarSign className="w-6 h-6 text-blue-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Direct Cash Payment</h3>
+              <p className="text-sm text-gray-600 mt-2">Pay cash directly to the company</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CreditCard className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Bank/Mobile Transfer</h3>
+              <p className="text-sm text-gray-600 mt-2">Transfer to company account and request points</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Zap className="w-6 h-6 text-purple-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Automatic Payment Gateway</h3>
+              <p className="text-sm text-gray-600 mt-2">Instant recharge via payment gateway</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recharge History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Method</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Points</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-gray-500">
+                  No recharge history found
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // Render Product Sales Section
+  const renderProductSales = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Product Sales with Mandatory Discounts</h2>
+        <Button onClick={() => setShowSaleDialog(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Record Sale
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>VAT & Service Charges</CardTitle>
+            <CardTitle>Mandatory Discount Rules</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">Gross Cashback</span>
-                <span className="font-bold">৳0</span>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-4 h-4 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-800">Reward Points (Mandatory)</p>
+                  <p className="text-sm text-gray-600">Must give reward points for every sale</p>
+                </div>
               </div>
-              <p className="text-xs text-gray-600">Before deductions</p>
-
-              <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                <span className="text-sm font-medium">VAT & Service Charge</span>
-                <span className="font-bold text-red-600">-৳0.00</span>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-blue-800">Cash Discount (Optional)</p>
+                  <p className="text-sm text-gray-600">Additional cash discount is optional</p>
+                </div>
               </div>
-              <p className="text-xs text-gray-600">12.5% deduction</p>
-
-              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                <span className="text-sm font-medium">Net Balance</span>
-                <span className="font-bold text-green-600">৳0.00</span>
-              </div>
-              <p className="text-xs text-gray-600">Available for withdrawal</p>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+            <CardTitle>Distribution Methods</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-              <Send className="w-4 h-4 mr-2" />
-              Transfer to Komarce Wallet
-            </Button>
-            <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
-              <Wallet className="w-4 h-4 mr-2" />
-              Withdraw Balance
-            </Button>
-            <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white">
-              <Eye className="w-4 h-4 mr-2" />
-              View Detailed Report
-            </Button>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">Next Payment</h4>
-              <div className="space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span>৳0.00</span>
-                  <span className="text-gray-500">Available for withdrawal</span>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <Edit className="w-4 h-4 text-green-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Manual Distribution</p>
+                  <p className="text-sm text-gray-600">Give points as you wish</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                  <Percent className="w-4 h-4 text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Automatic Percentage</p>
+                  <p className="text-sm text-gray-600">Pre-set percentage of sales amount</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                  <Calculator className="w-4 h-4 text-orange-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Automatic Fixed</p>
+                  <p className="text-sm text-gray-600">Pre-set fixed amount per product</p>
                 </div>
               </div>
             </div>
@@ -946,27 +1197,26 @@ export default function MerchantDashboard() {
         </Card>
       </div>
 
-      {/* Recent Cashback Transactions */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Cashback Transactions</CardTitle>
+          <CardTitle>Recent Sales</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Points</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead>Customer</TableHead>
                 <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Description</TableHead>
+                <TableHead>Points Given</TableHead>
+                <TableHead>Cash Discount</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                  No recent cashback found
+                <TableCell colSpan={6} className="text-center text-gray-500">
+                  No sales recorded yet
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -976,1351 +1226,391 @@ export default function MerchantDashboard() {
     </div>
   );
 
-  // Render Customer Management
-  const renderCustomers = () => (
+  // Render Activity Tracking Section
+  const renderActivityTracking = () => (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Customer Management</h1>
-        <p className="text-gray-600">Manage your registered customers and track their activity</p>
-      </div>
+      <h2 className="text-2xl font-bold text-gray-900">Merchant Activity Tracking</h2>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Total Customers</p>
-              <p className="text-3xl font-bold text-gray-900">1</p>
-              <p className="text-xs text-green-600 mt-1">↗ +2 new this month</p>
+              <p className="text-3xl font-bold text-green-600">0</p>
+              <p className="text-sm text-gray-600">Points Distributed This Month</p>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Active Customers</p>
-              <p className="text-3xl font-bold text-gray-900">1</p>
-              <p className="text-xs text-green-600 mt-1">↗ 100% activity rate</p>
+              <p className="text-3xl font-bold text-blue-600">1000</p>
+              <p className="text-sm text-gray-600">Required Points</p>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Reward Holders</p>
-              <p className="text-3xl font-bold text-gray-900">1</p>
-              <p className="text-xs text-gray-600 mt-1">↗ Customers with reward numbers</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">This Month's Activity</p>
-              <p className="text-3xl font-bold text-gray-900">0</p>
-              <p className="text-xs text-gray-600 mt-1">↗ Total transactions</p>
+              <Badge variant="default" className="bg-green-100 text-green-800">
+                Active
+              </Badge>
+              <p className="text-sm text-gray-600 mt-2">Current Status</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Customer Directory */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
-            <CardTitle>Customer Directory</CardTitle>
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input 
-                  placeholder="Search customers by name, mobile, or email..." 
-                  className="pl-10 w-full sm:w-80"
-                />
-              </div>
-              <Select defaultValue="all">
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Customers</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline">
-                <Filter className="w-4 h-4 mr-2" />
-                More Filters
-              </Button>
-              <Button variant="outline">
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
-            </div>
-          </div>
+          <CardTitle>Activity Requirements</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="mb-4">
-            <h3 className="font-semibold mb-3">Customer List (1)</h3>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              To remain active, merchants must distribute a minimum number of points to customers each month.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-semibold">Basic Level</h4>
+                <p className="text-2xl font-bold text-blue-600">1,000</p>
+                <p className="text-sm text-gray-600">Points per month</p>
+              </div>
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-semibold">Standard Level</h4>
+                <p className="text-2xl font-bold text-green-600">2,000</p>
+                <p className="text-sm text-gray-600">Points per month</p>
+              </div>
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-semibold">Premium Level</h4>
+                <p className="text-2xl font-bold text-purple-600">5,000</p>
+                <p className="text-sm text-gray-600">Points per month</p>
+              </div>
+            </div>
           </div>
-          
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // Render Distribution Reports Section
+  const renderDistributionReports = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Point Distribution Reports</h2>
+        <Button onClick={() => setShowReportDialog(true)}>
+          <BarChart className="w-4 h-4 mr-2" />
+          Generate Report
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Report Types</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Package className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Product-wise Report</p>
+                  <p className="text-sm text-gray-600">Points distributed by product</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <Building2 className="w-4 h-4 text-green-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Supplier-wise Report</p>
+                  <p className="text-sm text-gray-600">Points distributed by supplier company</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                  <Users className="w-4 h-4 text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Customer-wise Report</p>
+                  <p className="text-sm text-gray-600">Points distributed to customers</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                  <Calendar className="w-4 h-4 text-orange-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Monthly Summary</p>
+                  <p className="text-sm text-gray-600">Monthly distribution summary</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Example Report</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                <span className="font-medium">RIBANA Cosmetics</span>
+                <div className="text-right">
+                  <p className="font-semibold">1,250 points</p>
+                  <p className="text-sm text-gray-600">৳12,500 sales</p>
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                <span className="font-medium">Electronics Hub</span>
+                <div className="text-right">
+                  <p className="font-semibold">850 points</p>
+                  <p className="text-sm text-gray-600">৳8,500 sales</p>
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                <span className="font-medium">Fashion Store</span>
+                <div className="text-right">
+                  <p className="font-semibold">650 points</p>
+                  <p className="text-sm text-gray-600">৳6,500 sales</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Generated Reports</CardTitle>
+        </CardHeader>
+        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Points</TableHead>
-                <TableHead>Reward Number</TableHead>
-                <TableHead>This Month</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Registered</TableHead>
+                <TableHead>Report Type</TableHead>
+                <TableHead>Period</TableHead>
+                <TableHead>Total Points</TableHead>
+                <TableHead>Generated</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-blue-600 font-semibold">DC</span>
-                    </div>
-                    <div>
-                      <p className="font-medium">Demo Customer</p>
-                      <p className="text-sm text-gray-600">ID: #001</p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div>
-                    <p className="font-medium">9876543210</p>
-                    <p className="text-sm text-gray-600">demo@email.com</p>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div>
-                    <p className="font-bold text-blue-600">1500</p>
-                    <p className="text-xs text-gray-600">Total Points</p>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge className="bg-yellow-100 text-yellow-800">
-                    Reward
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div>
-                    <p className="font-medium">0</p>
-                    <p className="text-xs text-gray-600">Points</p>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge className="bg-green-100 text-green-800">
-                    Active
-                  </Badge>
-                </TableCell>
-                <TableCell>Aug 07, 2025</TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Button size="sm" variant="outline">
-                      <Eye className="w-4 h-4" />
-                      View
-                    </Button>
-                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-                      <Send className="w-4 h-4" />
-                      Send Points
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-
-          <Button className="w-full mt-4" variant="outline">
-            <UserPlus className="w-4 h-4 mr-2" />
-            Add Customer
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Top Customers and Customer Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Customers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3 p-3 border rounded-lg">
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-blue-600 font-semibold">DC</span>
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium">Demo Customer</p>
-                  <p className="text-sm text-gray-600">9876543210</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-blue-600">1500</p>
-                  <p className="text-xs text-gray-600">Points</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Customer Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">New This Month</span>
-                <span className="font-bold text-lg">1</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-
-  // Render Wallets
-  const renderWallets = () => (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Wallet Management</h1>
-        <p className="text-gray-600">Manage your three-wallet system and track all transactions</p>
-      </div>
-
-      {/* Three Wallet Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Reward Point Wallet */}
-        <Card className="border-l-4 border-purple-500">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3">
-            <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center mr-3">
-              <Coins className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Reward Point Wallet</h3>
-              <p className="text-sm text-gray-600">Available Points for Distribution</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="text-center">
-                <p className="text-4xl font-bold text-purple-600">0</p>
-                <p className="text-sm text-gray-600">Available Points for Distribution</p>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Total Purchased:</span>
-                  <span className="font-medium">0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Total Distributed:</span>
-                  <span className="font-medium">0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Available Balance:</span>
-                  <span className="font-medium">0</span>
-                </div>
-              </div>
-
-              <Button 
-                onClick={() => setShowPurchaseDialog(true)}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-              >
-                <Package className="w-4 h-4 mr-2" />
-                Purchase Points
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Income Wallet */}
-        <Card className="border-l-4 border-green-500">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3">
-            <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center mr-3">
-              <DollarSign className="w-6 h-6 text-green-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Income Wallet</h3>
-              <p className="text-sm text-gray-600">Total Cashback Earnings</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center space-x-1">
-                  <span className="text-green-600">৳</span>
-                  <p className="text-4xl font-bold text-green-600">500</p>
-                </div>
-                <p className="text-sm text-gray-600">Total Cashback Earnings</p>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>15% Instant Cashback:</span>
-                  <span className="font-medium">৳5,200</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>2% Referral Commission:</span>
-                  <span className="font-medium">৳1,240</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>1% Royalty Bonus:</span>
-                  <span className="font-medium">৳2,090</span>
-                </div>
-              </div>
-
-              <Button 
-                onClick={() => {
-                  toast({ title: "Transfer Initiated", description: "Transferring income to Komarce wallet..." });
-                }}
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Transfer to Komarce
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Komarce Wallet */}
-        <Card className="border-l-4 border-orange-500">
-          <CardHeader className="flex flex-row items-center space-y-0 pb-3">
-            <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center mr-3">
-              <Wallet className="w-6 h-6 text-orange-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Komarce Wallet</h3>
-              <p className="text-sm text-gray-600">Available for Withdrawal</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center space-x-1">
-                  <span className="text-orange-600">৳</span>
-                  <p className="text-4xl font-bold text-orange-600">500</p>
-                </div>
-                <p className="text-sm text-gray-600">Available for Withdrawal</p>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Total Received:</span>
-                  <span className="font-medium">৳0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Total Withdrawn:</span>
-                  <span className="font-medium">৳0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Available Balance:</span>
-                  <span className="font-medium">৳500</span>
-                </div>
-              </div>
-
-              <Button 
-                onClick={() => {
-                  toast({ title: "Balance Added", description: "Balance added to Komarce wallet successfully!" });
-                }}
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Add Balance
-              </Button>
-              
-              <Button 
-                onClick={() => setShowWithdrawDialog(true)}
-                className="w-full" variant="outline"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Withdraw
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions and Wallet Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button 
-              onClick={() => {
-                toast({ title: "Transfer Options", description: "Wallet transfer feature coming soon!" });
-              }}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              Transfer Between Wallets
-            </Button>
-            <Button 
-              onClick={() => {
-                toast({ title: "Balance Added", description: "Balance added successfully!" });
-              }}
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Balance
-            </Button>
-            <Button 
-              onClick={() => setShowWithdrawDialog(true)}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Withdraw Funds
-            </Button>
-            <Button 
-              onClick={() => {
-                toast({ title: "Payment Methods", description: "Payment method configuration coming soon!" });
-              }}
-              className="w-full" variant="outline"
-            >
-              <CreditCard className="w-4 h-4 mr-2" />
-              Payment Methods
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Wallet Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                <span className="text-sm font-medium">Total Asset Value</span>
-                <span className="font-bold text-lg text-blue-600">৳1000.00</span>
-              </div>
-              <p className="text-xs text-gray-600">Combined wallet balance</p>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Reward Points:</span>
-                  <span className="font-medium">0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Income Balance:</span>
-                  <span className="font-medium">৳500</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Komarce Balance:</span>
-                  <span className="font-medium">৳500</span>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>VAT & Service Charge:</span>
-                  <span className="font-medium text-red-600">12.5%</span>
-                </div>
-                <p className="text-xs text-gray-600">Applied on transfers from Income Wallet</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Payment Methods */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Payment Methods</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="border rounded-lg p-4 text-center">
-              <div className="w-12 h-12 bg-gray-100 rounded-lg mx-auto mb-3 flex items-center justify-center">
-                <CreditCard className="w-6 h-6 text-gray-600" />
-              </div>
-              <h3 className="font-semibold">Bank Transfer</h3>
-              <p className="text-sm text-gray-600 mb-3">Direct bank account transfer</p>
-              <Button 
-                onClick={() => {
-                  toast({ title: "Bank Transfer", description: "Bank transfer configuration saved!" });
-                }}
-                variant="outline" size="sm"
-              >
-                Configure
-              </Button>
-            </div>
-
-            <div className="border rounded-lg p-4 text-center">
-              <div className="w-12 h-12 bg-pink-100 rounded-lg mx-auto mb-3 flex items-center justify-center">
-                <Wallet className="w-6 h-6 text-pink-600" />
-              </div>
-              <h3 className="font-semibold">bKash</h3>
-              <p className="text-sm text-gray-600 mb-3">Mobile financial service</p>
-              <Button 
-                onClick={() => {
-                  toast({ title: "bKash", description: "bKash configuration saved!" });
-                }}
-                variant="outline" size="sm"
-              >
-                Configure
-              </Button>
-            </div>
-
-            <div className="border rounded-lg p-4 text-center">
-              <div className="w-12 h-12 bg-orange-100 rounded-lg mx-auto mb-3 flex items-center justify-center">
-                <Wallet className="w-6 h-6 text-orange-600" />
-              </div>
-              <h3 className="font-semibold">Nagad</h3>
-              <p className="text-sm text-gray-600 mb-3">Mobile financial service</p>
-              <Button 
-                onClick={() => {
-                  toast({ title: "Nagad", description: "Nagad configuration saved!" });
-                }}
-                variant="outline" size="sm"
-              >
-                Configure
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Recent Wallet Transactions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Wallet Transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Points</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Description</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                  No transactions found
+                <TableCell colSpan={5} className="text-center text-gray-500">
+                  No reports generated yet
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-    </div>
-  );
-
-  // Render Marketing Tools
-  const renderMarketing = () => (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Marketing Tools</h1>
-        <p className="text-gray-600">Access promotional materials and marketing resources for your business</p>
-      </div>
-
-      {/* Marketing Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Templates Downloaded</p>
-              <p className="text-3xl font-bold text-gray-900">{marketingData.templatesDownloaded}</p>
-              <p className="text-xs text-green-600 mt-1">↗ +27% from last month</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Campaign Views</p>
-              <p className="text-3xl font-bold text-gray-900">{marketingData.campaignViews}</p>
-              <p className="text-xs text-green-600 mt-1">↗ +18% from last month</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Social Shares</p>
-              <p className="text-3xl font-bold text-gray-900">{marketingData.socialShares}</p>
-              <p className="text-xs text-green-600 mt-1">↗ +25% from last month</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-600">Engagement Rate</p>
-              <p className="text-3xl font-bold text-gray-900">{marketingData.engagementRate}%</p>
-              <p className="text-xs text-green-600 mt-1">↗ +0.8% from last month</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Marketing Templates */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Marketing Templates</CardTitle>
-          <div className="flex space-x-2">
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Download All
-            </Button>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Custom
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="all" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="all">All Templates</TabsTrigger>
-              <TabsTrigger value="banners">Banners</TabsTrigger>
-              <TabsTrigger value="social">Social Media</TabsTrigger>
-              <TabsTrigger value="flyers">Flyers</TabsTrigger>
-              <TabsTrigger value="posters">Posters</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="all" className="space-y-4 mt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Template 1 */}
-                <Card className="border-2 border-dashed border-gray-200 hover:border-blue-400 transition-colors">
-                  <CardContent className="p-6">
-                    <div className="aspect-video bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg mb-4 flex items-center justify-center">
-                      <div className="text-white text-center">
-                        <h3 className="font-bold text-lg">KOMARCE Loyalty Program</h3>
-                        <p className="text-sm">Promote your participation in KOMARCE loyalty program</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-semibold">KOMARCE Loyalty Program</h4>
-                        <p className="text-sm text-gray-600">Banner</p>
-                        <div className="flex items-center space-x-2 mt-2">
-                          <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
-                          <span className="text-xs text-gray-500">📥 3,245 downloads</span>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Button size="sm" variant="outline">Customize</Button>
-                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white w-full">
-                          <Download className="w-4 h-4 mr-1" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Template 2 */}
-                <Card className="border-2 border-dashed border-gray-200 hover:border-green-400 transition-colors">
-                  <CardContent className="p-6">
-                    <div className="aspect-video bg-gradient-to-br from-green-500 to-blue-600 rounded-lg mb-4 flex items-center justify-center">
-                      <div className="text-white text-center">
-                        <h3 className="font-bold text-lg">Point Rewards Available</h3>
-                        <p className="text-sm">Announce reward points availability to customers</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-semibold">Point Rewards Available</h4>
-                        <p className="text-sm text-gray-600">Social Media</p>
-                        <div className="flex items-center space-x-2 mt-2">
-                          <Badge className="bg-green-100 text-green-800 text-xs">Valid</Badge>
-                          <span className="text-xs text-gray-500">📥 1,749 downloads</span>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Button size="sm" variant="outline">Customize</Button>
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white w-full">
-                          <Download className="w-4 h-4 mr-1" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Template 3 */}
-                <Card className="border-2 border-dashed border-gray-200 hover:border-orange-400 transition-colors">
-                  <CardContent className="p-6">
-                    <div className="aspect-video bg-gradient-to-br from-orange-500 to-red-600 rounded-lg mb-4 flex items-center justify-center">
-                      <div className="text-white text-center">
-                        <h3 className="font-bold text-lg">Cashback Offer</h3>
-                        <p className="text-sm">Highlight cashback benefits for customers</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-semibold">Cashback Offer</h4>
-                        <p className="text-sm text-gray-600">Flyer</p>
-                        <div className="flex items-center space-x-2 mt-2">
-                          <Badge className="bg-red-100 text-red-800 text-xs">New</Badge>
-                          <span className="text-xs text-gray-500">📥 890 downloads</span>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Button size="sm" variant="outline">Customize</Button>
-                        <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white w-full">
-                          <Download className="w-4 h-4 mr-1" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Campaign Performance and Marketing Resources */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Campaign Performance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Activity className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Loyalty Program Banner</h4>
-                    <p className="text-sm text-gray-600">Social Media Campaign</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-green-600">+24%</p>
-                  <p className="text-sm text-gray-600">Engagement</p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Cashback Promotion</h4>
-                    <p className="text-sm text-gray-600">Print Advertisement</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-green-600">+18%</p>
-                  <p className="text-sm text-gray-600">Conversion</p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Users className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Referral Campaign</h4>
-                    <p className="text-sm text-gray-600">Digital Marketing</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-green-600">+32%</p>
-                  <p className="text-sm text-gray-600">Referrals</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Marketing Resources</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <Package className="w-5 h-5 text-gray-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Brand Guidelines</h4>
-                    <p className="text-sm text-gray-600">KOMARCE brand colors, fonts, and logo usage guidelines</p>
-                  </div>
-                </div>
-                <Button 
-                  onClick={() => {
-                    toast({ title: "Brand Guidelines", description: "Brand guidelines PDF downloaded!" });
-                  }}
-                  size="sm" variant="outline"
-                >
-                  <Download className="w-4 h-4" />
-                  Download PDF
-                </Button>
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Gift className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Logo Pack</h4>
-                    <p className="text-sm text-gray-600">High-resolution KOMARCE logos in various formats</p>
-                  </div>
-                </div>
-                <Button 
-                  onClick={() => {
-                    toast({ title: "Logo Pack", description: "KOMARCE logo pack downloaded!" });
-                  }}
-                  size="sm" variant="outline"
-                >
-                  <Download className="w-4 h-4" />
-                  Download ZIP
-                </Button>
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Eye className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Video Templates</h4>
-                    <p className="text-sm text-gray-600">Animated templates for social media and digital ads</p>
-                  </div>
-                </div>
-                <Button 
-                  onClick={() => {
-                    toast({ title: "Gallery", description: "Opening marketing gallery..." });
-                  }}
-                  size="sm" variant="outline"
-                >
-                  <Eye className="w-4 h-4" />
-                  View Gallery
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Create Custom Campaign */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Create Custom Campaign</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h3 className="font-semibold mb-4">Campaign Details</h3>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="campaign-name">Campaign Name</Label>
-                  <Input id="campaign-name" placeholder="Enter campaign name" />
-                </div>
-                
-                <div>
-                  <Label htmlFor="campaign-type">Campaign Type</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select campaign type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="banner">Banner</SelectItem>
-                      <SelectItem value="social">Social Media</SelectItem>
-                      <SelectItem value="flyer">Flyer</SelectItem>
-                      <SelectItem value="poster">Poster</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea id="description" placeholder="Describe your campaign" />
-                </div>
-
-                <div>
-                  <Label htmlFor="audience">Target Audience</Label>
-                  <Textarea id="audience" placeholder="Describe your target audience" />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="font-semibold mb-4">Campaign Preview</h3>
-              <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-                <div className="text-center text-gray-500">
-                  <Package className="w-12 h-12 mx-auto mb-2" />
-                  <p>Campaign Preview</p>
-                  <p className="text-sm">Your campaign will appear here</p>
-                </div>
-              </div>
-              <Button 
-                onClick={() => {
-                  toast({ title: "Campaign Created", description: "Custom campaign created successfully!" });
-                }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Campaign
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-
-  // Render Leaderboard
-  const renderLeaderboard = () => (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Merchant Leaderboard</h1>
-        <p className="text-gray-600">Compare your performance with other merchants and track your ranking</p>
-      </div>
-
-      {/* Leaderboard Filters */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
-              <Select defaultValue="this-month">
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="this-month">This Month</SelectItem>
-                  <SelectItem value="last-month">Last Month</SelectItem>
-                  <SelectItem value="this-year">This Year</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select defaultValue="points">
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="points">Points Distributed</SelectItem>
-                  <SelectItem value="customers">Customer Count</SelectItem>
-                  <SelectItem value="revenue">Revenue</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Button 
-                onClick={() => {
-                  toast({ title: "Trends", description: "Loading performance trends..." });
-                }}
-                variant="outline"
-              >
-                <TrendingUp className="w-4 h-4 mr-2" />
-                View Trends
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Leaderboard Tabs */}
-      <Tabs defaultValue="global" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="global">Global Leaderboard</TabsTrigger>
-          <TabsTrigger value="regional">Regional Ranking</TabsTrigger>
-          <TabsTrigger value="category">Category Leaders</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="global" className="space-y-6">
-          {/* Global Merchant Leaderboard */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Global Merchant Leaderboard</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">#</TableHead>
-                    <TableHead>Merchant</TableHead>
-                    <TableHead>Points</TableHead>
-                    <TableHead>Customers</TableHead>
-                    <TableHead>Revenue</TableHead>
-                    <TableHead>Tier</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {leaderboardData.map((merchant, index) => (
-                    <TableRow key={index} className={index < 3 ? 'bg-gradient-to-r from-yellow-50 to-orange-50' : ''}>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          {index === 0 && <Crown className="w-5 h-5 text-yellow-500" />}
-                          {index === 1 && <Award className="w-5 h-5 text-gray-400" />}
-                          {index === 2 && <Award className="w-5 h-5 text-orange-500" />}
-                          <span className="font-bold text-lg">{merchant.rank}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="font-semibold text-blue-600">{merchant.code}</span>
-                          </div>
-                          <div>
-                            <p className="font-medium">{merchant.name}</p>
-                            <p className="text-sm text-gray-600">{merchant.code}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-bold text-blue-600">{merchant.points.toLocaleString()}</p>
-                          <p className="text-xs text-gray-600">Points</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-bold text-green-600">{merchant.customers}</p>
-                          <p className="text-xs text-gray-600">Customers</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-bold text-orange-600">৳{merchant.revenue.toLocaleString()}</p>
-                          <p className="text-xs text-gray-600">Revenue</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          merchant.tier === 'Co Founder' ? 'default' :
-                          merchant.tier === 'Regional Manager' ? 'secondary' :
-                          merchant.tier === 'Business Manager' ? 'outline' : 'destructive'
-                        }>
-                          {merchant.tier}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="regional" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Regional Ranking</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-gray-500">Regional leaderboard data will be displayed here</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="category" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Category Leaders</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-gray-500">Category-wise leader data will be displayed here</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Achievement Badges */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Achievement Badges</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="text-center p-6 border rounded-lg bg-yellow-50">
-              <div className="w-16 h-16 bg-yellow-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-                <Crown className="w-8 h-8 text-yellow-600" />
-              </div>
-              <h3 className="font-semibold text-yellow-800">Top Performer</h3>
-              <p className="text-sm text-yellow-600 mt-2">Highest points distributor this month</p>
-            </div>
-
-            <div className="text-center p-6 border rounded-lg bg-blue-50">
-              <div className="w-16 h-16 bg-blue-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-                <Users className="w-8 h-8 text-blue-600" />
-              </div>
-              <h3 className="font-semibold text-blue-800">Customer Magnet</h3>
-              <p className="text-sm text-blue-600 mt-2">Most new customers acquired</p>
-            </div>
-
-            <div className="text-center p-6 border rounded-lg bg-green-50">
-              <div className="w-16 h-16 bg-green-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-                <TrendingUp className="w-8 h-8 text-green-600" />
-              </div>
-              <h3 className="font-semibold text-green-800">Growth Champion</h3>
-              <p className="text-sm text-green-600 mt-2">Highest growth rate this quarter</p>
-            </div>
-
-            <div className="text-center p-6 border rounded-lg bg-purple-50">
-              <div className="w-16 h-16 bg-purple-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-                <Star className="w-8 h-8 text-purple-600" />
-              </div>
-              <h3 className="font-semibold text-purple-800">Loyalty Master</h3>
-              <p className="text-sm text-purple-600 mt-2">Best customer retention rate</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-
-  // Render Profile Settings
-  const renderProfile = () => (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Profile Settings</h1>
-        <p className="text-gray-600">Manage your account information and preferences</p>
-      </div>
-
-      {/* Profile Overview */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
-              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="text-2xl font-bold text-blue-600">M</span>
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold">Merchant ID</h2>
-                <p className="text-gray-600">Merchant • Joined {merchantData.joinedDate}</p>
-                <div className="flex items-center space-x-4 mt-2">
-                  <Badge className="bg-blue-100 text-blue-800">{merchantData.loyaltyPoints} Points</Badge>
-                  <Badge className="bg-green-100 text-green-800">1 Customer</Badge>
-                  <Badge className="bg-orange-100 text-orange-800">0 Referrals</Badge>
-                </div>
-              </div>
-            </div>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Profile
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Profile Tabs */}
-      <Tabs defaultValue="personal" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="personal">Personal Info</TabsTrigger>
-          <TabsTrigger value="business">Business Details</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="preferences">Preferences</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="personal" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="first-name">First Name</Label>
-                  <Input id="first-name" placeholder="Enter your first name" />
-                </div>
-                
-                <div>
-                  <Label htmlFor="last-name">Last Name</Label>
-                  <Input id="last-name" placeholder="Enter your last name" />
-                </div>
-
-                <div>
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" placeholder="Enter your email" />
-                </div>
-
-                <div>
-                  <Label htmlFor="mobile">Mobile Number</Label>
-                  <Input id="mobile" placeholder="Enter your mobile number" />
-                </div>
-
-                <div>
-                  <Label htmlFor="fathers-name">Father's Name</Label>
-                  <Input id="fathers-name" placeholder="Enter your father's name" />
-                </div>
-
-                <div>
-                  <Label htmlFor="mothers-name">Mother's Name</Label>
-                  <Input id="mothers-name" placeholder="Enter your mother's name" />
-                </div>
-
-                <div>
-                  <Label htmlFor="voter-id">Voter ID / Passport Number</Label>
-                  <Input id="voter-id" placeholder="Enter your voter ID or passport number" />
-                </div>
-
-                <div>
-                  <Label htmlFor="blood-group">Blood Group</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select blood group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="a+">A+</SelectItem>
-                      <SelectItem value="a-">A-</SelectItem>
-                      <SelectItem value="b+">B+</SelectItem>
-                      <SelectItem value="b-">B-</SelectItem>
-                      <SelectItem value="ab+">AB+</SelectItem>
-                      <SelectItem value="ab-">AB-</SelectItem>
-                      <SelectItem value="o+">O+</SelectItem>
-                      <SelectItem value="o-">O-</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <Label htmlFor="house-address">House Address</Label>
-                  <Textarea id="house-address" placeholder="Enter your full address" />
-                </div>
-
-                <div>
-                  <Label htmlFor="country">Country</Label>
-                  <Input id="country" placeholder="Enter your country" />
-                </div>
-
-                <div>
-                  <Label htmlFor="city">City</Label>
-                  <Input id="city" placeholder="Enter your city" />
-                </div>
-
-                <div>
-                  <Label htmlFor="district">District</Label>
-                  <Input id="district" placeholder="Enter your district" />
-                </div>
-
-                <div>
-                  <Label htmlFor="postcode">Postcode</Label>
-                  <Input id="postcode" placeholder="Enter your postcode" />
-                </div>
-
-                <div>
-                  <Label htmlFor="police-station">Police Station</Label>
-                  <Input id="police-station" placeholder="Enter your police station" />
-                </div>
-
-                <div>
-                  <Label htmlFor="whatsapp">WhatsApp Number</Label>
-                  <Input id="whatsapp" placeholder="Enter your WhatsApp number" />
-                </div>
-
-                <div>
-                  <Label htmlFor="telegram">Telegram Username</Label>
-                  <Input id="telegram" placeholder="Enter your Telegram username" />
-                </div>
-              </div>
-
-              <div className="flex justify-end mt-6">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Edit Profile
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="business" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Business Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-gray-500">Business details section will be displayed here</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="security" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Security Settings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-gray-500">Security settings will be displayed here</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="preferences" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Preferences</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-gray-500">Preference settings will be displayed here</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   );
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top Header */}
-      <div className="bg-white border-b sticky top-16 z-40">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center space-x-6">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
-                  <Store className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">KOMARCE</h1>
-                  <p className="text-sm text-gray-600">Merchant Portal</p>
-                </div>
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden"
+              >
+                <Menu className="w-5 h-5" />
+              </Button>
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">K</span>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">KOMARCE Merchant Portal</h1>
+                <p className="text-sm text-gray-500">Welcome, {merchantData.merchantName}</p>
               </div>
             </div>
+            
             <div className="flex items-center space-x-4">
-              <Badge className="bg-yellow-100 text-yellow-800 px-3 py-1">
+              <Badge variant="default" className="px-3 py-1 bg-yellow-100 text-yellow-800">
                 <Star className="w-4 h-4 mr-1" />
                 {merchantData.tier}
               </Badge>
-              <div className="text-right">
-                <p className="text-sm font-medium">{user?.firstName} {user?.lastName}</p>
-                <p className="text-xs text-gray-600">75% to next rank</p>
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">75% to next rank</span>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex">
+        {/* Sidebar */}
+        <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
+          <div className="flex items-center justify-between h-16 px-4 border-b">
+            <h2 className="text-lg font-semibold text-gray-900">Merchant Sidebar</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden"
+            >
+              <XIcon className="w-5 h-5" />
+            </Button>
+          </div>
+          
+          <ScrollArea className="h-[calc(100vh-4rem)]">
+            <nav className="p-4 space-y-2">
+              <Button
+                variant={activeSection === "dashboard" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("dashboard")}
+              >
+                <Home className="w-4 h-4 mr-2" />
+                Dashboard
+              </Button>
+              
+              <Button
+                variant={activeSection === "loyalty-points" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("loyalty-points")}
+              >
+                <Infinity className="w-4 h-4 mr-2" />
+                Reward Points
+              </Button>
+              
+              <Button
+                variant={activeSection === "income-wallet" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("income-wallet")}
+              >
+                <DollarSign className="w-4 h-4 mr-2" />
+                Income Wallet
+              </Button>
+              
+              <Button
+                variant={activeSection === "customers" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("customers")}
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Customers
+              </Button>
+              
+              <Button
+                variant={activeSection === "wallets" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("wallets")}
+              >
+                <Wallet className="w-4 h-4 mr-2" />
+                Wallets
+              </Button>
+              
+              <Button
+                variant={activeSection === "marketing" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("marketing")}
+              >
+                <Target className="w-4 h-4 mr-2" />
+                Marketing Tools
+              </Button>
+              
+              <Button
+                variant={activeSection === "leaderboard" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("leaderboard")}
+              >
+                <Trophy className="w-4 h-4 mr-2" />
+                Leaderboard
+              </Button>
+              
+              <Button
+                variant={activeSection === "profile" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("profile")}
+              >
+                <User className="w-4 h-4 mr-2" />
+                Profile
+              </Button>
+              
+              <Button
+                variant={activeSection === "point-recharge" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("point-recharge")}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Point Recharge
+              </Button>
+              
+              <Button
+                variant={activeSection === "product-sales" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("product-sales")}
+              >
+                <ShoppingCart className="w-4 h-4 mr-2" />
+                Product Sales
+              </Button>
+              
+              <Button
+                variant={activeSection === "activity-tracking" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("activity-tracking")}
+              >
+                <Activity className="w-4 h-4 mr-2" />
+                Activity Tracking
+              </Button>
+              
+              <Button
+                variant={activeSection === "distribution-reports" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("distribution-reports")}
+              >
+                <BarChart className="w-4 h-4 mr-2" />
+                Distribution Reports
+              </Button>
+            </nav>
+
+            {/* Star Merchant Widget */}
+            <div className="p-4 mt-6">
+              <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg border border-yellow-200 p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Star className="w-5 h-5 text-yellow-600" />
+                  <span className="font-semibold text-yellow-800">Star Merchant</span>
+                </div>
+                <p className="text-sm text-yellow-700 mb-2">Current Rank</p>
+                <div className="w-full bg-yellow-200 rounded-full h-2 mb-2">
+                  <div className="bg-yellow-500 h-2 rounded-full" style={{ width: '75%' }}></div>
+                </div>
+                <p className="text-xs text-yellow-600">75% to next rank</p>
+              </div>
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 lg:ml-0">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {activeSection === 'dashboard' && renderDashboard()}
+            {activeSection === 'loyalty-points' && renderLoyaltyPoints()}
+            {activeSection === 'income-wallet' && renderIncomeWallet()}
+            {activeSection === 'customers' && renderCustomers()}
+            {activeSection === 'leaderboard' && renderLeaderboard()}
+            {activeSection === 'profile' && renderProfile()}
+            {activeSection === 'wallets' && renderCommerceWallet()}
+            {activeSection === 'point-recharge' && renderPointRecharge()}
+            {activeSection === 'product-sales' && renderProductSales()}
+            {activeSection === 'activity-tracking' && renderActivityTracking()}
+            {activeSection === 'distribution-reports' && renderDistributionReports()}
+            {activeSection === 'marketing' && (
+              <div className="text-center py-12">
+                <Target className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Marketing Tools</h3>
+                <p className="text-gray-500">Marketing features coming soon</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2329,31 +1619,45 @@ export default function MerchantDashboard() {
       <Dialog open={showSendPointsDialog} onOpenChange={setShowSendPointsDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send Reward Points</DialogTitle>
+            <DialogTitle>Send Points to Customer</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => {
             e.preventDefault();
             const formData = new FormData(e.target as HTMLFormElement);
             sendPointsMutation.mutate({
-              customerEmail: formData.get('customerEmail') as string,
+              customerId: formData.get('customerId') as string,
               points: parseInt(formData.get('points') as string),
               description: formData.get('description') as string
             });
-          }}>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="customerEmail">Customer Email</Label>
-                <Input name="customerEmail" type="email" placeholder="customer@email.com" required />
-              </div>
-              <div>
-                <Label htmlFor="points">Points to Send</Label>
-                <Input name="points" type="number" min="1" placeholder="100" required />
-              </div>
-              <div>
-                <Label htmlFor="description">Description (Optional)</Label>
-                <Textarea name="description" placeholder="Reward for purchase..." />
-              </div>
-              <Button type="submit" className="w-full" disabled={sendPointsMutation.isPending}>
+          }} className="space-y-4">
+            <div>
+              <Label htmlFor="customerId">Customer</Label>
+              <Select name="customerId" required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((customer: any) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.fullName} - {customer.accountNumber} ({customer.currentPointsBalance} points)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="points">Points</Label>
+              <Input name="points" type="number" required min="1" />
+            </div>
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Textarea name="description" required />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setShowSendPointsDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={sendPointsMutation.isPending}>
                 {sendPointsMutation.isPending ? 'Sending...' : 'Send Points'}
               </Button>
             </div>
@@ -2361,46 +1665,69 @@ export default function MerchantDashboard() {
         </DialogContent>
       </Dialog>
 
+      {/* QR Code Scan Dialog */}
+      <Dialog open={showQRScanDialog} onOpenChange={setShowQRScanDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Scan Customer QR Code</DialogTitle>
+          </DialogHeader>
+          <QRScanComponent 
+            onCustomerScanned={(customer) => {
+              toast({
+                title: "Customer Added!",
+                description: `${customer.fullName} has been added to your customer list.`,
+              });
+              queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+              setShowQRScanDialog(false);
+            }}
+            onError={(error) => {
+              toast({
+                title: "Scan Failed",
+                description: error,
+                variant: "destructive",
+              });
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
       {/* Purchase Points Dialog */}
       <Dialog open={showPurchaseDialog} onOpenChange={setShowPurchaseDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Purchase Reward Points</DialogTitle>
+            <DialogTitle>Purchase Points</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => {
             e.preventDefault();
             const formData = new FormData(e.target as HTMLFormElement);
             purchasePointsMutation.mutate({
-              points: parseInt(formData.get('points') as string),
               amount: parseInt(formData.get('amount') as string),
               paymentMethod: formData.get('paymentMethod') as string
             });
-          }}>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="points">Points to Purchase</Label>
-                <Input name="points" type="number" min="100" placeholder="1000" required />
-              </div>
-              <div>
-                <Label htmlFor="amount">Amount ($)</Label>
-                <Input name="amount" type="number" min="1" placeholder="1000" required />
-              </div>
-              <div>
-                <Label htmlFor="paymentMethod">Payment Method</Label>
-                <Select name="paymentMethod" required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="bkash">bKash</SelectItem>
-                    <SelectItem value="nagad">Nagad</SelectItem>
-                    <SelectItem value="credit_card">Credit Card</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="w-full" disabled={purchasePointsMutation.isPending}>
-                {purchasePointsMutation.isPending ? 'Processing...' : 'Purchase Points'}
+          }} className="space-y-4">
+            <div>
+              <Label htmlFor="amount">Amount (৳)</Label>
+              <Input name="amount" type="number" required min="100" />
+            </div>
+            <div>
+              <Label htmlFor="paymentMethod">Payment Method</Label>
+              <Select name="paymentMethod" required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select payment method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bank">Bank Transfer</SelectItem>
+                  <SelectItem value="card">Credit Card</SelectItem>
+                  <SelectItem value="mobile">Mobile Banking</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setShowPurchaseDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={purchasePointsMutation.isPending}>
+                {purchasePointsMutation.isPending ? 'Processing...' : 'Purchase'}
               </Button>
             </div>
           </form>
@@ -2418,107 +1745,248 @@ export default function MerchantDashboard() {
             const formData = new FormData(e.target as HTMLFormElement);
             withdrawMutation.mutate({
               amount: parseInt(formData.get('amount') as string),
-              paymentMethod: formData.get('paymentMethod') as string,
-              accountDetails: formData.get('accountDetails') as string
+              bankAccount: formData.get('bankAccount') as string
             });
-          }}>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="amount">Amount to Withdraw ($)</Label>
-                <Input name="amount" type="number" min="1" max="500" placeholder="100" required />
-                <p className="text-sm text-gray-600">Available: $500</p>
-              </div>
-              <div>
-                <Label htmlFor="paymentMethod">Withdrawal Method</Label>
-                <Select name="paymentMethod" required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select withdrawal method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="bkash">bKash</SelectItem>
-                    <SelectItem value="nagad">Nagad</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="accountDetails">Account Details</Label>
-                <Textarea name="accountDetails" placeholder="Account number/phone number..." required />
-              </div>
-              <Button type="submit" className="w-full" disabled={withdrawMutation.isPending}>
-                {withdrawMutation.isPending ? 'Processing...' : 'Submit Withdrawal'}
+          }} className="space-y-4">
+            <div>
+              <Label htmlFor="amount">Amount (৳)</Label>
+              <Input name="amount" type="number" required min="100" max={merchantData.balance} />
+            </div>
+            <div>
+              <Label htmlFor="bankAccount">Bank Account</Label>
+              <Input name="bankAccount" required placeholder="Enter bank account details" />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setShowWithdrawDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={withdrawMutation.isPending}>
+                {withdrawMutation.isPending ? 'Processing...' : 'Withdraw'}
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <div className="w-64 bg-white border-r h-screen sticky top-32 overflow-y-auto">
-          <div className="p-6">
-            <nav className="space-y-2">
-              <button onClick={() => setActiveSection('dashboard')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeSection === 'dashboard' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <LayoutDashboard className="w-5 h-5" />
-                <span>Dashboard</span>
-              </button>
-              <button onClick={() => setActiveSection('loyalty-points')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeSection === 'loyalty-points' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <Coins className="w-5 h-5" />
-                <span>Loyalty Points</span>
-              </button>
-              <button onClick={() => setActiveSection('cashback')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeSection === 'cashback' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <DollarSign className="w-5 h-5" />
-                <span>Cashback</span>
-              </button>
-              <button onClick={() => setActiveSection('customers')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeSection === 'customers' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <Users className="w-5 h-5" />
-                <span>Customers</span>
-              </button>
-              <button onClick={() => setActiveSection('wallets')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeSection === 'wallets' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <Wallet className="w-5 h-5" />
-                <span>Wallets</span>
-              </button>
-              <button onClick={() => setActiveSection('marketing')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeSection === 'marketing' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <Target className="w-5 h-5" />
-                <span>Marketing Tools</span>
-              </button>
-              <button onClick={() => setActiveSection('leaderboard')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeSection === 'leaderboard' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <Award className="w-5 h-5" />
-                <span>Leaderboard</span>
-              </button>
-              <button onClick={() => setActiveSection('profile')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${activeSection === 'profile' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <Settings className="w-5 h-5" />
-                <span>Profile</span>
-              </button>
-            </nav>
-
-            {/* Merchant Status Widget */}
-            <div className="mt-6 p-4 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg border border-yellow-200">
-              <div className="flex items-center space-x-2 mb-2">
-                <Star className="w-5 h-5 text-yellow-600" />
-                <span className="font-semibold text-yellow-800">{merchantData.tier}</span>
-              </div>
-              <p className="text-xs text-yellow-700 mb-3">Current Rank</p>
-              <div className="w-full bg-yellow-200 rounded-full h-2 mb-2">
-                <div className="bg-yellow-600 h-2 rounded-full" style={{ width: '75%' }}></div>
-              </div>
-              <p className="text-xs text-yellow-600">75% to next rank</p>
+      {/* Transfer Income to Commerce Dialog */}
+      <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transfer to Commerce Wallet</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target as HTMLFormElement);
+            const amount = parseFloat(formData.get('amount') as string);
+            const vatAmount = amount * 0.125; // 12.5% VAT and service charge
+            const transferAmount = amount - vatAmount;
+            
+            // Here you would call the API to transfer funds
+            toast({ 
+              title: "Transfer Successful", 
+              description: `৳${transferAmount} transferred (after 12.5% VAT & service charge)` 
+            });
+            setShowTransferDialog(false);
+          }} className="space-y-4">
+            <div>
+              <Label htmlFor="amount">Amount to Transfer (৳)</Label>
+              <Input name="amount" type="number" required min="1" max={merchantData.incomeBalance} />
+              <p className="text-sm text-gray-500 mt-1">
+                Available: ৳{merchantData.incomeBalance}
+              </p>
             </div>
-          </div>
-        </div>
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                <strong>Note:</strong> A 12.5% VAT and service charge will be deducted from the transfer amount.
+              </p>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setShowTransferDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Transfer to Commerce Wallet
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-        {/* Main Content */}
-        <div className="flex-1 p-6">
-          {activeSection === 'dashboard' && renderDashboard()}
-          {activeSection === 'loyalty-points' && renderLoyaltyPoints()}
-          {activeSection === 'cashback' && renderCashback()}
-          {activeSection === 'customers' && renderCustomers()}
-          {activeSection === 'wallets' && renderWallets()}
-          {activeSection === 'marketing' && renderMarketing()}
-          {activeSection === 'leaderboard' && renderLeaderboard()}
-          {activeSection === 'profile' && renderProfile()}
-        </div>
-      </div>
+      {/* Point Recharge Dialog */}
+      <Dialog open={showRechargeDialog} onOpenChange={setShowRechargeDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Point Recharge</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target as HTMLFormElement);
+            const amount = parseFloat(formData.get('amount') as string);
+            const method = formData.get('method') as string;
+            const reference = formData.get('reference') as string;
+            
+            // Here you would call the API to create recharge request
+            toast({ 
+              title: "Recharge Request Created", 
+              description: `৳${amount} recharge request submitted via ${method}` 
+            });
+            setShowRechargeDialog(false);
+          }} className="space-y-4">
+            <div>
+              <Label htmlFor="method">Recharge Method</Label>
+              <Select name="method" required>
+                <option value="direct_cash">Direct Cash Payment</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="mobile_transfer">Mobile Transfer</option>
+                <option value="automatic_payment_gateway">Automatic Payment Gateway</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="amount">Amount (৳)</Label>
+              <Input name="amount" type="number" required min="100" />
+              <p className="text-sm text-gray-500 mt-1">
+                1 Taka = 1 Point
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="reference">Payment Reference</Label>
+              <Input name="reference" placeholder="Transaction ID, Reference Number, etc." />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setShowRechargeDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Submit Request
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Product Sale Dialog */}
+      <Dialog open={showSaleDialog} onOpenChange={setShowSaleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record Product Sale</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target as HTMLFormElement);
+            const customerId = formData.get('customerId') as string;
+            const productId = formData.get('productId') as string;
+            const quantity = parseInt(formData.get('quantity') as string);
+            const unitPrice = parseFloat(formData.get('unitPrice') as string);
+            const distributionMethod = formData.get('distributionMethod') as string;
+            const distributionValue = parseFloat(formData.get('distributionValue') as string);
+            const cashDiscount = parseFloat(formData.get('cashDiscount') as string) || 0;
+            
+            const totalAmount = quantity * unitPrice;
+            const pointsGiven = distributionMethod === 'manual' ? distributionValue : 
+                              distributionMethod === 'automatic_percentage' ? Math.floor(totalAmount * distributionValue / 100) :
+                              distributionValue;
+            
+            // Here you would call the API to record the sale
+            toast({ 
+              title: "Sale Recorded", 
+              description: `Sale recorded: ${quantity} items, ${pointsGiven} points given` 
+            });
+            setShowSaleDialog(false);
+          }} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customerId">Customer ID</Label>
+                <Input name="customerId" required />
+              </div>
+              <div>
+                <Label htmlFor="productId">Product ID</Label>
+                <Input name="productId" required />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input name="quantity" type="number" required min="1" />
+              </div>
+              <div>
+                <Label htmlFor="unitPrice">Unit Price (৳)</Label>
+                <Input name="unitPrice" type="number" required min="0" step="0.01" />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="distributionMethod">Point Distribution Method</Label>
+              <Select name="distributionMethod" required>
+                <option value="manual">Manual</option>
+                <option value="automatic_percentage">Automatic Percentage</option>
+                <option value="automatic_fixed">Automatic Fixed Amount</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="distributionValue">Distribution Value</Label>
+              <Input name="distributionValue" type="number" required min="0" />
+              <p className="text-sm text-gray-500 mt-1">
+                For percentage: enter percentage (e.g., 5 for 5%). For fixed: enter point amount.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="cashDiscount">Cash Discount (৳) - Optional</Label>
+              <Input name="cashDiscount" type="number" min="0" step="0.01" />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setShowSaleDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Record Sale
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Generate Report Dialog */}
+      <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate Distribution Report</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target as HTMLFormElement);
+            const reportType = formData.get('reportType') as string;
+            const period = formData.get('period') as string;
+            
+            // Here you would call the API to generate the report
+            toast({ 
+              title: "Report Generated", 
+              description: `${reportType} report generated for ${period}` 
+            });
+            setShowReportDialog(false);
+          }} className="space-y-4">
+            <div>
+              <Label htmlFor="reportType">Report Type</Label>
+              <Select name="reportType" required>
+                <option value="product_wise">Product-wise Report</option>
+                <option value="supplier_wise">Supplier-wise Report</option>
+                <option value="customer_wise">Customer-wise Report</option>
+                <option value="monthly_summary">Monthly Summary</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="period">Period</Label>
+              <Input name="period" type="month" required />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setShowReportDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Generate Report
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

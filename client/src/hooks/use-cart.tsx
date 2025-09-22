@@ -13,7 +13,7 @@ export function useCart() {
 
   const addToCartMutation = useMutation({
     mutationFn: async ({ productId, quantity }: { productId: string; quantity: number }) => {
-      const response = await apiRequest('POST', '/api/cart', { productId, quantity });
+      const response = await apiRequest('/api/cart', 'POST', { productId, quantity });
       return response.json();
     },
     onSuccess: () => {
@@ -34,7 +34,7 @@ export function useCart() {
 
   const updateCartMutation = useMutation({
     mutationFn: async ({ id, quantity }: { id: string; quantity: number }) => {
-      const response = await apiRequest('PUT', `/api/cart/${id}`, { quantity });
+      const response = await apiRequest(`/api/cart/${id}`, 'PUT', { quantity });
       return response.json();
     },
     onSuccess: () => {
@@ -51,7 +51,7 @@ export function useCart() {
 
   const removeFromCartMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiRequest('DELETE', `/api/cart/${id}`);
+      const response = await apiRequest(`/api/cart/${id}`, 'DELETE');
       return response.json();
     },
     onSuccess: () => {

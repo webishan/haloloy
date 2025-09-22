@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const register = async (userData: any) => {
-    const response = await apiRequest('POST', '/api/auth/register', userData);
+    const response = await apiRequest('/api/auth/register', 'POST', userData);
     const data = await response.json();
     
     localStorage.setItem('token', data.token);

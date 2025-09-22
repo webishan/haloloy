@@ -1,0 +1,95 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 50
+      name: "Ramp up load"
+    - duration: 300
+      arrivalRate: 100
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 200
+      name: "Peak load"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "User Registration and Login"
+    weight: 30
+    flow:
+      - post:
+          url: "/api/auth/register"
+          json:
+            email: "test{{ $randomInt(1, 10000) }}@example.com"
+            password: "TestPassword123!"
+            firstName: "Test"
+            lastName: "User"
+            role: "customer"
+            country: "BD"
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "test{{ $randomInt(1, 10000) }}@example.com"
+            password: "TestPassword123!"
+
+  - name: "Product Browsing"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/products"
+          qs:
+            page: "{{ $randomInt(1, 10) }}"
+            limit: "20"
+      - get:
+          url: "/api/categories"
+      - get:
+          url: "/api/brands"
+
+  - name: "Order Creation"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "testuser@example.com"
+            password: "TestPassword123!"
+      - post:
+          url: "/api/cart"
+          json:
+            productId: "{{ $randomUUID() }}"
+            quantity: "{{ $randomInt(1, 5) }}"
+      - post:
+          url: "/api/orders"
+          json:
+            items:
+              - productId: "{{ $randomUUID() }}"
+                name: "Test Product"
+                price: "{{ $randomInt(10, 100) }}"
+                quantity: "{{ $randomInt(1, 3) }}"
+                merchantId: "{{ $randomUUID() }}"
+            shippingAddress:
+              street: "123 Test Street"
+              city: "Test City"
+              country: "BD"
+              postalCode: "12345"
+            paymentMethod: "credit_card"
+
+  - name: "User Profile Management"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "testuser@example.com"
+            password: "TestPassword123!"
+      - get:
+          url: "/api/users/profile"
+      - put:
+          url: "/api/users/profile"
+          json:
+            firstName: "Updated"
+            lastName: "Name"

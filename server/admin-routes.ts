@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { storage } from "./storage";
-import { insertPointDistributionSchema, insertChatMessageSchema } from "@shared/schema";
+import { insertPointDistributionSchema, insertChatMessageSchema, insertPointGenerationRequestSchema } from "@shared/schema";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "komarce-secret-key";
@@ -32,6 +32,110 @@ function authorizeRole(roles: string[]) {
 }
 
 export function setupAdminRoutes(app: Express) {
+  // ========== Point Generation Requests (Local -> Global) ==========
+  // Create a new request (Local Admin)
+  app.post('/api/admin/point-generation-request', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const requester = await storage.getUser(req.user.userId);
+      const data = insertPointGenerationRequestSchema.parse({
+        requesterId: req.user.userId,
+        requesterCountry: requester?.country,
+        pointsRequested: req.body.pointsRequested,
+        reason: req.body.reason,
+        status: 'pending'
+      });
+      const request = await storage.createPointGenerationRequest(data);
+      res.json(request);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || 'Failed to create request' });
+    }
+  });
+
+  // List own requests (Local Admin)
+  app.get('/api/admin/point-generation-requests', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const list = await storage.getPointGenerationRequests({ requesterId: req.user.userId });
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch requests' });
+    }
+  });
+
+  // Pending requests (Global Admin)
+  app.get('/api/admin/pending-point-requests', authenticateToken, authorizeRole(['global_admin']), async (_req, res) => {
+    try {
+      const list = await storage.getPointGenerationRequests({ status: 'pending' });
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch pending requests' });
+    }
+  });
+
+  // All requests (Global Admin)
+  app.get('/api/admin/all-point-requests', authenticateToken, authorizeRole(['global_admin']), async (_req, res) => {
+    try {
+      const list = await storage.getPointGenerationRequests();
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch requests' });
+    }
+  });
+
+  // Approve request (Global Admin)
+  app.post('/api/admin/approve-point-request/:id', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const request = await storage.getPointGenerationRequest(req.params.id);
+      if (!request || request.status !== 'pending') {
+        return res.status(400).json({ message: 'Invalid request' });
+      }
+      // Update request
+      const updated = await storage.updatePointGenerationRequest(request.id, {
+        status: 'approved',
+        reviewedBy: req.user.userId,
+        reviewedAt: new Date()
+      });
+      // Credit local admin
+      const receiver = await storage.getAdmin(request.requesterId);
+      if (!receiver) {
+        await storage.createAdmin({ userId: request.requesterId, adminType: 'local', country: request.requesterCountry || 'Unknown', pointsBalance: 0, totalPointsReceived: 0, totalPointsDistributed: 0, isActive: true });
+      }
+      const receiverAdmin = await storage.getAdmin(request.requesterId);
+      await storage.updateAdmin(request.requesterId, {
+        pointsBalance: (receiverAdmin?.pointsBalance || 0) + request.pointsRequested,
+        totalPointsReceived: (receiverAdmin?.totalPointsReceived || 0) + request.pointsRequested
+      });
+      // Log distribution from global to local
+      await storage.createPointDistribution({
+        fromUserId: req.user.userId,
+        toUserId: request.requesterId,
+        points: request.pointsRequested,
+        description: request.reason || 'Approved point generation request',
+        distributionType: 'admin_to_admin',
+        status: 'completed'
+      });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to approve request' });
+    }
+  });
+
+  // Reject request (Global Admin)
+  app.post('/api/admin/reject-point-request/:id', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const request = await storage.getPointGenerationRequest(req.params.id);
+      if (!request || request.status !== 'pending') {
+        return res.status(400).json({ message: 'Invalid request' });
+      }
+      const updated = await storage.updatePointGenerationRequest(request.id, {
+        status: 'rejected',
+        reviewedBy: req.user.userId,
+        reviewedAt: new Date()
+      });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to reject request' });
+    }
+  });
   // Only global admins can manually add points to their own balance
   app.post('/api/admin/add-points', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
     try {

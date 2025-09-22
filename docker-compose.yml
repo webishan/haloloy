@@ -1,0 +1,498 @@
+version: '3.8'
+
+services:
+  # API Gateway with Load Balancer
+  api-gateway:
+    build: ./services/api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    depends_on:
+      - auth-service
+      - user-service
+      - product-service
+      - order-service
+      - payment-service
+      - loyalty-service
+      - notification-service
+    networks:
+      - komarce-network
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Authentication Service
+  auth-service:
+    build: ./services/auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - JWT_SECRET=${JWT_SECRET}
+      - DB_HOST=postgres-auth
+      - DB_PORT=5432
+      - DB_NAME=komarce_auth
+      - DB_USER=komarce
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - postgres-auth
+      - redis
+    networks:
+      - komarce-network
+    deploy:
+      replicas: 5
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # User Management Service
+  user-service:
+    build: ./services/user-service
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - DB_HOST=postgres-user
+      - DB_PORT=5432
+      - DB_NAME=komarce_user
+      - DB_USER=komarce
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - postgres-user
+      - redis
+    networks:
+      - komarce-network
+    deploy:
+      replicas: 4
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Product Catalog Service
+  product-service:
+    build: ./services/product-service
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - DB_HOST=postgres-product
+      - DB_PORT=5432
+      - DB_NAME=komarce_product
+      - DB_USER=komarce
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - postgres-product
+      - redis
+    networks:
+      - komarce-network
+    deploy:
+      replicas: 6
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Order Management Service
+  order-service:
+    build: ./services/order-service
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - DB_HOST=postgres-order
+      - DB_PORT=5432
+      - DB_NAME=komarce_order
+      - DB_USER=komarce
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - postgres-order
+      - redis
+    networks:
+      - komarce-network
+    deploy:
+      replicas: 8
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Payment Service
+  payment-service:
+    build: ./services/payment-service
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=production
+      - PORT=3005
+      - DB_HOST=postgres-payment
+      - DB_PORT=5432
+      - DB_NAME=komarce_payment
+      - DB_USER=komarce
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - postgres-payment
+      - redis
+    networks:
+      - komarce-network
+    deploy:
+      replicas: 6
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Loyalty Points Service
+  loyalty-service:
+    build: ./services/loyalty-service
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=production
+      - PORT=3006
+      - DB_HOST=postgres-loyalty
+      - DB_PORT=5432
+      - DB_NAME=komarce_loyalty
+      - DB_USER=komarce
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - postgres-loyalty
+      - redis
+    networks:
+      - komarce-network
+    deploy:
+      replicas: 8
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Notification Service
+  notification-service:
+    build: ./services/notification-service
+    ports:
+      - "3007:3007"
+    environment:
+      - NODE_ENV=production
+      - PORT=3007
+      - DB_HOST=postgres-notification
+      - DB_PORT=5432
+      - DB_NAME=komarce_notification
+      - DB_USER=komarce
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - postgres-notification
+      - redis
+    networks:
+      - komarce-network
+    deploy:
+      replicas: 4
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Analytics Service
+  analytics-service:
+    build: ./services/analytics-service
+    ports:
+      - "3008:3008"
+    environment:
+      - NODE_ENV=production
+      - PORT=3008
+      - DB_HOST=postgres-analytics
+      - DB_PORT=5432
+      - DB_NAME=komarce_analytics
+      - DB_USER=komarce
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - postgres-analytics
+      - redis
+    networks:
+      - komarce-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Redis for Caching and Session Management
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # PostgreSQL Databases (one per service for data isolation)
+  postgres-auth:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=komarce_auth
+      - POSTGRES_USER=komarce
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  postgres-user:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=komarce_user
+      - POSTGRES_USER=komarce
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-user-data:/var/lib/postgresql/data
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  postgres-product:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=komarce_product
+      - POSTGRES_USER=komarce
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-product-data:/var/lib/postgresql/data
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  postgres-order:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=komarce_order
+      - POSTGRES_USER=komarce
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-order-data:/var/lib/postgresql/data
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  postgres-payment:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=komarce_payment
+      - POSTGRES_USER=komarce
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-payment-data:/var/lib/postgresql/data
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  postgres-loyalty:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=komarce_loyalty
+      - POSTGRES_USER=komarce
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-loyalty-data:/var/lib/postgresql/data
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  postgres-notification:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=komarce_notification
+      - POSTGRES_USER=komarce
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-notification-data:/var/lib/postgresql/data
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  postgres-analytics:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=komarce_analytics
+      - POSTGRES_USER=komarce
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-analytics-data:/var/lib/postgresql/data
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # Load Balancer (Nginx)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - api-gateway
+    networks:
+      - komarce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - komarce-network
+
+  # Grafana for Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - komarce-network
+
+volumes:
+  redis-data:
+  postgres-auth-data:
+  postgres-user-data:
+  postgres-product-data:
+  postgres-order-data:
+  postgres-payment-data:
+  postgres-loyalty-data:
+  postgres-notification-data:
+  postgres-analytics-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  komarce-network:
+    driver: bridge

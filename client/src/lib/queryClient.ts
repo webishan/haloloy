@@ -8,8 +8,8 @@ async function throwIfResNotOk(res: Response) {
 }
 
 export async function apiRequest(
-  method: string,
   url: string,
+  method: string,
   data?: unknown | undefined,
 ): Promise<Response> {
   // Check for all possible token types
@@ -18,8 +18,9 @@ export async function apiRequest(
   const merchantToken = localStorage.getItem('merchantToken');
   const userToken = localStorage.getItem('token');
   const adminToken = localStorage.getItem('adminToken');
+  const customerToken = localStorage.getItem('customerToken');
   
-  const token = globalToken || localToken || merchantToken || userToken || adminToken;
+  const token = globalToken || localToken || merchantToken || userToken || adminToken || customerToken;
   const headers: Record<string, string> = {};
   
   if (data) {
@@ -53,8 +54,9 @@ export const getQueryFn: <T>(options: {
     const merchantToken = localStorage.getItem('merchantToken');
     const userToken = localStorage.getItem('token');
     const adminToken = localStorage.getItem('adminToken');
+    const customerToken = localStorage.getItem('customerToken');
     
-    const token = globalToken || localToken || merchantToken || userToken || adminToken;
+    const token = globalToken || localToken || merchantToken || userToken || adminToken || customerToken;
     const headers: Record<string, string> = {};
     
     if (token) {

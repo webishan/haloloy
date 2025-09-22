@@ -23,7 +23,9 @@ import GlobalAdminPortal from "@/pages/global-admin-portal";
 import LocalAdminPortal from "@/pages/local-admin-portal";
 import MerchantPortal from "@/pages/merchant-portal";
 import CustomerPortal from "@/pages/customer-portal";
+import CustomerAuth from "@/pages/customer-auth";
 import MerchantPanel from "@/pages/merchant-panel";
+import MerchantQRScan from "@/pages/merchant-qr-scan";
 import Header from "@/components/header";
 import Footer from "@/components/footer";
 import AuthGuard from "@/components/auth-guard";
@@ -88,7 +90,13 @@ function Router() {
           <Route path="/local-admin-portal" component={LocalAdminPortal} />
           <Route path="/merchant-portal" component={MerchantPortal} />
           <Route path="/customer-portal" component={CustomerPortal} />
+          <Route path="/customer-auth">
+            <AuthGuard requireAuth={false}>
+              <CustomerAuth />
+            </AuthGuard>
+          </Route>
           <Route path="/merchant-panel" component={MerchantPanel} />
+          <Route path="/merchant/scan" component={MerchantQRScan} />
           <Route component={NotFound} />
         </Switch>
       </main>

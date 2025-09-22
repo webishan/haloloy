@@ -5,6 +5,11 @@ import { storage } from "./storage";
 import { setupAdminRoutes } from "./admin-routes";
 import { setupMerchantRoutes } from "./merchant-routes";
 import { setupChatRoutes } from "./chat-routes";
+import merchantWalletRoutes from "./merchant-wallet-routes";
+import merchantAdvancedRoutes from "./merchant-advanced-routes";
+import customerRoutes from "./customer-routes";
+import customerRewardRoutes from "./customer-reward-routes";
+import customerWalletRoutes from "./customer-wallet-routes";
 import { 
   insertUserSchema, 
   insertProductSchema, 
@@ -73,11 +78,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create customer or merchant profile based on role
       if (user.role === 'customer') {
-        await storage.createCustomer({
+        // Generate unique account number
+        const uniqueAccountNumber = await storage.generateUniqueAccountNumber();
+        
+        // Create customer profile
+        const profile = await storage.createCustomerProfile({
           userId: user.id,
-          totalPoints: 0,
-          accumulatedPoints: 0
+          uniqueAccountNumber,
+          mobileNumber: userData.mobileNumber || `+880${Math.floor(Math.random() * 1000000000)}`,
+          email: user.email,
+          fullName: `${user.firstName} ${user.lastName}`,
+          profileComplete: false,
+          totalPointsEarned: 0,
+          currentPointsBalance: 0,
+          tier: 'bronze',
+          isActive: true
         });
+
+        // Create customer wallet
+        await storage.createCustomerWallet({
+          customerId: profile.id,
+          pointsBalance: 0,
+          totalPointsEarned: 0,
+          totalPointsSpent: 0,
+          totalPointsTransferred: 0
+        });
+
+        // Generate QR code
+        await storage.generateCustomerQRCode(user.id);
       } else if (user.role === 'merchant') {
         await storage.createMerchant({
           userId: user.id,
@@ -603,17 +631,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Merchant profile not found" });
       }
 
-      const { customerEmail, points, description } = req.body;
+      const { customerId, points, description } = req.body;
       
-      // Find customer by email
-      const customerUser = await storage.getUserByEmail(customerEmail);
-      if (!customerUser || customerUser.role !== 'customer') {
+      // Find customer by ID (from scanned customers)
+      const customer = await storage.getCustomerProfileById(customerId);
+      if (!customer) {
         return res.status(404).json({ message: "Customer not found" });
       }
 
-      const customer = await storage.getCustomerByUserId(customerUser.id);
-      if (!customer) {
-        return res.status(404).json({ message: "Customer profile not found" });
+      const customerUser = await storage.getUser(customer.userId);
+      if (!customerUser || customerUser.role !== 'customer') {
+        return res.status(404).json({ message: "Customer user not found" });
       }
 
       // Check if merchant has enough points
@@ -1007,6 +1035,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAdminRoutes(app);
   setupMerchantRoutes(app);
   setupChatRoutes(app);
+  
+  // Merchant wallet system routes
+  app.use('/api/merchant', merchantWalletRoutes);
+  
+  // Merchant advanced features routes
+  app.use('/api/merchant', merchantAdvancedRoutes);
+  
+  // Customer portal routes
+  app.use('/api/customer', customerRoutes);
+  
+  // Customer reward system routes
+  app.use('/api/customer', customerRewardRoutes);
+  
+  // Customer wallet system routes
+  app.use('/api/customer', customerWalletRoutes);
   
   // Import and register loyalty routes
   const { registerLoyaltyRoutes } = await import("./loyalty-routes");

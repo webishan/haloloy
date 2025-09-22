@@ -54,6 +54,7 @@ app.use((req, res, next) => {
       await seedTestData();
       console.log("✅ Development data seeded automatically");
     } catch (error) {
+      console.log("❌ Error seeding test data:", error);
       console.log("⚠️  Auto-seed skipped (data may already exist)");
     }
   }
@@ -74,8 +75,7 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen({
     port,
-    host: "0.0.0.0",
-    reusePort: true,
+    host: "127.0.0.1",
   }, () => {
     log(`serving on port ${port}`);
   });

@@ -10,10 +10,93 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   User, LogOut, TrendingUp, Star, DollarSign, BarChart3, MessageCircle, Gift,
-  Coins, ShoppingBag, Award, QrCode, Trophy, Heart
+  Coins, ShoppingBag, Award, QrCode, Trophy, Heart, AlertCircle
 } from "lucide-react";
 import SecureChat from "@/components/SecureChat";
 import QRTransferComponent from "@/components/QRTransferComponent";
+import { apiRequest } from "@/lib/queryClient";
+
+// QR Code Image Component with proper authentication
+function QRCodeImage() {
+  const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const fetchQRImage = async () => {
+      try {
+        setLoading(true);
+        setError(false);
+        
+        // Get the token from localStorage
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setError(true);
+          setLoading(false);
+          return;
+        }
+
+        // Create a blob URL for the authenticated image request
+        const response = await fetch('/api/customer/qr-code-image', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch QR code image');
+        }
+
+        const blob = await response.blob();
+        const imageUrl = URL.createObjectURL(blob);
+        setQrImageUrl(imageUrl);
+      } catch (err) {
+        console.error('Error fetching QR code image:', err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQRImage();
+
+    // Cleanup blob URL on unmount
+    return () => {
+      if (qrImageUrl) {
+        URL.revokeObjectURL(qrImageUrl);
+      }
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="text-xs text-gray-500 mt-2">Loading QR Code...</p>
+      </div>
+    );
+  }
+
+  if (error || !qrImageUrl) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <svg className="w-32 h-32 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+        </svg>
+        <p className="text-xs text-gray-500 mt-2">QR Code</p>
+        <p className="text-xs text-red-500 mt-1">Failed to load</p>
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={qrImageUrl} 
+      alt="Customer QR Code" 
+      className="w-full h-full object-contain p-2"
+    />
+  );
+}
 
 interface CustomerUser {
   id: string;
@@ -25,6 +108,161 @@ interface CustomerUser {
   country: string;
   isActive: boolean;
   createdAt: string;
+}
+
+// Customer QR Code Display Component
+function CustomerQRCodeDisplay({ currentUser }: { currentUser: CustomerUser | null }) {
+  const { toast } = useToast();
+  const [qrCodeImage, setQrCodeImage] = useState<string | null>(null);
+
+  // Get customer QR code
+  const { data: qrData, isLoading: qrLoading, error: qrError } = useQuery({
+    queryKey: ['/api/customer/qr-code', currentUser?.id],
+    enabled: !!currentUser,
+    select: (data: any) => data || {}
+  });
+
+  // Generate QR code image when data is available
+  useEffect(() => {
+    if (qrData?.qrCode) {
+      // Use the backend endpoint to get the QR code image
+      setQrCodeImage('/api/customer/qr-code-image');
+    }
+  }, [qrData?.qrCode]);
+
+  const copyQRCode = () => {
+    if (qrData?.qrCode) {
+      navigator.clipboard.writeText(qrData.qrCode);
+      toast({
+        title: "QR Code Copied",
+        description: "Your QR code has been copied to clipboard",
+      });
+    }
+  };
+
+  const copyShareableLink = () => {
+    if (qrData?.qrCode) {
+      const shareableLink = `${window.location.origin}/merchant/scan?qr=${encodeURIComponent(qrData.qrCode)}`;
+      navigator.clipboard.writeText(shareableLink);
+      toast({
+        title: "Shareable Link Copied",
+        description: "Link copied to clipboard. Share this with merchants for instant point transfers!",
+      });
+    }
+  };
+
+  const downloadQRCode = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "Please log in to download QR code",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const response = await fetch('/api/customer/qr-code-image', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch QR code image');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `komarce-qr-${currentUser?.id}.png`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "QR Code Downloaded",
+        description: "Your QR code has been downloaded successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "Failed to download QR code",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (!currentUser) {
+    return <div className="text-center py-8 text-gray-500">Please log in to view your QR code</div>;
+  }
+
+  if (qrLoading) {
+    return <div className="text-center py-8">Loading your QR code...</div>;
+  }
+
+  if (qrError) {
+    return (
+      <div className="text-center py-8 text-red-500">
+        <AlertCircle className="mx-auto h-12 w-12 mb-4" />
+        <p>Failed to load QR code. Please try again.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <div className="bg-white p-6 rounded-lg border-2 border-dashed border-gray-300 inline-block">
+          <div className="bg-gray-100 p-6 rounded-lg mb-4 h-64 w-64">
+            <QRCodeImage />
+          </div>
+          <p className="text-sm text-gray-600 mb-2">Your Unique QR Code</p>
+          <div className="bg-gray-50 p-3 rounded font-mono text-xs break-all">
+            {qrData?.qrCode || 'No QR code available'}
+          </div>
+        </div>
+      </div>
+      
+      <div className="text-center space-y-4">
+        <div className="flex gap-2 justify-center flex-wrap">
+          <Button onClick={copyQRCode} variant="outline" size="sm">
+            <QrCode className="h-4 w-4 mr-2" />
+            Copy QR Code
+          </Button>
+          <Button onClick={copyShareableLink} variant="default" size="sm">
+            <QrCode className="h-4 w-4 mr-2" />
+            Copy Shareable Link
+          </Button>
+          {qrCodeImage && (
+            <Button onClick={downloadQRCode} variant="outline" size="sm">
+              <QrCode className="h-4 w-4 mr-2" />
+              Download
+            </Button>
+          )}
+        </div>
+        
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <h4 className="font-semibold text-blue-900 mb-2">How to Use Your QR Code:</h4>
+          <div className="text-sm text-blue-800 space-y-1">
+            <p>• <strong>Show QR Code:</strong> Let merchants scan your QR code directly</p>
+            <p>• <strong>Share Link:</strong> Send the shareable link to merchants via WhatsApp, SMS, or email</p>
+            <p>• <strong>Instant Transfer:</strong> Merchants can transfer points to you immediately</p>
+          </div>
+        </div>
+        
+        {qrData?.qrCode && (
+          <div className="bg-gray-50 p-3 rounded border">
+            <p className="text-xs text-gray-600 mb-2">Shareable Link:</p>
+            <div className="bg-white p-2 rounded border font-mono text-xs break-all">
+              {`${window.location.origin}/merchant/scan?qr=${encodeURIComponent(qrData.qrCode)}`}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function CustomerPortal() {
@@ -560,6 +798,23 @@ export default function CustomerPortal() {
 
           {/* QR Transfer Tab */}
           <TabsContent value="qr-transfer" className="space-y-6">
+            {/* Customer QR Code Display */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <QrCode className="w-5 h-5 mr-2" />
+                  Your QR Code
+                </CardTitle>
+                <CardDescription>
+                  Show this QR code to merchants to receive points
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CustomerQRCodeDisplay currentUser={currentUser} />
+              </CardContent>
+            </Card>
+
+            {/* QR Transfer Component */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
