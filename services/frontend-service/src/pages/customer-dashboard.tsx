@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
          BarChart as RechartsBar, Bar, PieChart as RechartsPie, Pie, Cell } from 'recharts';
+import AccumulatedPointsDisplay from '@/components/AccumulatedPointsDisplay';
 
 export default function CustomerDashboard() {
   const { user, profile } = useAuth();
@@ -149,7 +150,7 @@ export default function CustomerDashboard() {
     globalSerialNumber: serialNumber.globalSerialNumber || 1,
     localSerialNumber: serialNumber.localSerialNumber || 1,
     profileComplete: customerProfile.profileComplete || false,
-    qrCode: customerProfile.qrCode || 'QR_CODE_DATA_HERE'
+    qrCode: customerProfile.qrCode
   };
 
   // Render Dashboard Section
@@ -334,6 +335,9 @@ export default function CustomerDashboard() {
         </CardContent>
       </Card>
                       </div>
+
+      {/* Accumulated Points System */}
+      <AccumulatedPointsDisplay currentUser={user} />
   );
 
   // Render Wallet Section

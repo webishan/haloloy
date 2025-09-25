@@ -450,7 +450,7 @@ export default function AdminPortal() {
             <div className="mt-6 text-center text-sm text-gray-500">
               <p>Test Credentials:</p>
               <p>Global: global@komarce.com / global123</p>
-              <p>Local BD: local.bd@komarce.com / local123</p>
+              <p>Local BD: bd@komarce.com / local123</p>
             </div>
           </CardContent>
         </Card>

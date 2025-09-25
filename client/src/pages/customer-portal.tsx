@@ -8,12 +8,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSimpleRealtime } from "@/hooks/use-simple-realtime";
 import { 
   User, LogOut, TrendingUp, Star, DollarSign, BarChart3, MessageCircle, Gift,
-  Coins, ShoppingBag, Award, QrCode, Trophy, Heart, AlertCircle
+  Coins, ShoppingBag, Award, QrCode, Trophy, Heart, AlertCircle, Crown
 } from "lucide-react";
 import SecureChat from "@/components/SecureChat";
 import QRTransferComponent from "@/components/QRTransferComponent";
+import RewardNumberSystem from "@/components/RewardNumberSystem";
+import GlobalRewardDashboard from "@/components/GlobalRewardDashboard";
+import RewardSystemTester from "@/components/RewardSystemTester";
+import Logo from "@/components/ui/logo";
 import { apiRequest } from "@/lib/queryClient";
 
 // QR Code Image Component with proper authentication
@@ -130,24 +135,78 @@ function CustomerQRCodeDisplay({ currentUser }: { currentUser: CustomerUser | nu
     }
   }, [qrData?.qrCode]);
 
-  const copyQRCode = () => {
+  const copyQRCode = async () => {
     if (qrData?.qrCode) {
-      navigator.clipboard.writeText(qrData.qrCode);
-      toast({
-        title: "QR Code Copied",
-        description: "Your QR code has been copied to clipboard",
-      });
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(qrData.qrCode);
+          toast({
+            title: "QR Code Copied",
+            description: "Your QR code has been copied to clipboard",
+          });
+        } else {
+          // Fallback for older browsers or non-secure contexts
+          const textArea = document.createElement('textarea');
+          textArea.value = qrData.qrCode;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          textArea.style.top = '-999999px';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          document.execCommand('copy');
+          textArea.remove();
+          toast({
+            title: "QR Code Copied",
+            description: "Your QR code has been copied to clipboard",
+          });
+        }
+      } catch (error) {
+        console.error('Failed to copy QR code:', error);
+        toast({
+          title: "Copy Failed",
+          description: "Please manually copy the QR code from the text below",
+          variant: "destructive",
+        });
+      }
     }
   };
 
-  const copyShareableLink = () => {
+  const copyShareableLink = async () => {
     if (qrData?.qrCode) {
-      const shareableLink = `${window.location.origin}/merchant/scan?qr=${encodeURIComponent(qrData.qrCode)}`;
-      navigator.clipboard.writeText(shareableLink);
-      toast({
-        title: "Shareable Link Copied",
-        description: "Link copied to clipboard. Share this with merchants for instant point transfers!",
-      });
+      try {
+        const shareableLink = `${window.location.origin}/merchant/scan?qr=${encodeURIComponent(qrData.qrCode)}`;
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(shareableLink);
+          toast({
+            title: "Shareable Link Copied",
+            description: "Link copied to clipboard. Share this with merchants for instant point transfers!",
+          });
+        } else {
+          // Fallback for older browsers or non-secure contexts
+          const textArea = document.createElement('textarea');
+          textArea.value = shareableLink;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          textArea.style.top = '-999999px';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          document.execCommand('copy');
+          textArea.remove();
+          toast({
+            title: "Shareable Link Copied",
+            description: "Link copied to clipboard. Share this with merchants for instant point transfers!",
+          });
+        }
+      } catch (error) {
+        console.error('Failed to copy shareable link:', error);
+        toast({
+          title: "Copy Failed",
+          description: "Please manually copy the link from the text below",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -219,7 +278,11 @@ function CustomerQRCodeDisplay({ currentUser }: { currentUser: CustomerUser | nu
             <QRCodeImage />
           </div>
           <p className="text-sm text-gray-600 mb-2">Your Unique QR Code</p>
-          <div className="bg-gray-50 p-3 rounded font-mono text-xs break-all">
+          <div 
+            className="bg-gray-50 p-3 rounded font-mono text-xs break-all cursor-pointer hover:bg-gray-100 transition-colors"
+            onClick={copyQRCode}
+            title="Click to copy QR code"
+          >
             {qrData?.qrCode || 'No QR code available'}
           </div>
         </div>
@@ -322,21 +385,39 @@ export default function CustomerPortal() {
   const { data: dashboardData, isLoading: isDashboardLoading } = useQuery({
     queryKey: ['/api/customer/dashboard', currentUser?.id],
     enabled: isAuthenticated && !!currentUser,
-    select: (data: any) => data || {}
+    select: (data: any) => data || {},
+    refetchInterval: 30000, // Refresh every 30 seconds instead of 3 seconds
+    refetchIntervalInBackground: false, // Don't refetch in background
+    staleTime: 10000, // Consider data fresh for 10 seconds
+    cacheTime: 300000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: true // Only refetch on component mount
   });
 
   // Customer profile query
   const { data: customerProfile, isLoading: profileLoading } = useQuery({
     queryKey: ['/api/customer/profile', currentUser?.id],
     enabled: isAuthenticated && !!currentUser,
-    select: (data: any) => data || {}
+    select: (data: any) => data || {},
+    refetchInterval: 30000, // Refresh every 30 seconds instead of 3 seconds
+    refetchIntervalInBackground: false, // Don't refetch in background
+    staleTime: 10000, // Consider data fresh for 10 seconds
+    cacheTime: 300000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: true // Only refetch on component mount
   });
 
   // Transaction history query
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
     queryKey: ['/api/customer/transactions', currentUser?.id],
     enabled: isAuthenticated && !!currentUser,
-    select: (data: any) => Array.isArray(data) ? data : []
+    select: (data: any) => Array.isArray(data) ? data : [],
+    refetchInterval: 30000, // Refresh every 30 seconds instead of 3 seconds
+    refetchIntervalInBackground: false, // Don't refetch in background
+    staleTime: 10000, // Consider data fresh for 10 seconds
+    cacheTime: 300000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: true // Only refetch on component mount
   });
 
   // Reward numbers query
@@ -345,6 +426,26 @@ export default function CustomerPortal() {
     enabled: isAuthenticated && !!currentUser,
     select: (data: any) => Array.isArray(data) ? data : []
   });
+
+  // Simple real-time updates for all customer data
+  const { forceRefresh } = useSimpleRealtime([
+    '/api/customer/dashboard',
+    '/api/customer/profile',
+    '/api/customer/transactions',
+    '/api/customer/wallet',
+    '/api/customer/reward-numbers'
+  ], 1000); // Update every 1 second
+
+  // Auto-check for global serial eligibility when customer profile loads
+  useEffect(() => {
+    if (dashboardData && dashboardData.globalSerialAssigned && dashboardData.globalSerialNumber) {
+      toast({
+        title: "🎉 Global Serial Number Assigned!",
+        description: `Congratulations! Your global serial number is #${dashboardData.globalSerialNumber}`,
+        duration: 5000,
+      });
+    }
+  }, [dashboardData, toast]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -404,18 +505,18 @@ export default function CustomerPortal() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-purple-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-lg shadow-2xl border-0">
-          <CardHeader className="text-center bg-gradient-to-r from-pink-600 to-rose-600 text-white rounded-t-lg">
-            <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full mx-auto mb-4 flex items-center justify-center">
-              <User className="w-10 h-10 text-white" />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4 animate-gradient">
+        <Card className="w-full max-w-lg komarce-card animate-fade-in">
+          <CardHeader className="text-center komarce-gradient text-white rounded-t-2xl p-8">
+            <div className="w-24 h-24 bg-white/20 backdrop-blur-sm rounded-full mx-auto mb-6 flex items-center justify-center animate-float">
+              <Logo size="xl" />
             </div>
-            <CardTitle className="text-3xl font-bold">Customer Portal</CardTitle>
-            <p className="text-pink-100">KOMARCE Loyalty Dashboard</p>
+            <CardTitle className="text-3xl font-bold mb-2">Customer Portal</CardTitle>
+            <p className="text-blue-100">KOMARCE Loyalty Dashboard</p>
           </CardHeader>
           <CardContent className="p-8">
             <form onSubmit={handleLogin} className="space-y-6">
-              <div>
+              <div className="animate-slide-up">
                 <Label htmlFor="customer-email" className="text-sm font-semibold text-gray-700">Email Address</Label>
                 <Input
                   id="customer-email"
@@ -423,13 +524,13 @@ export default function CustomerPortal() {
                   value={loginForm.email}
                   onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
                   placeholder="customer1@bd.komarce.com"
-                  className="mt-2 h-12"
+                  className="mt-2 h-12 komarce-input focus-komarce"
                   required
                   data-testid="input-customer-email"
                 />
               </div>
               
-              <div>
+              <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                 <Label htmlFor="customer-password" className="text-sm font-semibold text-gray-700">Password</Label>
                 <Input
                   id="customer-password"
@@ -437,7 +538,7 @@ export default function CustomerPortal() {
                   value={loginForm.password}
                   onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
                   placeholder="Enter your password"
-                  className="mt-2 h-12"
+                  className="mt-2 h-12 komarce-input focus-komarce"
                   required
                   data-testid="input-customer-password"
                 />
@@ -445,7 +546,8 @@ export default function CustomerPortal() {
 
               <Button 
                 type="submit" 
-                className="w-full h-12 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-semibold text-lg"
+                className="w-full h-12 komarce-button animate-slide-up"
+                style={{ animationDelay: '0.2s' }}
                 disabled={loginMutation.isPending}
                 data-testid="button-customer-login"
               >
@@ -453,11 +555,13 @@ export default function CustomerPortal() {
               </Button>
             </form>
             
-            <div className="mt-6 text-center text-sm text-gray-500">
-              <p>Test Credentials:</p>
-              <p>customer1@bd.komarce.com / customer123</p>
-              <p>customer2@my.komarce.com / customer123</p>
-              <p>customer3@ae.komarce.com / customer123</p>
+            <div className="mt-6 text-center text-sm text-gray-500 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+              <p className="font-semibold text-gray-700 mb-2">Test Credentials:</p>
+              <div className="space-y-1 text-xs">
+                <p>customer1@bd.komarce.com / customer123</p>
+                <p>customer2@my.komarce.com / customer123</p>
+                <p>customer3@ae.komarce.com / customer123</p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -468,34 +572,38 @@ export default function CustomerPortal() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="komarce-nav sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-pink-600 to-rose-600 rounded-lg flex items-center justify-center">
-                <User className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Customer Portal</h1>
-                <p className="text-sm text-gray-500">
-                  {getCountryFlag(currentUser?.country || '')} Loyalty Member Dashboard
-                </p>
-              </div>
+          <div className="flex justify-between items-center h-20">
+            <div className="flex items-center space-x-4 animate-slide-in-left">
+              <Logo size="lg" className="animate-float" />
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-6 animate-slide-in-right">
               {customerProfile && (customerProfile as any).currentTier && (
-                <Badge className={getTierColor((customerProfile as any).currentTier || 'bronze')}>
+                <Badge className={`${getTierColor((customerProfile as any).currentTier || 'bronze')} animate-pulse-slow`}>
                   <Star className="w-4 h-4 mr-1" />
                   {((customerProfile as any).currentTier || 'bronze').toUpperCase()} MEMBER
                 </Badge>
               )}
               
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <span>{currentUser?.firstName} {currentUser?.lastName}</span>
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 komarce-gradient rounded-full flex items-center justify-center text-white font-bold text-sm">
+                  {currentUser?.firstName?.charAt(0)}{currentUser?.lastName?.charAt(0)}
+                </div>
+                <div className="text-sm">
+                  <div className="font-semibold text-gray-900">{currentUser?.firstName} {currentUser?.lastName}</div>
+                  <div className="text-gray-500">{getCountryFlag(currentUser?.country || '')} Member</div>
+                </div>
               </div>
               
-              <Button onClick={handleLogout} variant="outline" size="sm" data-testid="button-customer-logout">
+              <Button 
+                onClick={handleLogout} 
+                variant="outline" 
+                size="sm" 
+                className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all duration-200"
+                data-testid="button-customer-logout"
+              >
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>
@@ -506,85 +614,152 @@ export default function CustomerPortal() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="dashboard" data-testid="tab-dashboard">
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Dashboard
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+          <TabsList className="grid w-full grid-cols-7 komarce-card p-2 h-auto">
+            <TabsTrigger 
+              value="dashboard" 
+              data-testid="tab-dashboard"
+              className="flex flex-col items-center p-4 rounded-xl transition-all duration-200 hover:bg-blue-50 data-[state=active]:komarce-gradient data-[state=active]:text-white"
+            >
+              <BarChart3 className="w-5 h-5 mb-1" />
+              <span className="text-xs font-medium">Dashboard</span>
             </TabsTrigger>
-            <TabsTrigger value="rewards" data-testid="tab-rewards">
-              <Trophy className="w-4 h-4 mr-2" />
-              Reward Numbers
+            <TabsTrigger 
+              value="global-rewards" 
+              data-testid="tab-global-rewards"
+              className="flex flex-col items-center p-4 rounded-xl transition-all duration-200 hover:bg-purple-50 data-[state=active]:komarce-gradient data-[state=active]:text-white"
+            >
+              <Crown className="w-5 h-5 mb-1" />
+              <span className="text-xs font-medium">Global Rewards</span>
             </TabsTrigger>
-            <TabsTrigger value="transactions" data-testid="tab-transactions">
-              <DollarSign className="w-4 h-4 mr-2" />
-              Transactions
+            <TabsTrigger 
+              value="test-system" 
+              data-testid="tab-test-system"
+              className="flex flex-col items-center p-4 rounded-xl transition-all duration-200 hover:bg-pink-50 data-[state=active]:komarce-gradient data-[state=active]:text-white"
+            >
+              <Sparkles className="w-5 h-5 mb-1" />
+              <span className="text-xs font-medium">Test System</span>
             </TabsTrigger>
-            <TabsTrigger value="qr-transfer" data-testid="tab-qr-transfer">
-              <QrCode className="w-4 h-4 mr-2" />
-              QR Transfer
+            <TabsTrigger 
+              value="rewards" 
+              data-testid="tab-rewards"
+              className="flex flex-col items-center p-4 rounded-xl transition-all duration-200 hover:bg-yellow-50 data-[state=active]:komarce-gradient data-[state=active]:text-white"
+            >
+              <Trophy className="w-5 h-5 mb-1" />
+              <span className="text-xs font-medium">Reward Numbers</span>
             </TabsTrigger>
-            <TabsTrigger value="chat" data-testid="tab-chat">
-              <MessageCircle className="w-4 h-4 mr-2" />
-              Chat
+            <TabsTrigger 
+              value="transactions" 
+              data-testid="tab-transactions"
+              className="flex flex-col items-center p-4 rounded-xl transition-all duration-200 hover:bg-green-50 data-[state=active]:komarce-gradient data-[state=active]:text-white"
+            >
+              <DollarSign className="w-5 h-5 mb-1" />
+              <span className="text-xs font-medium">Transactions</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="qr-transfer" 
+              data-testid="tab-qr-transfer"
+              className="flex flex-col items-center p-4 rounded-xl transition-all duration-200 hover:bg-indigo-50 data-[state=active]:komarce-gradient data-[state=active]:text-white"
+            >
+              <QrCode className="w-5 h-5 mb-1" />
+              <span className="text-xs font-medium">QR Transfer</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="chat" 
+              data-testid="tab-chat"
+              className="flex flex-col items-center p-4 rounded-xl transition-all duration-200 hover:bg-orange-50 data-[state=active]:komarce-gradient data-[state=active]:text-white"
+            >
+              <MessageCircle className="w-5 h-5 mb-1" />
+              <span className="text-xs font-medium">Chat</span>
             </TabsTrigger>
           </TabsList>
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
+            {/* Dashboard Header with Refresh Button */}
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+              <Button 
+                onClick={() => {
+                  forceRefresh();
+                  toast({ title: "Refreshed", description: "Dashboard data updated!" });
+                }}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <TrendingUp className="w-4 h-4" />
+                Refresh
+              </Button>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card>
+              <Card className="komarce-card animate-slide-up hover:shadow-komarce transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Total Points</p>
-                      <p className="text-3xl font-bold text-pink-600">
-                        {isDashboardLoading ? "..." : ((dashboardData as any)?.totalPoints?.toLocaleString() || 0)}
+                      <p className="text-sm font-medium text-gray-600">Loyalty Points</p>
+                      <p className="text-3xl font-bold komarce-gradient-text">
+                        {isDashboardLoading ? "..." : ((customerProfile as any)?.totalPointsEarned?.toLocaleString() || (dashboardData as any)?.profile?.totalPointsEarned?.toLocaleString() || 0)}
                       </p>
                     </div>
-                    <Coins className="w-8 h-8 text-pink-500" />
+                    <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full">
+                      <Coins className="w-6 h-6 text-white" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="komarce-card animate-slide-up hover:shadow-komarce transition-all duration-300" style={{ animationDelay: '0.1s' }}>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Accumulated Points</p>
-                      <p className="text-3xl font-bold text-purple-600">
-                        {isDashboardLoading ? "..." : ((dashboardData as any)?.accumulatedPoints?.toLocaleString() || 0)}
+                      <p className="text-sm font-medium text-gray-600">Current Balance</p>
+                      <p className="text-3xl font-bold komarce-gradient-text">
+                        {isDashboardLoading ? "..." : ((customerProfile as any)?.currentPointsBalance?.toLocaleString() || (dashboardData as any)?.profile?.currentPointsBalance?.toLocaleString() || 0)}
                       </p>
                     </div>
-                    <TrendingUp className="w-8 h-8 text-purple-500" />
+                    <div className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full">
+                      <TrendingUp className="w-6 h-6 text-white" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              {((customerProfile as any)?.globalSerialNumber || (dashboardData as any)?.serialNumber?.globalSerialNumber) && (
+                <Card className="komarce-card animate-slide-up hover:shadow-komarce-lg transition-all duration-300 border-4 border-gradient-to-r from-yellow-400 to-orange-500 bg-gradient-to-br from-yellow-50 to-orange-50 animate-glow" style={{ animationDelay: '0.2s' }}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-orange-700 uppercase tracking-wide">🏆 Global Serial Number</p>
+                        <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 to-orange-600">
+                          #{(customerProfile as any)?.globalSerialNumber || (dashboardData as any)?.serialNumber?.globalSerialNumber}
+                        </p>
+                        <p className="text-xs text-orange-600 font-semibold mt-1">
+                          Achievement Order Ranking
+                        </p>
+                      </div>
+                      <div className="relative animate-float">
+                        <Crown className="w-12 h-12 text-yellow-500 animate-pulse" />
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-ping"></div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card className="komarce-card animate-slide-up hover:shadow-komarce transition-all duration-300" style={{ animationDelay: '0.3s' }}>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Reward Numbers</p>
-                      <p className="text-3xl font-bold text-blue-600">
-                        {isDashboardLoading ? "..." : ((dashboardData as any)?.rewardNumbers || 0)}
+                      <p className="text-3xl font-bold komarce-gradient-text">
+                        {isDashboardLoading ? "..." : (rewardNumbers.length || 0)}
                       </p>
                     </div>
-                    <Trophy className="w-8 h-8 text-blue-500" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Total Orders</p>
-                      <p className="text-3xl font-bold text-green-600">
-                        {isDashboardLoading ? "..." : ((dashboardData as any)?.totalOrders || 0)}
-                      </p>
+                    <div className="p-3 bg-gradient-to-r from-green-500 to-blue-500 rounded-full">
+                      <Award className="w-6 h-6 text-white" />
                     </div>
-                    <ShoppingBag className="w-8 h-8 text-green-500" />
                   </div>
                 </CardContent>
               </Card>
@@ -592,162 +767,153 @@ export default function CustomerPortal() {
 
             {/* Member Profile */}
             {customerProfile && (
-              <Card>
-                <CardHeader>
+              <Card className="komarce-card animate-slide-up" style={{ animationDelay: '0.4s' }}>
+                <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-purple-50 rounded-t-2xl">
                   <CardTitle className="flex items-center">
-                    <User className="w-5 h-5 mr-2 text-pink-600" />
-                    Member Profile
-                  </CardTitle>
-                  <CardDescription>Your loyalty membership information and tier status</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="p-2 komarce-gradient rounded-full mr-3">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Member Since</p>
-                      <p className="text-lg font-semibold text-gray-900">
+                      <span className="komarce-gradient-text text-xl">Member Profile</span>
+                      <CardDescription className="text-gray-600 mt-1">Your loyalty membership information and tier status</CardDescription>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                      <p className="text-sm font-medium text-blue-700 mb-2">Member Since</p>
+                      <p className="text-lg font-bold text-blue-900">
                         {new Date(currentUser?.createdAt || '').toLocaleDateString()}
                       </p>
                     </div>
                     
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Current Tier</p>
-                      <Badge className={getTierColor(customerProfile.currentTier || 'bronze')}>
+                    <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
+                      <p className="text-sm font-medium text-purple-700 mb-2">Current Tier</p>
+                      <Badge className={`${getTierColor(customerProfile.currentTier || 'bronze')} text-sm px-3 py-1`}>
+                        <Star className="w-4 h-4 mr-1" />
                         {(customerProfile.currentTier || 'bronze').toUpperCase()}
                       </Badge>
                     </div>
                     
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Points Balance</p>
-                      <p className="text-lg font-semibold text-pink-600">
-                        {customerProfile.totalPoints?.toLocaleString()} points
+                    <div className="p-4 bg-pink-50 rounded-xl border border-pink-200">
+                      <p className="text-sm font-medium text-pink-700 mb-2">Loyalty Points</p>
+                      <p className="text-lg font-bold komarce-gradient-text">
+                        {(customerProfile.totalPointsEarned || customerProfile.totalPoints || 0).toLocaleString()} points
                       </p>
                     </div>
                     
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Lifetime Points</p>
-                      <p className="text-lg font-semibold text-purple-600">
-                        {customerProfile.accumulatedPoints?.toLocaleString()} points
+                    <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+                      <p className="text-sm font-medium text-green-700 mb-2">Current Balance</p>
+                      <p className="text-lg font-bold text-green-600">
+                        {(customerProfile.currentPointsBalance || 0).toLocaleString()} points
                       </p>
                     </div>
                     
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Global Reward Numbers</p>
-                      <p className="text-lg font-semibold text-blue-600">
-                        {customerProfile.globalRewardNumbers || 0}
-                      </p>
-                    </div>
+                    {(customerProfile.globalSerialNumber || customerProfile.globalRewardNumbers) && (
+                      <div className="col-span-full">
+                        <div className="komarce-gradient p-6 rounded-2xl text-white animate-glow">
+                          <div className="flex items-center space-x-4">
+                            <Crown className="w-12 h-12 text-yellow-300 animate-pulse" />
+                            <div>
+                              <p className="text-sm font-bold uppercase tracking-wide mb-2">🏆 Global Serial Number</p>
+                              <p className="text-4xl font-black mb-2">
+                                #{customerProfile.globalSerialNumber || 'Pending Assignment'}
+                              </p>
+                              <p className="text-sm font-semibold text-blue-100">
+                                {customerProfile.globalSerialNumber ? 'Achievement Order Ranking' : 'Earn 1,500 points to qualify'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Local Reward Numbers</p>
-                      <p className="text-lg font-semibold text-green-600">
-                        {customerProfile.localRewardNumbers || 0}
-                      </p>
-                    </div>
+                    {(customerProfile.localSerialNumber || customerProfile.localRewardNumbers) && (
+                      <div className="p-4 bg-orange-50 rounded-xl border border-orange-200">
+                        <p className="text-sm font-medium text-orange-700 mb-2">Local Serial Number</p>
+                        <p className="text-lg font-bold text-orange-600">
+                          #{customerProfile.localSerialNumber || 'Pending'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             )}
 
             {/* Tier Progress */}
-            <Card>
-              <CardHeader>
+            <Card className="komarce-card animate-slide-up" style={{ animationDelay: '0.5s' }}>
+              <CardHeader className="border-b bg-gradient-to-r from-yellow-50 to-orange-50 rounded-t-2xl">
                 <CardTitle className="flex items-center">
-                  <Award className="w-5 h-5 mr-2 text-yellow-600" />
-                  Tier Progression
+                  <div className="p-2 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full mr-3">
+                    <Award className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <span className="komarce-gradient-text text-xl">Tier Progression</span>
+                    <CardDescription className="text-gray-600 mt-1">Your progress towards the next tier level</CardDescription>
+                  </div>
                 </CardTitle>
-                <CardDescription>Your progress towards the next tier level</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between text-sm">
-                    <span>Current: {(customerProfile?.currentTier || 'bronze').toUpperCase()}</span>
-                    <span>Next: {customerProfile?.currentTier === 'gold' ? 'MAX TIER' : customerProfile?.currentTier === 'silver' ? 'GOLD' : 'SILVER'}</span>
+              <CardContent className="p-6">
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <div className="text-center">
+                      <div className="text-sm font-medium text-gray-600 mb-1">Current Tier</div>
+                      <Badge className={`${getTierColor(customerProfile?.currentTier || 'bronze')} text-sm px-3 py-1`}>
+                        {(customerProfile?.currentTier || 'bronze').toUpperCase()}
+                      </Badge>
+                    </div>
+                    <ArrowRight className="w-6 h-6 text-gray-400" />
+                    <div className="text-center">
+                      <div className="text-sm font-medium text-gray-600 mb-1">Next Tier</div>
+                      <Badge variant="outline" className="text-sm px-3 py-1">
+                        {customerProfile?.currentTier === 'gold' ? 'MAX TIER' : customerProfile?.currentTier === 'silver' ? 'GOLD' : 'SILVER'}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div 
-                      className="bg-gradient-to-r from-yellow-400 to-yellow-600 h-3 rounded-full transition-all duration-300"
-                      style={{ 
-                        width: `${Math.min(100, ((customerProfile?.accumulatedPoints || 0) / 5000) * 100)}%` 
-                      }}
-                    ></div>
+                  
+                  <div className="relative">
+                    <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                      <div 
+                        className="komarce-gradient h-4 rounded-full transition-all duration-500 animate-gradient"
+                        style={{ 
+                          width: `${Math.min(100, ((customerProfile?.accumulatedPoints || 0) / 5000) * 100)}%` 
+                        }}
+                      ></div>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-xs font-bold text-white drop-shadow-lg">
+                        {Math.min(100, ((customerProfile?.accumulatedPoints || 0) / 5000) * 100).toFixed(1)}%
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600">
-                    {5000 - (customerProfile?.accumulatedPoints || 0) > 0 
-                      ? `${(5000 - (customerProfile?.accumulatedPoints || 0)).toLocaleString()} points to next tier`
-                      : 'Congratulations! You\'ve reached the maximum tier.'}
-                  </p>
+                  
+                  <div className="text-center p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl">
+                    <p className="text-sm font-semibold text-gray-700">
+                      {5000 - (customerProfile?.accumulatedPoints || 0) > 0 
+                        ? `${(5000 - (customerProfile?.accumulatedPoints || 0)).toLocaleString()} points to next tier`
+                        : '🎉 Congratulations! You\'ve reached the maximum tier!'}
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
+          {/* Global Rewards Tab */}
+          <TabsContent value="global-rewards" className="space-y-6">
+            <GlobalRewardDashboard currentUser={currentUser} />
+          </TabsContent>
+
+          {/* Test System Tab */}
+          <TabsContent value="test-system" className="space-y-6">
+            <RewardSystemTester />
+          </TabsContent>
+
           {/* Reward Numbers Tab */}
           <TabsContent value="rewards" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>StepUp Reward Numbers</CardTitle>
-                <CardDescription>Your active reward numbers and their completion status</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {rewardNumbersLoading ? (
-                  <div className="text-center py-8">Loading reward numbers...</div>
-                ) : rewardNumbers.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Trophy className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                    <p>No reward numbers yet. Start shopping to earn your first StepUp reward!</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {rewardNumbers.map((reward: any) => (
-                      <Card key={reward.id} className="border-2">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center justify-between">
-                            <Badge className={reward.type === 'global' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
-                              {reward.type.toUpperCase()}
-                            </Badge>
-                            <Badge variant="outline">
-                              #{reward.rewardNumber}
-                            </Badge>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div>
-                            <p className="text-sm text-gray-600">Serial Number</p>
-                            <p className="font-mono text-sm">{reward.serialNumber}</p>
-                          </div>
-                          
-                          <div className="grid grid-cols-3 gap-2 text-center">
-                            <div className={`p-2 rounded ${reward.tier1Status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                              <p className="text-xs">Tier 1</p>
-                              <p className="font-bold">{reward.tier1Amount || 0}</p>
-                            </div>
-                            <div className={`p-2 rounded ${reward.tier2Status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                              <p className="text-xs">Tier 2</p>
-                              <p className="font-bold">{reward.tier2Amount || 0}</p>
-                            </div>
-                            <div className={`p-2 rounded ${reward.tier3Status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                              <p className="text-xs">Tier 3</p>
-                              <p className="font-bold">{reward.tier3Amount || 0}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="text-center">
-                            {reward.completedAt ? (
-                              <Badge className="bg-green-100 text-green-800">
-                                <Trophy className="w-3 h-3 mr-1" />
-                                Completed
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary">In Progress</Badge>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <RewardNumberSystem currentUser={currentUser} />
           </TabsContent>
 
           {/* Transactions Tab */}

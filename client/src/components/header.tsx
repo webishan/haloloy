@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useCart } from '@/hooks/use-cart';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Logo } from '@/components/ui/logo';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -86,40 +87,35 @@ export default function Header() {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link href="/">
-            <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-lg">K</span>
-              </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">KOMARCE</span>
-            </div>
+            <Logo size="lg" className="hover:opacity-80 transition-opacity" />
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             <Link href="/">
-              <span className={`text-sm font-semibold transition-colors hover:text-blue-600 ${
-                location === '/' ? 'text-blue-600' : 'text-gray-700'
+              <span className={`text-sm font-semibold transition-colors hover:text-red-600 ${
+                location === '/' ? 'text-red-600' : 'text-gray-700'
               }`}>
                 Home
               </span>
             </Link>
             <Link href="/marketplace">
-              <span className={`text-sm font-semibold transition-colors hover:text-blue-600 ${
-                location === '/marketplace' ? 'text-blue-600' : 'text-gray-700'
+              <span className={`text-sm font-semibold transition-colors hover:text-red-600 ${
+                location === '/marketplace' ? 'text-red-600' : 'text-gray-700'
               }`}>
                 Marketplace
               </span>
             </Link>
             <Link href="/about">
-              <span className={`text-sm font-semibold transition-colors hover:text-blue-600 ${
-                location === '/about' ? 'text-blue-600' : 'text-gray-700'
+              <span className={`text-sm font-semibold transition-colors hover:text-red-600 ${
+                location === '/about' ? 'text-red-600' : 'text-gray-700'
               }`}>
                 About Us
               </span>
             </Link>
             <Link href="/contact">
-              <span className={`text-sm font-semibold transition-colors hover:text-blue-600 ${
-                location === '/contact' ? 'text-blue-600' : 'text-gray-700'
+              <span className={`text-sm font-semibold transition-colors hover:text-red-600 ${
+                location === '/contact' ? 'text-red-600' : 'text-gray-700'
               }`}>
                 Contact Us
               </span>
@@ -148,7 +144,7 @@ export default function Header() {
             {!adminUser && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 hover:from-blue-700 hover:to-indigo-700">
+                  <Button variant="outline" size="sm" className="bg-gradient-to-r from-red-600 to-red-500 text-white border-0 hover:from-red-700 hover:to-red-600">
                     <Shield className="w-4 h-4 mr-1" />
                     Admin Access
                   </Button>
@@ -174,7 +170,7 @@ export default function Header() {
             {adminUser ? (
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-red-500 rounded-full flex items-center justify-center">
                     <Shield className="w-4 h-4 text-white" />
                   </div>
                   <div className="hidden md:block">
@@ -190,7 +186,7 @@ export default function Header() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="text-blue-600 border-blue-300 hover:bg-blue-50 hover:border-blue-400 flex items-center"
+                    className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 flex items-center"
                   >
                     <Shield className="w-4 h-4 mr-2" />
                     Dashboard
@@ -241,33 +237,33 @@ export default function Header() {
               <div className="flex items-center space-x-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="default" size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6">
+                    <Button variant="default" size="sm" className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white font-semibold px-6">
                       Login Portal
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem asChild>
                       <Link href="/customer-login" className="flex items-center space-x-2">
-                        <User className="w-4 h-4 text-green-600" />
+                        <User className="w-4 h-4 text-red-600" />
                         <span>Customer Login</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/merchant-login" className="flex items-center space-x-2">
-                        <Store className="w-4 h-4 text-orange-600" />
+                        <Store className="w-4 h-4 text-red-500" />
                         <span>Merchant Portal</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/admin-login" className="flex items-center space-x-2">
-                        <Shield className="w-4 h-4 text-blue-600" />
+                        <Shield className="w-4 h-4 text-red-400" />
                         <span>Admin Access</span>
                       </Link>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Link href="/register">
-                  <Button size="sm" variant="outline" className="border-2 border-purple-300 text-purple-700 hover:bg-purple-50 font-semibold px-6">
+                  <Button size="sm" variant="outline" className="border-2 border-red-300 text-red-700 hover:bg-red-50 font-semibold px-6">
                     Sign Up
                   </Button>
                 </Link>

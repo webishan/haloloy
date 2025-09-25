@@ -50,7 +50,7 @@ const calculateRoyaltyIncome = (totalSales: number): number => {
 // Get merchant wallet information
 router.get('/wallet', async (req, res) => {
   try {
-    const merchantId = await getMerchantId(req.user.id);
+    const merchantId = await getMerchantId(req.user.userId);
     let wallet = await storage.getMerchantWallet(merchantId);
     
     // Create wallet if it doesn't exist
@@ -396,7 +396,211 @@ router.post('/income/cashback', async (req, res) => {
 // Process referral income (2% per 1000 Taka)
 router.post('/income/referral', async (req, res) => {
   try {
-    const merchantId = await getMerchantId(req.user.id);
+    const merchantId = await getMerchantId(req.user.userId);
+    const { referralAmount, referredMerchantId } = req.body;
+    
+    if (!referralAmount || referralAmount < 0) {
+      return res.status(400).json({ error: 'Invalid referral amount' });
+    }
+    
+    const referralCommission = calculateReferralCommission(referralAmount);
+    if (referralCommission <= 0) {
+      return res.status(400).json({ 
+        error: 'Minimum 1000 Taka referral required for commission' 
+      });
+    }
+    
+    const wallet = await storage.getMerchantWallet(merchantId);
+    if (!wallet) {
+      return res.status(404).json({ error: 'Wallet not found' });
+    }
+    
+    // Update wallet balance
+    const newIncomeBalance = parseFloat(wallet.incomeWalletBalance) + referralCommission;
+    const newReferralIncome = parseFloat(wallet.referralIncome) + referralCommission;
+    
+    await storage.updateMerchantWallet(merchantId, {
+      incomeWalletBalance: newIncomeBalance.toString(),
+      referralIncome: newReferralIncome.toString()
+    });
+    
+    // Create income record
+    await storage.createMerchantIncome({
+      merchantId,
+      incomeType: 'referral_2_percent',
+      amount: referralCommission.toString(),
+      sourceAmount: referralAmount.toString(),
+      description: `2% referral commission on ${referralAmount} Taka`,
+      referenceId: referredMerchantId
+    });
+    
+    // Create transaction record
+    await storage.createWalletTransaction({
+      merchantId,
+      walletType: 'income',
+      transactionType: 'income',
+      amount: referralCommission.toString(),
+      description: `2% referral commission income`,
+      balanceAfter: newIncomeBalance.toString()
+    });
+    
+    res.json({ 
+      success: true, 
+      referralCommission,
+      newIncomeBalance,
+      message: 'Referral commission processed successfully' 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Process royalty income (1% of total sales distributed monthly)
+router.post('/income/royalty', async (req, res) => {
+  try {
+    const merchantId = await getMerchantId(req.user.userId);
+    const { totalSales, month, year } = req.body;
+    
+    if (!totalSales || totalSales < 0) {
+      return res.status(400).json({ error: 'Invalid total sales amount' });
+    }
+    
+    const royaltyAmount = totalSales * 0.01; // 1% royalty
+    
+    const wallet = await storage.getMerchantWallet(merchantId);
+    if (!wallet) {
+      return res.status(404).json({ error: 'Wallet not found' });
+    }
+    
+    // Update wallet balance
+    const newIncomeBalance = parseFloat(wallet.incomeWalletBalance) + royaltyAmount;
+    const newRoyaltyIncome = parseFloat(wallet.royaltyIncome) + royaltyAmount;
+    
+    await storage.updateMerchantWallet(merchantId, {
+      incomeWalletBalance: newIncomeBalance.toString(),
+      royaltyIncome: newRoyaltyIncome.toString()
+    });
+    
+    // Create income record
+    await storage.createMerchantIncome({
+      merchantId,
+      incomeType: 'royalty_1_percent',
+      amount: royaltyAmount.toString(),
+      sourceAmount: totalSales.toString(),
+      description: `1% royalty on ${totalSales} Taka sales for ${month}/${year}`,
+      referenceId: `${month}-${year}`
+    });
+    
+    // Create transaction record
+    await storage.createWalletTransaction({
+      merchantId,
+      walletType: 'income',
+      transactionType: 'income',
+      amount: royaltyAmount.toString(),
+      description: `1% royalty income for ${month}/${year}`,
+      balanceAfter: newIncomeBalance.toString()
+    });
+    
+    res.json({ 
+      success: true, 
+      royaltyAmount,
+      newIncomeBalance,
+      message: 'Royalty income processed successfully' 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get merchant income summary
+router.get('/income/summary', async (req, res) => {
+  try {
+    const merchantId = await getMerchantId(req.user.userId);
+    const { period = 'all' } = req.query;
+    
+    const wallet = await storage.getMerchantWallet(merchantId);
+    if (!wallet) {
+      return res.status(404).json({ error: 'Wallet not found' });
+    }
+    
+    // Get income records for the period
+    const now = new Date();
+    let periodDate = new Date(0);
+    
+    if (period !== 'all') {
+      periodDate = getPeriodDate(now, period as string);
+    }
+    
+    const incomes = await storage.getMerchantIncomes(merchantId, periodDate);
+    
+    const summary = {
+      totalIncome: parseFloat(wallet.incomeWalletBalance),
+      cashbackIncome: parseFloat(wallet.cashbackIncome),
+      referralIncome: parseFloat(wallet.referralIncome),
+      royaltyIncome: parseFloat(wallet.royaltyIncome),
+      periodIncomes: incomes,
+      breakdown: {
+        cashback: incomes.filter(i => i.incomeType === 'cashback_15_percent')
+          .reduce((sum, i) => sum + parseFloat(i.amount), 0),
+        referral: incomes.filter(i => i.incomeType === 'referral_2_percent')
+          .reduce((sum, i) => sum + parseFloat(i.amount), 0),
+        royalty: incomes.filter(i => i.incomeType === 'royalty_1_percent')
+          .reduce((sum, i) => sum + parseFloat(i.amount), 0)
+      }
+    };
+    
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to get period date
+function getPeriodDate(now: Date, period: string): Date {
+  const date = new Date(now);
+  switch (period) {
+    case 'daily':
+      date.setDate(date.getDate() - 1);
+      break;
+    case 'weekly':
+      date.setDate(date.getDate() - 7);
+      break;
+    case 'monthly':
+      date.setMonth(date.getMonth() - 1);
+      break;
+    case 'yearly':
+      date.setFullYear(date.getFullYear() - 1);
+      break;
+    default:
+      return new Date(0);
+  }
+  return date;
+}
+
+// Get merchant incomes for a period
+router.get('/incomes', async (req, res) => {
+  try {
+    const merchantId = await getMerchantId(req.user.userId);
+    const { period = 'all' } = req.query;
+    
+    const now = new Date();
+    let periodDate = new Date(0);
+    
+    if (period !== 'all') {
+      periodDate = getPeriodDate(now, period as string);
+    }
+    
+    const incomes = await storage.getMerchantIncomes(merchantId, periodDate);
+    res.json(incomes);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Process merchant referral commission (2% per 1000 Taka)
+router.post('/process-referral-commission', async (req, res) => {
+  try {
+    const merchantId = await getMerchantId(req.user.userId);
     const { salesAmount, referredMerchantId, saleId } = req.body;
     
     if (!salesAmount || salesAmount <= 0) {
@@ -607,6 +811,122 @@ router.put('/profile/withdrawal-info', async (req, res) => {
       merchant: updatedMerchant,
       message: 'Withdrawal information updated successfully' 
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== Withdrawal System ==========
+
+// Request withdrawal from income wallet
+router.post('/withdraw/request', async (req, res) => {
+  try {
+    const merchantId = await getMerchantId(req.user.userId);
+    const { amount, withdrawalMethod, accountDetails } = req.body;
+    
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid withdrawal amount' });
+    }
+    
+    const wallet = await storage.getMerchantWallet(merchantId);
+    if (!wallet) {
+      return res.status(404).json({ error: 'Wallet not found' });
+    }
+    
+    const availableBalance = parseFloat(wallet.incomeWalletBalance);
+    if (availableBalance < amount) {
+      return res.status(400).json({ error: 'Insufficient balance for withdrawal' });
+    }
+    
+    // Calculate VAT and service charge
+    const vatAndServiceCharge = calculateVATAndServiceCharge(amount);
+    const finalAmount = amount - vatAndServiceCharge;
+    
+    // Create withdrawal request
+    const withdrawalRequest = await storage.createWithdrawalRequest({
+      merchantId,
+      amount: amount.toString(),
+      vatAmount: vatAndServiceCharge.toString(),
+      serviceCharge: '0.00', // Service charge included in VAT
+      finalAmount: finalAmount.toString(),
+      withdrawalMethod,
+      accountDetails,
+      status: 'pending',
+      requestedAt: new Date()
+    });
+    
+    res.json({
+      success: true,
+      withdrawalRequest,
+      message: 'Withdrawal request submitted successfully'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get withdrawal requests
+router.get('/withdraw/requests', async (req, res) => {
+  try {
+    const merchantId = await getMerchantId(req.user.userId);
+    const { status = 'all' } = req.query;
+    
+    let requests = await storage.getWithdrawalRequests(merchantId);
+    
+    if (status !== 'all') {
+      requests = requests.filter(req => req.status === status);
+    }
+    
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Cancel withdrawal request
+router.post('/withdraw/cancel/:id', async (req, res) => {
+  try {
+    const merchantId = await getMerchantId(req.user.userId);
+    const requestId = req.params.id;
+    
+    const request = await storage.getWithdrawalRequest(requestId);
+    if (!request || request.merchantId !== merchantId) {
+      return res.status(404).json({ error: 'Withdrawal request not found' });
+    }
+    
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Cannot cancel non-pending withdrawal request' });
+    }
+    
+    await storage.updateWithdrawalRequest(requestId, {
+      status: 'cancelled',
+      cancelledAt: new Date()
+    });
+    
+    res.json({
+      success: true,
+      message: 'Withdrawal request cancelled successfully'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get withdrawal history
+router.get('/withdraw/history', async (req, res) => {
+  try {
+    const merchantId = await getMerchantId(req.user.userId);
+    const { period = 'all' } = req.query;
+    
+    const now = new Date();
+    let periodDate = new Date(0);
+    
+    if (period !== 'all') {
+      periodDate = getPeriodDate(now, period as string);
+    }
+    
+    const history = await storage.getWithdrawalHistory(merchantId, periodDate);
+    res.json(history);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

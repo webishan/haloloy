@@ -79,7 +79,7 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="pt-32 min-h-screen bg-gradient-to-br from-blue-50 to-primary/5 flex items-center justify-center">
+    <div className="pt-32 min-h-screen bg-gradient-to-br from-red-50 to-red-50/20 flex items-center justify-center">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-md mx-auto">
           <Card className="shadow-xl border-0">

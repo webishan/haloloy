@@ -75,7 +75,22 @@ export default function MerchantDashboard() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Points sent successfully!" });
-      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/profile'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/leaderboard'] });
+      
+      // Remove cached data to force fresh fetch
+      queryClient.removeQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.removeQueries({ queryKey: ['/api/dashboard/merchant'] });
+      queryClient.removeQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      
+      // Force immediate refetch
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: ['/api/merchant/wallet'] });
+        queryClient.refetchQueries({ queryKey: ['/api/dashboard/merchant'] });
+      }, 100);
       queryClient.invalidateQueries({ queryKey: ['/api/merchant/customers'] });
       setShowSendPointsDialog(false);
     },
@@ -90,7 +105,22 @@ export default function MerchantDashboard() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Points purchased successfully!" });
-      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/profile'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/leaderboard'] });
+      
+      // Remove cached data to force fresh fetch
+      queryClient.removeQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.removeQueries({ queryKey: ['/api/dashboard/merchant'] });
+      queryClient.removeQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      
+      // Force immediate refetch
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: ['/api/merchant/wallet'] });
+        queryClient.refetchQueries({ queryKey: ['/api/dashboard/merchant'] });
+      }, 100);
       setShowPurchaseDialog(false);
     },
     onError: (error: any) => {
@@ -104,7 +134,22 @@ export default function MerchantDashboard() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Withdrawal request submitted!" });
-      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/profile'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/leaderboard'] });
+      
+      // Remove cached data to force fresh fetch
+      queryClient.removeQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.removeQueries({ queryKey: ['/api/dashboard/merchant'] });
+      queryClient.removeQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      
+      // Force immediate refetch
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: ['/api/merchant/wallet'] });
+        queryClient.refetchQueries({ queryKey: ['/api/dashboard/merchant'] });
+      }, 100);
       setShowWithdrawDialog(false);
     },
     onError: (error: any) => {
@@ -131,11 +176,11 @@ export default function MerchantDashboard() {
 
   // Merchant data from API
   const merchantData = {
-    loyaltyPoints: walletData?.rewardPointBalance || 1000,
+    loyaltyPoints: walletData?.rewardPointBalance || 0,
     totalCashback: walletData?.cashbackIncome || 0,
-    balance: walletData?.commerceWalletBalance || 1000,
+    balance: walletData?.commerceWalletBalance || 0,
     incomeBalance: walletData?.incomeWalletBalance || 0,
-    registeredCustomers: customers?.length || 1,
+    registeredCustomers: customers?.length || 0,
     merchantName: merchantProfile?.user?.businessName || "Tech Store",
     tier: "Star Merchant",
     joinedDate: "Aug 2025",

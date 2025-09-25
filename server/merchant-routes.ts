@@ -79,6 +79,12 @@ export function setupMerchantRoutes(app: Express) {
       const totalOrders = orders.length;
       const activeProducts = products.filter(p => p.isActive).length;
       
+      console.log(`🔍 Merchant Dashboard Debug for ${req.user.userId}:`);
+      console.log(`   - Merchant ID: ${merchant.id}`);
+      console.log(`   - Loyalty Points Balance: ${merchant.loyaltyPointsBalance || 0}`);
+      console.log(`   - Available Points: ${merchant.availablePoints || 0}`);
+      console.log(`   - Total Points Purchased: ${merchant.totalPointsPurchased || 0}`);
+
       const dashboard = {
         merchant: {
           ...merchant,
@@ -181,24 +187,31 @@ export function setupMerchantRoutes(app: Express) {
   // Get merchant's scanned customers (for point transfers)
   app.get('/api/merchant/scanned-customers', authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
-      const merchantId = req.user.id;
+      const merchantId = req.user.userId;
       
       // Get merchant's scanned customers
       const merchantCustomers = await storage.getMerchantCustomers(merchantId);
       
-      // Format the response
-      const customers = merchantCustomers.map(mc => ({
-        id: mc.customerId,
-        fullName: mc.customerName,
-        email: mc.customerEmail,
-        mobileNumber: mc.customerMobile,
-        accountNumber: mc.accountNumber,
-        currentPointsBalance: mc.currentPointsBalance,
-        totalPointsEarned: mc.totalPointsEarned,
-        tier: mc.tier,
-        isActive: mc.isActive,
-        lastUpdated: mc.updatedAt
-      }));
+      // Format the response with real-time customer points balance
+      const customers = [];
+      for (const mc of merchantCustomers) {
+        // Get the actual customer profile to get current points balance
+        const customerProfile = await storage.getCustomerProfileById(mc.customerId);
+        
+        customers.push({
+          id: mc.customerId,
+          fullName: mc.customerName,
+          email: mc.customerEmail,
+          mobileNumber: mc.customerMobile,
+          accountNumber: mc.accountNumber,
+          // Use real-time balance from customer profile, fallback to merchant customer record
+          currentPointsBalance: customerProfile?.currentPointsBalance ?? mc.currentPointsBalance,
+          totalPointsEarned: customerProfile?.totalPointsEarned ?? mc.totalPointsEarned,
+          tier: customerProfile?.tier ?? mc.tier,
+          isActive: mc.isActive,
+          lastUpdated: mc.updatedAt
+        });
+      }
 
       res.json(customers);
     } catch (error) {
@@ -248,7 +261,7 @@ export function setupMerchantRoutes(app: Express) {
   app.post('/api/merchant/transfer-points', authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
       const { customerId, points, description } = req.body;
-      const merchantId = req.user.id;
+      const merchantId = req.user.userId;
 
       if (!customerId || !points || !description) {
         return res.status(400).json({ message: 'Customer ID, points, and description are required' });
@@ -292,8 +305,20 @@ export function setupMerchantRoutes(app: Express) {
         totalPointsEarned: customerProfile.totalPointsEarned + pointsAmount
       });
 
-      // Update merchant available points
+      // Update merchant customer record to keep it synchronized
+      try {
+        await storage.updateMerchantCustomer(merchantId, customerProfile.id, {
+          currentPointsBalance: customerProfile.currentPointsBalance + pointsAmount,
+          totalPointsEarned: customerProfile.totalPointsEarned + pointsAmount,
+          tier: customerProfile.tier
+        });
+      } catch (error) {
+        console.log('Note: Merchant customer record not found or failed to update:', error);
+      }
+
+      // Update merchant available points - keep both fields in sync
       await storage.updateMerchant(merchantId, {
+        loyaltyPointsBalance: (merchant.loyaltyPointsBalance || 0) - pointsAmount,
         availablePoints: merchant.availablePoints - pointsAmount,
         totalPointsDistributed: merchant.totalPointsDistributed + pointsAmount
       });
@@ -314,7 +339,7 @@ export function setupMerchantRoutes(app: Express) {
   app.post('/api/merchant/transfer-points-qr', authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
       const { qrCode, points, description } = req.body;
-      const merchantId = req.user.id;
+      const merchantId = req.user.userId;
 
       if (!qrCode || !points || !description) {
         return res.status(400).json({ message: 'QR code, points, and description are required' });
@@ -368,8 +393,20 @@ export function setupMerchantRoutes(app: Express) {
         totalPointsEarned: customerProfile.totalPointsEarned + pointsAmount
       });
 
-      // Update merchant available points
+      // Update merchant customer record to keep it synchronized
+      try {
+        await storage.updateMerchantCustomer(merchantId, customerProfile.id, {
+          currentPointsBalance: customerProfile.currentPointsBalance + pointsAmount,
+          totalPointsEarned: customerProfile.totalPointsEarned + pointsAmount,
+          tier: customerProfile.tier
+        });
+      } catch (error) {
+        console.log('Note: Merchant customer record not found or failed to update:', error);
+      }
+
+      // Update merchant available points - keep both fields in sync
       await storage.updateMerchant(merchantId, {
+        loyaltyPointsBalance: (merchant.loyaltyPointsBalance || 0) - pointsAmount,
         availablePoints: merchant.availablePoints - pointsAmount,
         totalPointsDistributed: merchant.totalPointsDistributed + pointsAmount
       });
@@ -398,7 +435,7 @@ export function setupMerchantRoutes(app: Express) {
   app.post('/api/merchant/profile', authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
       const { businessName, businessType, address, phone, country } = req.body;
-      const merchantId = req.user.id;
+      const merchantId = req.user.userId;
 
       // Check if merchant profile already exists
       const existingMerchant = await storage.getMerchantByUserId(merchantId);
@@ -449,7 +486,7 @@ export function setupMerchantRoutes(app: Express) {
   app.post('/api/merchant/scan-customer', authenticateToken, async (req, res) => {
     try {
       const { qrCode } = req.body;
-      const merchantId = req.user.id;
+      const merchantId = req.user.userId;
 
       if (!qrCode) {
         return res.status(400).json({ error: 'QR code is required' });

@@ -17,12 +17,17 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { useSimpleRealtime } from '@/hooks/use-simple-realtime';
+import { NotificationProvider } from '@/hooks/use-notifications';
+import NotificationBadge, { NotificationWrapper, MessageNotificationBadge } from '@/components/NotificationBadge';
+import SecureChat from '@/components/SecureChat';
 import { 
   LayoutDashboard, Package, ShoppingCart, Coins, BarChart, 
   Plus, Edit, Trash2, DollarSign, TrendingUp, Users, Store,
   Star, Award, Calendar, Eye, Settings, Target, Copy,
   CreditCard, Wallet, Send, Download, Gift, Crown,
   ArrowUpRight, ArrowDownRight, Filter, Search, MoreHorizontal,
+  RefreshCw, MessageCircle,
   QrCode, UserPlus, Activity, PieChart, LineChart, Bell,
   Menu, X as XIcon, Home, Infinity, Trophy, User, Zap,
   AlertCircle, Percent, Calculator, Building2, Upload
@@ -235,18 +240,95 @@ export default function MerchantDashboard() {
 
   const { data: dashboardData = {}, isLoading } = useQuery({
     queryKey: ['/api/dashboard/merchant'],
-    enabled: !!user && user.role === 'merchant'
+    enabled: !!user && user.role === 'merchant',
+    refetchInterval: 30000, // Refresh every 30 seconds instead of 3 seconds
+    refetchIntervalInBackground: false, // Don't refetch in background
+    staleTime: 10000, // Consider data fresh for 10 seconds
+    cacheTime: 300000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: true // Only refetch on component mount
   });
 
   const { data: walletData = {}, isLoading: walletsLoading } = useQuery({
     queryKey: ['/api/merchant/wallet'],
-    enabled: !!user && user.role === 'merchant'
+    enabled: !!user && user.role === 'merchant',
+    refetchInterval: 30000, // Refresh every 30 seconds instead of 3 seconds
+    refetchIntervalInBackground: false, // Don't refetch in background
+    staleTime: 10000, // Consider data fresh for 10 seconds
+    cacheTime: 300000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: true // Only refetch on component mount
   });
 
-  const { data: customers = [] } = useQuery({
+  const { data: customers = [], refetch: refetchCustomers } = useQuery({
     queryKey: ['/api/merchant/scanned-customers'],
-    enabled: !!user && user.role === 'merchant'
+    enabled: !!user && user.role === 'merchant',
+    refetchInterval: 30000, // Refresh every 30 seconds instead of 3 seconds
+    refetchIntervalInBackground: false, // Don't refetch in background
+    staleTime: 10000, // Consider data fresh for 10 seconds
+    cacheTime: 300000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: true, // Only refetch on component mount
+    retry: 3, // Retry failed requests
+    retryDelay: 1000, // Wait 1 second between retries
+    onSuccess: (data) => {
+      console.log('✅ Customer list updated:', data);
+      // Force re-render if we have customers
+      if (data && data.length > 0) {
+        console.log('📋 Available customers:', data.map(c => `${c.fullName} - ${c.accountNumber}`));
+      }
+    }
   });
+
+  // Only refresh on component mount, not continuously
+  useEffect(() => {
+    if (user && user.role === 'merchant') {
+      // Only clear cache on initial load, not continuously
+      queryClient.invalidateQueries(['/api/merchant/scanned-customers']);
+    }
+  }, [user, queryClient]);
+
+  // Simple real-time updates for all merchant data - reduced frequency
+  const { forceRefresh } = useSimpleRealtime([
+    '/api/merchant/wallet',
+    '/api/dashboard/merchant',
+    '/api/merchant/scanned-customers',
+    '/api/merchant/profile',
+    '/api/merchant/leaderboard'
+  ], 30000); // Update every 30 seconds instead of 1 second
+
+  // Manual refresh function for immediate updates
+  const handleManualRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+    toast({ title: "Refreshing Data", description: "Merchant data is being refreshed..." });
+  };
+
+  // Listen for point distribution updates
+  useEffect(() => {
+    const checkForPointUpdates = () => {
+      // Check if loyalty points have increased
+      const currentPoints = walletData?.rewardPointWallet?.availablePoints || 0;
+      const previousPoints = localStorage.getItem('previousLoyaltyPoints');
+      
+      if (previousPoints && parseInt(previousPoints) < currentPoints) {
+        const pointsGained = currentPoints - parseInt(previousPoints);
+        toast({ 
+          title: "🎉 Points Received!", 
+          description: `You received ${pointsGained} loyalty points from admin distribution!`,
+          duration: 5000
+        });
+      }
+      
+      // Store current points for next comparison
+      localStorage.setItem('previousLoyaltyPoints', currentPoints.toString());
+    };
+
+    if (walletData?.rewardPointWallet?.availablePoints !== undefined) {
+      checkForPointUpdates();
+    }
+  }, [walletData?.rewardPointWallet?.availablePoints]);
 
   const { data: leaderboard = [] } = useQuery({
     queryKey: ['/api/merchant/leaderboard'],
@@ -265,8 +347,16 @@ export default function MerchantDashboard() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Points sent successfully!" });
-      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallets'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      
+      // Force immediate refresh
+      forceRefresh();
+      
+      // Additional immediate updates
+      setTimeout(() => {
+        refetchCustomers(); // Refresh customer list immediately
+        forceRefresh(); // Force another refresh
+      }, 100);
+      
       setShowSendPointsDialog(false);
     },
     onError: (error: any) => {
@@ -280,7 +370,8 @@ export default function MerchantDashboard() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Points purchased successfully!" });
-      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
       setShowPurchaseDialog(false);
     },
     onError: (error: any) => {
@@ -294,7 +385,8 @@ export default function MerchantDashboard() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Withdrawal request submitted!" });
-      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
       setShowWithdrawDialog(false);
     },
     onError: (error: any) => {
@@ -321,9 +413,9 @@ export default function MerchantDashboard() {
 
   // Merchant data from API
   const merchantData = {
-    loyaltyPoints: walletData?.rewardPointBalance || 1000,
+    loyaltyPoints: walletData?.rewardPointWallet?.availablePoints || 0,
     totalCashback: walletData?.cashbackIncome || 0,
-    balance: walletData?.commerceWalletBalance || 1000,
+    balance: walletData?.commerceWalletBalance || 0,
     incomeBalance: walletData?.incomeWalletBalance || 0,
     registeredCustomers: customers?.length || 0,
     merchantName: merchantProfile?.user?.businessName || "Tech Store",
@@ -331,7 +423,7 @@ export default function MerchantDashboard() {
     joinedDate: "Aug 2025",
     referralLink: "komarce.com/ref/m001",
     // Wallet breakdown
-    rewardPointBalance: walletData?.rewardPointBalance || 0,
+    rewardPointBalance: walletData?.rewardPointWallet?.availablePoints || 0,
     totalPointsIssued: walletData?.totalPointsIssued || 0,
     cashbackIncome: walletData?.cashbackIncome || 0,
     referralIncome: walletData?.referralIncome || 0,
@@ -383,9 +475,20 @@ export default function MerchantDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
           <p className="text-gray-600">Here's what's happening with your business today</p>
         </div>
-        <div className="relative">
-          <Bell className="w-6 h-6 text-gray-600" />
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">1</span>
+        <div className="flex items-center gap-4">
+          <Button 
+            onClick={handleManualRefresh}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
+          <div className="relative">
+            <Bell className="w-6 h-6 text-gray-600" />
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">1</span>
+          </div>
         </div>
       </div>
 
@@ -404,8 +507,8 @@ export default function MerchantDashboard() {
                   +12.5% from last month
                 </p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center">
-                <Infinity className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+                <Infinity className="w-6 h-6 text-red-600" />
               </div>
             </div>
           </CardContent>
@@ -463,8 +566,8 @@ export default function MerchantDashboard() {
                   +10 new this week
                 </p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+                <Users className="w-6 h-6 text-red-500" />
               </div>
             </div>
           </CardContent>
@@ -505,7 +608,7 @@ export default function MerchantDashboard() {
           <CardContent className="space-y-4">
             <Button 
               onClick={() => setShowQRScanDialog(true)}
-              className="w-full justify-start bg-purple-600 hover:bg-purple-700"
+              className="w-full justify-start bg-red-600 hover:bg-red-700"
             >
               <QrCode className="w-4 h-4 mr-2" />
               Scan Customer QR
@@ -565,7 +668,7 @@ export default function MerchantDashboard() {
         <h2 className="text-2xl font-bold text-gray-900">Reward Point Wallet</h2>
         <Button onClick={() => setShowSendPointsDialog(true)}>
           <Plus className="w-4 h-4 mr-2" />
-          Issue Points
+          Issue Loyalty Points
         </Button>
       </div>
 
@@ -888,7 +991,30 @@ export default function MerchantDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Customer List</CardTitle>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Customer List</CardTitle>
+              <p className="text-sm text-gray-500 mt-1">
+                {customers.length > 0 ? `Showing ${customers.length} customer(s)` : 'No customers found'}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Force refresh customer list
+                queryClient.invalidateQueries(['/api/merchant/scanned-customers']);
+                queryClient.removeQueries(['/api/merchant/scanned-customers']); // Remove all cached data
+                setTimeout(() => {
+                  refetchCustomers();
+                }, 100);
+              }}
+              className="text-blue-600 border-blue-300 hover:bg-blue-50"
+            >
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Clear Cache & Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -897,7 +1023,7 @@ export default function MerchantDashboard() {
                 <TableHead>Name</TableHead>
                 <TableHead>Account Number</TableHead>
                 <TableHead>Mobile</TableHead>
-                <TableHead>Current Points</TableHead>
+                <TableHead>Loyalty Points</TableHead>
                 <TableHead>Tier</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -1411,7 +1537,14 @@ export default function MerchantDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <NotificationProvider 
+      currentUser={user ? {
+        id: user.id,
+        token: localStorage.getItem('token') || '',
+        role: user.role
+      } : undefined}
+    >
+      <div className="min-h-screen bg-gray-50">
       {/* Top Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1439,6 +1572,19 @@ export default function MerchantDashboard() {
                 <Star className="w-4 h-4 mr-1" />
                 {merchantData.tier}
               </Badge>
+              
+              {/* Notification Bell */}
+              <NotificationWrapper badgeProps={{ type: 'total', size: 'sm' }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveSection("chat")}
+                  className="relative"
+                >
+                  <Bell className="w-5 h-5 text-gray-600" />
+                </Button>
+              </NotificationWrapper>
+              
               <div className="text-sm text-gray-600">
                 <span className="font-medium">75% to next rank</span>
               </div>
@@ -1571,6 +1717,17 @@ export default function MerchantDashboard() {
                 <BarChart className="w-4 h-4 mr-2" />
                 Distribution Reports
               </Button>
+              
+              <NotificationWrapper badgeProps={{ type: 'messages' }}>
+                <Button
+                  variant={activeSection === "chat" ? "default" : "ghost"}
+                  className="w-full justify-start"
+                  onClick={() => setActiveSection("chat")}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Secure Chat
+                </Button>
+              </NotificationWrapper>
             </nav>
 
             {/* Star Merchant Widget */}
@@ -1604,6 +1761,41 @@ export default function MerchantDashboard() {
             {activeSection === 'product-sales' && renderProductSales()}
             {activeSection === 'activity-tracking' && renderActivityTracking()}
             {activeSection === 'distribution-reports' && renderDistributionReports()}
+            {activeSection === 'chat' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-gray-900">Secure Chat</h2>
+                  <Badge variant="outline" className="text-blue-600 border-blue-300">
+                    <MessageCircle className="w-4 h-4 mr-1" />
+                    Merchant Chat
+                  </Badge>
+                </div>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <MessageCircle className="w-5 h-5 mr-2" />
+                      Merchant Secure Chat
+                    </CardTitle>
+                    <p className="text-sm text-gray-600">
+                      Communicate with local administrators and customers securely
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {user && (
+                      <SecureChat 
+                        currentUser={{
+                          id: user.id,
+                          name: `${user.firstName} ${user.lastName}`,
+                          role: user.role,
+                          token: localStorage.getItem('token') || ''
+                        }}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
             {activeSection === 'marketing' && (
               <div className="text-center py-12">
                 <Target className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -1616,34 +1808,105 @@ export default function MerchantDashboard() {
       </div>
 
       {/* Send Points Dialog */}
-      <Dialog open={showSendPointsDialog} onOpenChange={setShowSendPointsDialog}>
+      <Dialog open={showSendPointsDialog} onOpenChange={(open) => {
+        setShowSendPointsDialog(open);
+        if (open) {
+          // Force refresh customer list when dialog opens
+          queryClient.invalidateQueries(['/api/merchant/scanned-customers']);
+          queryClient.removeQueries(['/api/merchant/scanned-customers']); // Remove all cached data
+          setTimeout(() => {
+            refetchCustomers();
+          }, 100);
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send Points to Customer</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>Send Loyalty Points to Customer</DialogTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Force refresh customer list
+                  queryClient.invalidateQueries(['/api/merchant/scanned-customers']);
+                  queryClient.removeQueries(['/api/merchant/scanned-customers']); // Remove all cached data
+                  setTimeout(() => {
+                    refetchCustomers();
+                  }, 100);
+                }}
+                className="text-blue-600 border-blue-300 hover:bg-blue-50"
+              >
+                <RefreshCw className="w-4 h-4 mr-1" />
+                Clear Cache & Refresh
+              </Button>
+            </div>
           </DialogHeader>
           <form onSubmit={(e) => {
             e.preventDefault();
             const formData = new FormData(e.target as HTMLFormElement);
+            const customerId = formData.get('customerId') as string;
+            const points = parseInt(formData.get('points') as string);
+            const description = formData.get('description') as string;
+            
+            // Validate customer selection
+            if (!customerId || customerId.trim() === '') {
+              toast({ 
+                title: "Error", 
+                description: "Please select a customer from the dropdown.", 
+                variant: "destructive" 
+              });
+              return;
+            }
+            
+            // Validate that customer exists in scanned customers
+            const selectedCustomer = customers.find((c: any) => c.id === customerId);
+            if (!selectedCustomer) {
+              toast({ 
+                title: "Error", 
+                description: "Selected customer not found. Please refresh and try again.", 
+                variant: "destructive" 
+              });
+              return;
+            }
+            
             sendPointsMutation.mutate({
-              customerId: formData.get('customerId') as string,
-              points: parseInt(formData.get('points') as string),
-              description: formData.get('description') as string
+              customerId,
+              points,
+              description
             });
           }} className="space-y-4">
             <div>
               <Label htmlFor="customerId">Customer</Label>
-              <Select name="customerId" required>
+              <Select name="customerId" required key={customers.length}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select customer" />
                 </SelectTrigger>
                 <SelectContent>
-                  {customers.map((customer: any) => (
-                    <SelectItem key={customer.id} value={customer.id}>
-                      {customer.fullName} - {customer.accountNumber} ({customer.currentPointsBalance} points)
-                    </SelectItem>
-                  ))}
+                  {customers.length > 0 ? (
+                    customers.map((customer: any) => (
+                      <SelectItem key={customer.id} value={customer.id}>
+                        {customer.fullName} - {customer.accountNumber} ({customer.currentPointsBalance} points)
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-2 text-sm text-gray-500">
+                      No scanned customers found. Please scan a customer QR code first.
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
+              {customers.length === 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Tip: Use "Scan Customer QR" to add customers to your list
+                </p>
+              )}
+              {customers.length > 0 && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                  <p className="text-xs text-green-600 font-medium">
+                    ✅ {customers.length} customer(s) available for point transfer
+                  </p>
+                </div>
+              )}
             </div>
             <div>
               <Label htmlFor="points">Points</Label>
@@ -1658,7 +1921,7 @@ export default function MerchantDashboard() {
                 Cancel
               </Button>
               <Button type="submit" disabled={sendPointsMutation.isPending}>
-                {sendPointsMutation.isPending ? 'Sending...' : 'Send Points'}
+                {sendPointsMutation.isPending ? 'Sending...' : 'Send Loyalty Points'}
               </Button>
             </div>
           </form>
@@ -1677,7 +1940,12 @@ export default function MerchantDashboard() {
                 title: "Customer Added!",
                 description: `${customer.fullName} has been added to your customer list.`,
               });
-              queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+              // Force refresh customer list immediately with aggressive cache clearing
+              queryClient.invalidateQueries(['/api/merchant/scanned-customers']);
+              queryClient.removeQueries(['/api/merchant/scanned-customers']);
+              setTimeout(() => {
+                refetchCustomers();
+              }, 100);
               setShowQRScanDialog(false);
             }}
             onError={(error) => {
@@ -1988,5 +2256,6 @@ export default function MerchantDashboard() {
         </DialogContent>
       </Dialog>
     </div>
+    </NotificationProvider>
   );
 }

@@ -32,6 +32,221 @@ function authorizeRole(roles: string[]) {
 }
 
 export function setupAdminRoutes(app: Express) {
+  // ========== Global Admin Dashboard Analytics ==========
+  
+  // Global Admin Dashboard - Total Global Merchants
+  app.get('/api/admin/global/merchants', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { period = 'all' } = req.query;
+      const merchants = await storage.getGlobalMerchants(period as string);
+      res.json(merchants);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch global merchants' });
+    }
+  });
+
+  // Global Admin Dashboard - Total Global Customers
+  app.get('/api/admin/global/customers', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { period = 'all' } = req.query;
+      const customers = await storage.getGlobalCustomers(period as string);
+      res.json(customers);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch global customers' });
+    }
+  });
+
+  // Global Admin Dashboard - Reward Points Analytics
+  app.get('/api/admin/global/reward-points', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { period = 'all' } = req.query;
+      const rewardPoints = await storage.getGlobalRewardPoints(period as string);
+      res.json(rewardPoints);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch reward points analytics' });
+    }
+  });
+
+  // Global Admin Dashboard - Serial Numbers
+  app.get('/api/admin/global/serial-numbers', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { period = 'all' } = req.query;
+      const serialNumbers = await storage.getGlobalSerialNumbers(period as string);
+      res.json(serialNumbers);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch serial numbers' });
+    }
+  });
+
+  // Global Admin Dashboard - Withdrawal Analytics
+  app.get('/api/admin/global/withdrawals', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { period = 'all' } = req.query;
+      const withdrawals = await storage.getGlobalWithdrawals(period as string);
+      res.json(withdrawals);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch withdrawal analytics' });
+    }
+  });
+
+  // Global Admin Dashboard - VAT & Service Charge
+  app.get('/api/admin/global/vat-service-charge', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { period = 'all' } = req.query;
+      const vatServiceCharge = await storage.getGlobalVATServiceCharge(period as string);
+      res.json(vatServiceCharge);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch VAT & service charge analytics' });
+    }
+  });
+
+  // Global Admin - Commission & Percentage Settings
+  app.get('/api/admin/global/commission-settings', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const settings = await storage.getCommissionSettings();
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch commission settings' });
+    }
+  });
+
+  app.post('/api/admin/global/commission-settings', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { confirmPassword, ...settings } = req.body;
+      
+      // Verify password before saving
+      const admin = await storage.getAdmin(req.user.userId);
+      if (!admin || admin.password !== confirmPassword) {
+        return res.status(400).json({ message: 'Invalid confirmation password' });
+      }
+
+      const updatedSettings = await storage.updateCommissionSettings(settings);
+      res.json(updatedSettings);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to update commission settings' });
+    }
+  });
+
+  // Global Admin - Direct Point Distribution to Local Admins
+  app.post('/api/admin/global/distribute-points', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { localAdminId, points, description, confirmPassword } = req.body;
+      
+      // Verify password
+      const admin = await storage.getAdmin(req.user.userId);
+      if (!admin || admin.password !== confirmPassword) {
+        return res.status(400).json({ message: 'Invalid confirmation password' });
+      }
+
+      // Check if global admin has enough points
+      if (admin.pointsBalance < points) {
+        return res.status(400).json({ message: 'Insufficient points balance' });
+      }
+
+      // Distribute points
+      const distribution = await storage.distributePointsToLocalAdmin({
+        distributorId: req.user.userId,
+        receiverId: localAdminId,
+        points,
+        description,
+        type: 'global_to_local'
+      });
+
+      res.json(distribution);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to distribute points' });
+    }
+  });
+
+  // ========== Local Admin Dashboard Analytics ==========
+  
+  // Local Admin Dashboard - Country-specific data
+  app.get('/api/admin/local/dashboard', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const admin = await storage.getAdmin(req.user.userId);
+      if (!admin) {
+        return res.status(404).json({ message: 'Admin not found' });
+      }
+
+      const { period = 'all' } = req.query;
+      const dashboardData = await storage.getLocalAdminDashboard(admin.country, period as string);
+      res.json(dashboardData);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch local admin dashboard' });
+    }
+  });
+
+  // Local Admin Dashboard with country parameter (for dynamic country selection)
+  app.get('/api/admin/local-dashboard/:country', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const { country } = req.params;
+      const { period = 'all' } = req.query;
+      
+      // Get merchants and customers for this country
+      const merchants = await storage.getMerchants(country);
+      const customers = await storage.getCustomers(country);
+      
+      // Calculate active merchants and total customers
+      const activeMerchants = merchants.filter(m => m.isActive).length;
+      const totalCustomers = customers.length;
+      
+      // Basic dashboard data for the local admin
+      const dashboardData = {
+        country,
+        merchants: {
+          total: merchants.length,
+          active: activeMerchants,
+          regular: merchants.filter(m => !m.isEMerchant).length,
+          eMerchant: merchants.filter(m => m.isEMerchant).length,
+        },
+        customers: {
+          total: totalCustomers,
+          active: customers.filter(c => c.isActive).length,
+        },
+        overview: {
+          activeMerchants,
+          totalCustomers,
+          totalMerchants: merchants.length
+        }
+      };
+      
+      res.json(dashboardData);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch local admin dashboard' });
+    }
+  });
+
+  // Local Admin - Distribute Points to Merchants
+  app.post('/api/admin/local/distribute-to-merchants', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const { merchantIds, points, description, confirmPassword } = req.body;
+      
+      // Verify password
+      const admin = await storage.getAdmin(req.user.userId);
+      if (!admin || admin.password !== confirmPassword) {
+        return res.status(400).json({ message: 'Invalid confirmation password' });
+      }
+
+      // Check if local admin has enough points
+      if (admin.pointsBalance < points * merchantIds.length) {
+        return res.status(400).json({ message: 'Insufficient points balance' });
+      }
+
+      // Distribute points to multiple merchants
+      const distributions = await storage.distributePointsToMerchants({
+        distributorId: req.user.userId,
+        merchantIds,
+        points,
+        description,
+        type: 'local_to_merchant'
+      });
+
+      res.json(distributions);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to distribute points to merchants' });
+    }
+  });
+
   // ========== Point Generation Requests (Local -> Global) ==========
   // Create a new request (Local Admin)
   app.post('/api/admin/point-generation-request', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
@@ -88,12 +303,24 @@ export function setupAdminRoutes(app: Express) {
       if (!request || request.status !== 'pending') {
         return res.status(400).json({ message: 'Invalid request' });
       }
+      // Ensure the global admin has enough balance to fulfill the request
+      const globalAdmin = await storage.getAdmin(req.user.userId);
+      if (!globalAdmin || (globalAdmin.pointsBalance || 0) < request.pointsRequested) {
+        return res.status(400).json({ message: 'Insufficient global admin balance' });
+      }
       // Update request
       const updated = await storage.updatePointGenerationRequest(request.id, {
         status: 'approved',
         reviewedBy: req.user.userId,
         reviewedAt: new Date()
       });
+      // Debit global admin balance and increment distribution stats
+      const debited = await storage.updateAdmin(req.user.userId, {
+        pointsBalance: (globalAdmin.pointsBalance || 0) - request.pointsRequested,
+        totalPointsDistributed: (globalAdmin.totalPointsDistributed || 0) + request.pointsRequested
+      });
+      const newGlobalBalance = (debited.pointsBalance || ((globalAdmin.pointsBalance || 0) - request.pointsRequested));
+
       // Credit local admin
       const receiver = await storage.getAdmin(request.requesterId);
       if (!receiver) {
@@ -113,7 +340,47 @@ export function setupAdminRoutes(app: Express) {
         distributionType: 'admin_to_admin',
         status: 'completed'
       });
-      res.json(updated);
+
+      // Real-time Socket.IO updates
+      const io = (global as any).socketIO;
+      if (io) {
+        // Emit balance update to global admin
+        io.to(req.user.userId).emit('balanceUpdate', {
+          type: 'global_admin_balance',
+          newBalance: newGlobalBalance,
+          change: -request.pointsRequested,
+          reason: 'Point request approved',
+          timestamp: new Date().toISOString()
+        });
+
+        // Emit balance update to local admin
+        io.to(request.requesterId).emit('balanceUpdate', {
+          type: 'local_admin_balance',
+          newBalance: (receiverAdmin?.pointsBalance || 0) + request.pointsRequested,
+          change: request.pointsRequested,
+          reason: 'Point request approved',
+          timestamp: new Date().toISOString()
+        });
+
+        // Emit request status update to local admin
+        io.to(request.requesterId).emit('requestStatusUpdate', {
+          requestId: request.id,
+          status: 'approved',
+          points: request.pointsRequested,
+          approvedBy: req.user.userId,
+          timestamp: new Date().toISOString()
+        });
+
+        // Emit notification to local admin
+        io.to(request.requesterId).emit('notification', {
+          type: 'success',
+          title: 'Point Request Approved',
+          message: `Your request for ${request.pointsRequested.toLocaleString()} points has been approved!`,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      res.json({ ...updated, newGlobalBalance });
     } catch (error: any) {
       res.status(500).json({ message: error.message || 'Failed to approve request' });
     }
@@ -131,6 +398,28 @@ export function setupAdminRoutes(app: Express) {
         reviewedBy: req.user.userId,
         reviewedAt: new Date()
       });
+
+      // Real-time Socket.IO updates
+      const io = (global as any).socketIO;
+      if (io) {
+        // Emit request status update to local admin
+        io.to(request.requesterId).emit('requestStatusUpdate', {
+          requestId: request.id,
+          status: 'rejected',
+          points: request.pointsRequested,
+          rejectedBy: req.user.userId,
+          timestamp: new Date().toISOString()
+        });
+
+        // Emit notification to local admin
+        io.to(request.requesterId).emit('notification', {
+          type: 'error',
+          title: 'Point Request Rejected',
+          message: `Your request for ${request.pointsRequested.toLocaleString()} points has been rejected.`,
+          timestamp: new Date().toISOString()
+        });
+      }
+
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ message: error.message || 'Failed to reject request' });
@@ -441,10 +730,30 @@ export function setupAdminRoutes(app: Express) {
         });
       } else if (toUserType === 'merchant') {
         const merchant = await storage.getMerchantByUserId(toUserId);
+        console.log(`🔍 Found merchant for userId ${toUserId}:`, merchant ? `ID: ${merchant.id}, Current balance: ${merchant.loyaltyPointsBalance || 0}` : 'NOT FOUND');
+        
         if (merchant) {
+          const newLoyaltyBalance = (merchant.loyaltyPointsBalance || 0) + points;
+          const newAvailablePoints = (merchant.availablePoints || 0) + points;
+          
+          console.log(`💰 Updating merchant ${toUserId}:`);
+          console.log(`   - Previous loyalty balance: ${merchant.loyaltyPointsBalance || 0}`);
+          console.log(`   - Adding points: ${points}`);
+          console.log(`   - New loyalty balance: ${newLoyaltyBalance}`);
+          console.log(`   - New available points: ${newAvailablePoints}`);
+          
           await storage.updateMerchant(toUserId, {
-            loyaltyPointsBalance: (merchant.loyaltyPointsBalance || 0) + points
+            // Keep both fields in sync so all endpoints/UIS reflect correctly
+            loyaltyPointsBalance: newLoyaltyBalance,
+            availablePoints: newAvailablePoints,
+            totalPointsPurchased: (merchant.totalPointsPurchased || 0) + points
           });
+          
+          // Verify the update worked
+          const updatedMerchant = await storage.getMerchantByUserId(toUserId);
+          console.log(`✅ Verification - Updated merchant balance: ${updatedMerchant?.loyaltyPointsBalance || 0}`);
+        } else {
+          console.log(`❌ ERROR: Merchant not found for userId: ${toUserId}`);
         }
       }
       
@@ -707,13 +1016,28 @@ export function setupAdminRoutes(app: Express) {
   // Get transaction history for admin
   app.get('/api/admin/transactions', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.userId || req.user.id;
       
       // Get admin data for balance info
       const adminData = await storage.getAdmin(userId);
       
-      // For now, return empty transactions until we implement getPointDistributionsByUser
-      const transactionHistory: any[] = [];
+      // Get point distributions where this admin is involved
+      const distributions = await storage.getPointDistributions();
+      const userDistributions = distributions.filter(d => 
+        d.fromUserId === userId || d.toUserId === userId || d.fromUserId === 'system'
+      );
+      
+      // Convert distributions to transaction format
+      const transactionHistory = userDistributions.map(dist => ({
+        id: dist.id,
+        type: dist.fromUserId === 'system' ? 'credit' : dist.toUserId === userId ? 'credit' : 'debit',
+        amount: dist.points,
+        description: dist.description,
+        createdAt: dist.createdAt,
+        status: dist.status,
+        distributionType: dist.distributionType,
+        balanceAfter: dist.toUserId === userId ? adminData?.pointsBalance : undefined
+      })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       
       res.json({
         transactions: transactionHistory,
@@ -731,6 +1055,12 @@ export function setupAdminRoutes(app: Express) {
   // Get real-time admin balance
   app.get('/api/admin/balance', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
     try {
+      // Prevent any HTTP caching so balances always reflect latest state
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      // Bust conditional requests by changing ETag each response
+      res.setHeader('ETag', `bal-${Date.now()}`);
       const userId = req.user.userId;
       const adminData = await storage.getAdmin(userId);
       

@@ -181,9 +181,9 @@ export default function CustomerLogin() {
           <div className="text-center mt-6">
             <p className="text-sm text-gray-600">
               Looking for a different login?{' '}
-              <Link href="/admin-login" className="text-blue-600 hover:underline">Admin</Link>
+              <Link href="/admin-login" className="text-red-600 hover:underline">Admin</Link>
               {' | '}
-              <Link href="/merchant-login" className="text-orange-600 hover:underline">Merchant</Link>
+              <Link href="/merchant-login" className="text-red-500 hover:underline">Merchant</Link>
             </p>
           </div>
         </div>

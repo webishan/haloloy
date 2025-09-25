@@ -1,4 +1,5 @@
 import { Link } from 'wouter';
+import { Logo } from '@/components/ui/logo';
 import { Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin } from 'lucide-react';
 
 export default function Footer() {
@@ -10,11 +11,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Company Info */}
           <div className="col-span-1 lg:col-span-2">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">K</span>
-              </div>
-              <span className="text-xl font-bold">KOMARCE</span>
+            <div className="mb-4">
+              <Logo size="md" className="text-white" />
             </div>
             <p className="text-gray-400 mb-6 max-w-md">
               A unified e-commerce and loyalty ecosystem focused on sustainability. 

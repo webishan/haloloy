@@ -303,8 +303,8 @@ export default function MerchantQRScan() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="text-center">
-                <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <QrCode className="h-6 w-6 text-blue-600" />
+                <div className="bg-red-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <QrCode className="h-6 w-6 text-red-600" />
                 </div>
                 <h3 className="font-semibold mb-1">1. Scan QR Code</h3>
                 <p className="text-sm text-gray-600">Customer shows their QR code or shares the link</p>
@@ -317,8 +317,8 @@ export default function MerchantQRScan() {
                 <p className="text-sm text-gray-600">Customer profile is automatically created in your system</p>
               </div>
               <div className="text-center">
-                <div className="bg-purple-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <CreditCard className="h-6 w-6 text-purple-600" />
+                <div className="bg-red-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <CreditCard className="h-6 w-6 text-red-500" />
                 </div>
                 <h3 className="font-semibold mb-1">3. Transfer Points</h3>
                 <p className="text-sm text-gray-600">Enter points and transfer instantly to customer</p>

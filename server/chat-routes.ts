@@ -38,6 +38,67 @@ const validateMessageHierarchy = (senderRole: string, receiverRole: string): boo
 
 export function setupChatRoutes(app: Express) {
   
+  // Get unread message count for current user
+  app.get('/api/chat/unread-count', authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+      
+      // Get all conversations where user is a participant
+      const conversations = await storage.getUserConversations(userId, userRole);
+      
+      let totalUnreadCount = 0;
+      for (const conversation of conversations) {
+        const unreadCount = await storage.getUnreadMessageCount(conversation.id, userId);
+        totalUnreadCount += unreadCount;
+      }
+      
+      res.json({ count: totalUnreadCount });
+    } catch (error) {
+      console.error('Get unread count error:', error);
+      res.status(500).json({ error: 'Failed to get unread count' });
+    }
+  });
+
+  // Get recent unread messages for notifications
+  app.get('/api/chat/unread-messages', authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const limit = parseInt(req.query.limit as string) || 10;
+      
+      // Get recent unread messages
+      const unreadMessages = await storage.getRecentUnreadMessages(userId, limit);
+      
+      res.json(unreadMessages);
+    } catch (error) {
+      console.error('Get unread messages error:', error);
+      res.status(500).json({ error: 'Failed to get unread messages' });
+    }
+  });
+
+  // Mark messages as read
+  app.post('/api/chat/mark-read', authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const { conversationId, messageIds } = req.body;
+      
+      if (conversationId) {
+        // Mark all messages in conversation as read
+        await storage.markConversationMessagesAsRead(conversationId, userId);
+      } else if (messageIds && Array.isArray(messageIds)) {
+        // Mark specific messages as read
+        for (const messageId of messageIds) {
+          await storage.markMessageAsRead(messageId, userId);
+        }
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Mark messages as read error:', error);
+      res.status(500).json({ error: 'Failed to mark messages as read' });
+    }
+  });
+  
   // Get available users to chat with based on role hierarchy
   app.get('/api/chat/users', authenticateToken, async (req: any, res) => {
     try {

@@ -149,7 +149,7 @@ export default function MerchantLogin() {
               <div className="text-center">
                 <p className="text-sm text-gray-600">
                   Want to become a merchant?{' '}
-                  <Link href="/register" className="text-primary hover:underline font-medium">
+                  <Link href="/register?role=merchant" className="text-primary hover:underline font-medium">
                     Apply here
                   </Link>
                 </p>
@@ -198,9 +198,9 @@ export default function MerchantLogin() {
           <div className="text-center mt-6">
             <p className="text-sm text-gray-600">
               Looking for a different login?{' '}
-              <Link href="/admin-login" className="text-blue-600 hover:underline">Admin</Link>
+              <Link href="/admin-login" className="text-red-600 hover:underline">Admin</Link>
               {' | '}
-              <Link href="/customer-login" className="text-green-600 hover:underline">Customer</Link>
+              <Link href="/customer-login" className="text-red-500 hover:underline">Customer</Link>
             </p>
           </div>
         </div>

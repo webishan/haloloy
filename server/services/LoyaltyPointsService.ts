@@ -19,6 +19,11 @@ export interface ILoyaltyPointsService {
   checkTierProgression(userId: string): Promise<void>;
   awardTier(rewardNumberId: string, tierLevel: number): Promise<void>;
   
+  // Bengali document reward system
+  processStepUpReward(userId: string, tierLevel: number): Promise<void>;
+  processInfinityReward(userId: string): Promise<void>;
+  processMerchantShoppingWallet(userId: string, merchantId: string, amount: number): Promise<void>;
+  
   // Affiliate referral commission system
   processReferralCommission(refereeId: string, basePoints: number): Promise<void>;
   processRippleRewards(userId: string, tierLevel: number): Promise<void>;
@@ -174,7 +179,7 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
   }
   
   async convertPointsToCash(userId: string, points: number): Promise<{ finalAmount: number; vatAmount: number; serviceCharge: number }> {
-    const vatRate = 0.125; // 12.5% VAT
+    const vatRate = 0.125; // 12.5% VAT as per Bengali document
     const serviceChargeRate = 0.05; // 5% service charge
     
     const baseAmount = points; // 1 point = 1 unit of currency
@@ -227,16 +232,25 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
   }
   
   async checkTierProgression(userId: string): Promise<void> {
-    const rewardNumbers = await this.storage.getActiveRewardNumbers(userId);
     const userPoints = await this.getUserTotalPoints(userId);
+    
+    // Check if user qualifies for global serial number (1500 points)
+    if (userPoints >= 1500) {
+      await this.checkAndCreateGlobalSerial(userId);
+    }
+    
+    const rewardNumbers = await this.storage.getActiveRewardNumbers(userId);
     
     for (const rewardNumber of rewardNumbers) {
       let pointsToApply = userPoints;
       
-      // Check each tier progression
+      // Check each tier progression - Bengali document logic
       if (rewardNumber.tier1Status === 'active' && pointsToApply >= rewardNumber.tier1Amount) {
         await this.awardTier(rewardNumber.id, 1);
         pointsToApply -= rewardNumber.tier1Amount;
+        // Award StepUp reward (800 points)
+        await this.processStepUpReward(userId, 1);
+        // Award Ripple reward to referrer (50 points)
         await this.processRippleRewards(userId, 1);
       }
       
@@ -247,6 +261,9 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
       if (rewardNumber.tier2Status === 'active' && pointsToApply >= rewardNumber.tier2Amount) {
         await this.awardTier(rewardNumber.id, 2);
         pointsToApply -= rewardNumber.tier2Amount;
+        // Award StepUp reward (1500 points)
+        await this.processStepUpReward(userId, 2);
+        // Award Ripple reward to referrer (100 points)
         await this.processRippleRewards(userId, 2);
       }
       
@@ -257,6 +274,9 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
       if (rewardNumber.tier3Status === 'active' && pointsToApply >= rewardNumber.tier3Amount) {
         await this.awardTier(rewardNumber.id, 3);
         pointsToApply -= rewardNumber.tier3Amount;
+        // Award StepUp reward (3500 points)
+        await this.processStepUpReward(userId, 3);
+        // Award Ripple reward to referrer (150 points)
         await this.processRippleRewards(userId, 3);
       }
       
@@ -266,11 +286,14 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
       
       if (rewardNumber.tier4Status === 'active' && pointsToApply >= rewardNumber.tier4Amount) {
         await this.awardTier(rewardNumber.id, 4);
+        // Award StepUp reward (32200 points)
+        await this.processStepUpReward(userId, 4);
+        // Award Ripple reward to referrer (700 points)
         await this.processRippleRewards(userId, 4);
-        
-        // Special handling for tier 4 - split into voucher reserve and redeemable
-        await this.updateWalletBalance(userId, 'income', rewardNumber.tier4VoucherReserve);
-        await this.updateWalletBalance(userId, 'commerce', rewardNumber.tier4RedeemableAmount);
+        // Process Infinity reward (generate 4 new reward numbers)
+        await this.processInfinityReward(userId);
+        // Process merchant shopping wallet (26200 Taka for designated merchants)
+        await this.processMerchantShoppingWallet(userId, 'designated_merchant', 26200);
       }
       
       // Update current points on reward number
@@ -280,6 +303,88 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
     }
   }
   
+  async checkAndCreateGlobalSerial(userId: string): Promise<void> {
+    // Get customer profile to check total points
+    const profile = await this.storage.getCustomerProfile(userId);
+    if (!profile) return;
+
+    const totalPoints = profile.totalPointsEarned || 0;
+    
+    // Only proceed if customer has 1500+ points (global eligibility threshold)
+    if (totalPoints < 1500) return;
+
+    // Check if customer already has a global serial number
+    const customerId = await this.getCustomerId(userId);
+    if (!customerId) return;
+
+    const existingSerial = await this.storage.getCustomerSerialNumber(customerId);
+    
+    // If no serial number exists, create one based on achievement order
+    if (!existingSerial) {
+      const serialData = await this.storage.assignSerialNumberToCustomer(customerId);
+      console.log(`🎉 Global serial number #${serialData.globalSerialNumber} assigned to customer ${userId} with ${totalPoints} points`);
+      
+      // Determine reward tier based on serial number ranges (from Bengali logic)
+      const rewardTier = this.getRewardTierBySerial(serialData.globalSerialNumber);
+      console.log(`🎯 Customer ${userId} assigned to reward tier: ${rewardTier.name} (Serial #${serialData.globalSerialNumber})`);
+    }
+
+    // Check if user already has a global reward number
+    const existingRewardNumbers = await this.storage.getRewardNumbersByUser(userId);
+    const hasGlobalReward = existingRewardNumbers.some((rn: any) => rn.type === 'global');
+    
+    if (!hasGlobalReward) {
+      // Create global reward number automatically with enhanced tier system
+      const user = await this.storage.getUser(userId);
+      if (user) {
+        const globalRewardNumber = await this.storage.getNextGlobalRewardNumber();
+        const serialNumber = await this.storage.generateSerialNumber();
+        
+        // Enhanced tier amounts based on global point system logic
+        const rewardNumberData: InsertStepUpRewardNumber = {
+          userId,
+          rewardNumber: globalRewardNumber,
+          serialNumber: serialNumber,
+          type: 'global',
+          tier1Status: 'active',
+          tier1Amount: 800,    // First tier requirement
+          tier2Status: 'locked',
+          tier2Amount: 1500,   // Second tier requirement  
+          tier3Status: 'locked',
+          tier3Amount: 3500,   // Third tier requirement
+          tier4Status: 'locked',
+          tier4Amount: 32200,  // Final tier requirement
+          tier4VoucherReserve: 6000,    // Voucher reserve amount
+          tier4RedeemableAmount: 20200, // Redeemable amount
+          currentPoints: 0,
+          totalPointsRequired: 37000,   // Total points needed for completion
+          isCompleted: false,
+          country: user.country || 'BD'
+        };
+        
+        await this.storage.createStepUpRewardNumber(rewardNumberData);
+        console.log(`🎯 Global reward number created for customer ${userId}`);
+      }
+    }
+  }
+
+  // Get reward tier based on global serial number (from Bengali logic)
+  private getRewardTierBySerial(serialNumber: number): { name: string; range: string; reward: number } {
+    if (serialNumber === 1) {
+      return { name: 'Champion', range: '1', reward: 38000 };
+    } else if (serialNumber >= 2 && serialNumber <= 5) {
+      return { name: 'Elite', range: '2-5', reward: 15000 };
+    } else if (serialNumber >= 6 && serialNumber <= 15) {
+      return { name: 'Premium', range: '6-15', reward: 8000 };
+    } else if (serialNumber >= 16 && serialNumber <= 37) {
+      return { name: 'Gold', range: '16-37', reward: 3500 };
+    } else if (serialNumber >= 38 && serialNumber <= 65) {
+      return { name: 'Silver', range: '38-65', reward: 1500 };
+    } else {
+      return { name: 'Bronze', range: '66+', reward: 800 };
+    }
+  }
+
   async awardTier(rewardNumberId: string, tierLevel: number): Promise<void> {
     const updateData: any = {};
     const now = new Date();
@@ -344,27 +449,40 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
     await this.storage.createCommissionTransaction(commissionTransaction);
   }
   
-  // Ripple reward system (50, 100, 150, 700 points for tiers 1-4)
+  // Ripple reward system (50, 100, 150, 700 points for tiers 1-4) - Bengali document logic
   async processRippleRewards(userId: string, tierLevel: number): Promise<void> {
     const referral = await this.storage.getReferralByReferee(userId);
     if (!referral) return; // No referrer
     
+    // Ripple reward amounts as per Bengali document: 50, 100, 150, 700
     const rippleAmounts = [50, 100, 150, 700]; // For tiers 1-4
     const rippleAmount = rippleAmounts[tierLevel - 1];
     
     if (!rippleAmount) return;
     
-    // Award ripple reward to referrer
-    await this.addPoints(referral.referrerId, rippleAmount, 'ripple_reward', {
-      refereeId: userId,
-      tierLevel,
-      rippleAmount,
-      description: `Ripple reward for tier ${tierLevel} completion`
+    // Award ripple reward to referrer in income wallet
+    await this.updateWalletBalance(referral.referrerId, 'income', rippleAmount);
+    
+    // Create transaction record
+    await this.storage.createPointTransaction({
+      userId: referral.referrerId,
+      points: rippleAmount,
+      transactionType: 'ripple_reward',
+      description: `Ripple reward for tier ${tierLevel} completion by ${userId}`,
+      balanceBefore: await this.getWalletBalance(referral.referrerId, 'income') - rippleAmount,
+      balanceAfter: await this.getWalletBalance(referral.referrerId, 'income'),
+      status: 'completed',
+      metadata: {
+        refereeId: userId,
+        tierLevel,
+        rippleAmount,
+        rewardType: 'ripple'
+      }
     });
     
     // Update referral tracking
     await this.storage.updateReferral(referral.id, {
-      totalRippleRewards: referral.totalRippleRewards + rippleAmount
+      totalRippleRewards: (referral.totalRippleRewards || 0) + rippleAmount
     });
     
     // Record commission transaction
@@ -380,6 +498,109 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
     };
     
     await this.storage.createCommissionTransaction(commissionTransaction);
+  }
+
+  // StepUp reward system - Award points based on tier completion
+  async processStepUpReward(userId: string, tierLevel: number): Promise<void> {
+    const stepUpAmounts = [800, 1500, 3500, 32200]; // As per Bengali document
+    const stepUpAmount = stepUpAmounts[tierLevel - 1];
+    
+    if (!stepUpAmount) return;
+    
+    // Award StepUp reward to user's income wallet
+    await this.updateWalletBalance(userId, 'income', stepUpAmount);
+    
+    // Create transaction record
+    await this.storage.createPointTransaction({
+      userId,
+      points: stepUpAmount,
+      transactionType: 'stepup_reward',
+      description: `StepUp reward for tier ${tierLevel} completion`,
+      balanceBefore: await this.getWalletBalance(userId, 'income') - stepUpAmount,
+      balanceAfter: await this.getWalletBalance(userId, 'income'),
+      status: 'completed',
+      metadata: {
+        tierLevel,
+        stepUpAmount,
+        rewardType: 'stepup'
+      }
+    });
+  }
+
+  // Infinity reward system - Generate 4 new reward numbers from 32200 points
+  async processInfinityReward(userId: string): Promise<void> {
+    const infinityAmount = 32200;
+    const voucherReserve = 6000;
+    const redeemableAmount = infinityAmount - voucherReserve; // 26200
+    
+    // Award infinity reward to user's income wallet
+    await this.updateWalletBalance(userId, 'income', infinityAmount);
+    
+    // Create 4 new reward numbers as per Bengali document
+    for (let i = 0; i < 4; i++) {
+      const globalRewardNumber = await this.storage.getNextGlobalRewardNumber();
+      const serialNumber = await this.storage.generateSerialNumber();
+      
+      await this.storage.createStepUpRewardNumber({
+        userId,
+        rewardNumber: globalRewardNumber,
+        serialNumber: serialNumber,
+        type: 'global',
+        tier1Status: 'active',
+        tier1Amount: 800,
+        tier2Status: 'locked',
+        tier2Amount: 1500,
+        tier3Status: 'locked',
+        tier3Amount: 3500,
+        tier4Status: 'locked',
+        tier4Amount: 32200,
+        tier4VoucherReserve: 6000,
+        tier4RedeemableAmount: 20200,
+        currentPoints: 0,
+        totalPointsRequired: 38000,
+        isCompleted: false,
+        country: 'BD'
+      });
+    }
+    
+    // Create transaction record
+    await this.storage.createPointTransaction({
+      userId,
+      points: infinityAmount,
+      transactionType: 'infinity_reward',
+      description: `Infinity reward: 4 new reward numbers generated`,
+      balanceBefore: await this.getWalletBalance(userId, 'income') - infinityAmount,
+      balanceAfter: await this.getWalletBalance(userId, 'income'),
+      status: 'completed',
+      metadata: {
+        rewardType: 'infinity',
+        newRewardNumbers: 4,
+        voucherReserve,
+        redeemableAmount
+      }
+    });
+  }
+
+  // Merchant shopping wallet system - 26200 Taka for designated merchants
+  async processMerchantShoppingWallet(userId: string, merchantId: string, amount: number): Promise<void> {
+    // Create merchant-specific shopping wallet
+    await this.updateWalletBalance(userId, 'commerce', amount);
+    
+    // Create transaction record
+    await this.storage.createPointTransaction({
+      userId,
+      points: amount,
+      transactionType: 'merchant_shopping_wallet',
+      description: `Merchant shopping wallet for merchant ${merchantId}`,
+      balanceBefore: await this.getWalletBalance(userId, 'commerce') - amount,
+      balanceAfter: await this.getWalletBalance(userId, 'commerce'),
+      status: 'completed',
+      metadata: {
+        merchantId,
+        rewardType: 'merchant_shopping',
+        restrictedMerchant: true
+      }
+    });
   }
   
   // Merchant commission and cashback (15% instant cashback)
@@ -549,6 +770,15 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
     return Math.floor(Math.random() * 1000000) + 100000;
   }
   
+  private async getCustomerId(userId: string): Promise<string | null> {
+    try {
+      const profile = await this.storage.getCustomerProfile(userId);
+      return profile ? profile.id : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   private async generateUniqueSerial(type: string, country: string): Promise<string> {
     // Generate unique serial based on type and country
     const prefix = type === 'global' ? 'G' : 'L';

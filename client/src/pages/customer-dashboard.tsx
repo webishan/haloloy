@@ -16,6 +16,9 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { useSimpleRealtime } from '@/hooks/use-simple-realtime';
+import RewardNumberSystem from '@/components/RewardNumberSystem';
+import AccumulatedPointsDisplay from '@/components/AccumulatedPointsDisplay';
 import { 
   User, Wallet, Coins, TrendingUp, History, QrCode, Send, 
   Download, Gift, Crown, Star, Award, Calendar, Eye, Settings, 
@@ -127,13 +130,33 @@ export default function CustomerDashboard() {
 
   const { data: customerProfile = {} } = useQuery({
     queryKey: ['/api/customer/profile'],
-    enabled: !!user && user.role === 'customer'
+    enabled: !!user && user.role === 'customer',
+    refetchInterval: 30000, // Refresh every 30 seconds instead of 3 seconds
+    refetchIntervalInBackground: false, // Don't refetch in background
+    staleTime: 10000, // Consider data fresh for 10 seconds
+    cacheTime: 300000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: true // Only refetch on component mount
   });
 
   const { data: walletData = {} } = useQuery({
     queryKey: ['/api/customer/wallet'],
-    enabled: !!user && user.role === 'customer'
+    enabled: !!user && user.role === 'customer',
+    refetchInterval: 30000, // Refresh every 30 seconds instead of 3 seconds
+    refetchIntervalInBackground: false, // Don't refetch in background
+    staleTime: 10000, // Consider data fresh for 10 seconds
+    cacheTime: 300000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: true // Only refetch on component mount
   });
+
+  // Simple real-time updates for all customer data - reduced frequency
+  const { forceRefresh } = useSimpleRealtime([
+    '/api/customer/dashboard',
+    '/api/customer/profile',
+    '/api/customer/wallet',
+    '/api/customer/transactions'
+  ], 30000); // Update every 30 seconds instead of 1 second
 
   const { data: transactions = [] } = useQuery({
     queryKey: ['/api/customer/transactions'],
@@ -224,14 +247,14 @@ export default function CustomerDashboard() {
     mobileNumber: customerProfile.mobileNumber || '+8801234567890',
     email: customerProfile.email || 'john.doe@example.com',
     tier: customerProfile.tier || 'bronze',
-    pointsBalance: walletData.pointsBalance || 1250,
-    totalEarned: walletData.totalPointsEarned || 2500,
-    totalSpent: walletData.totalPointsSpent || 800,
-    totalTransferred: walletData.totalPointsTransferred || 450,
+    pointsBalance: customerProfile.currentPointsBalance ?? walletData.pointsBalance ?? 0,
+    totalEarned: customerProfile.totalPointsEarned ?? walletData.totalPointsEarned ?? 0,
+    totalSpent: walletData.totalPointsSpent || 0,
+    totalTransferred: walletData.totalPointsTransferred || 0,
     globalSerialNumber: serialNumber.globalSerialNumber || 1,
     localSerialNumber: serialNumber.localSerialNumber || 1,
     profileComplete: customerProfile.profileComplete || false,
-    qrCode: customerProfile.qrCode || 'QR_CODE_DATA_HERE'
+    qrCode: customerProfile.qrCode
   };
 
   // Render Dashboard Section
@@ -257,7 +280,7 @@ export default function CustomerDashboard() {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                <p className="text-sm font-medium text-gray-600">Current Balance</p>
+                <p className="text-sm font-medium text-gray-600">Loyalty Points</p>
                 <p className="text-2xl font-bold text-green-600">{customerData.pointsBalance.toLocaleString()}</p>
                 <p className="text-xs text-gray-500">Points</p>
                         </div>
@@ -430,9 +453,9 @@ export default function CustomerDashboard() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Current Balance</span>
+              <span className="text-gray-600">Loyalty Points</span>
               <span className="text-2xl font-bold text-green-600">{customerData.pointsBalance.toLocaleString()}</span>
-                      </div>
+            </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Total Earned</span>
               <span className="text-lg font-semibold">{customerData.totalEarned.toLocaleString()}</span>
@@ -653,7 +676,13 @@ export default function CustomerDashboard() {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Reward System</h2>
       
-      {/* Reward Status */}
+      {/* Accumulated Points System */}
+      <AccumulatedPointsDisplay currentUser={user} />
+      
+      {/* Reward Number System */}
+      <RewardNumberSystem currentUser={user} />
+      
+      {/* Legacy Reward Status */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader>

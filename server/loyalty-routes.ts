@@ -404,4 +404,77 @@ export function registerLoyaltyRoutes(app: Express): void {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // =============== BENGALI DOCUMENT REWARD SYSTEM ===============
+  
+  // Process StepUp reward
+  app.post("/api/loyalty/stepup-reward", async (req, res) => {
+    try {
+      const { userId, tierLevel } = req.body;
+      
+      if (!userId || !tierLevel) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      await loyaltyService.processStepUpReward(userId, tierLevel);
+      res.json({ success: true, message: `StepUp reward processed for tier ${tierLevel}` });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Process Infinity reward
+  app.post("/api/loyalty/infinity-reward", async (req, res) => {
+    try {
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ error: "Missing userId" });
+      }
+      
+      await loyaltyService.processInfinityReward(userId);
+      res.json({ success: true, message: "Infinity reward processed - 4 new reward numbers generated" });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Process Merchant Shopping Wallet
+  app.post("/api/loyalty/merchant-shopping-wallet", async (req, res) => {
+    try {
+      const { userId, merchantId, amount } = req.body;
+      
+      if (!userId || !merchantId || !amount) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      await loyaltyService.processMerchantShoppingWallet(userId, merchantId, amount);
+      res.json({ success: true, message: `Merchant shopping wallet created for ${amount} points` });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get reward income summary
+  app.get("/api/loyalty/reward-income/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      const incomeTransactions = await loyaltyService.getWalletTransactions(userId, 'income');
+      const commerceTransactions = await loyaltyService.getWalletTransactions(userId, 'commerce');
+      
+      const incomeSummary = {
+        totalIncome: incomeTransactions.reduce((sum, t) => sum + t.points, 0),
+        stepUpRewards: incomeTransactions.filter(t => t.transactionType === 'stepup_reward'),
+        infinityRewards: incomeTransactions.filter(t => t.transactionType === 'infinity_reward'),
+        rippleRewards: incomeTransactions.filter(t => t.transactionType === 'ripple_reward'),
+        affiliateRewards: incomeTransactions.filter(t => t.transactionType === 'referral_commission'),
+        commerceBalance: commerceTransactions.reduce((sum, t) => sum + t.points, 0)
+      };
+      
+      res.json(incomeSummary);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 }

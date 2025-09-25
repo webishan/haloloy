@@ -10,15 +10,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtimeBalance } from "@/hooks/use-realtime-balance";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   Shield, MapPin, LogOut, Users, DollarSign, BarChart3, Store, Settings, MessageCircle,
   TrendingUp, Coins, CheckCircle, Send, Plus, AlertCircle, Menu, X as XIcon,
   Building2, UserCheck, Award, CreditCard, Globe, FileText, Headphones, 
   Database, BarChart, UserPlus, Building, Calendar, Download, Star as StarIcon, Star,
-  Percent, Calculator, Eye, Edit, Trash2, Save, RefreshCw, Filter, Search
+  Percent, Calculator, Eye, Edit, Trash2, Save, RefreshCw, Filter, Search, Bell
 } from "lucide-react";
 import SecureChat from "@/components/SecureChat";
+import { useStorageListener } from "@/hooks/use-storage-listener";
+import { NotificationProvider } from "@/hooks/use-notifications";
+import NotificationBadge, { NotificationWrapper, MessageNotificationBadge } from "@/components/NotificationBadge";
 
 interface LocalAdminUser {
   id: string;
@@ -42,6 +46,12 @@ export default function LocalAdminPortal() {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Real-time balance updates
+  const { isConnected: balanceSocketConnected } = useRealtimeBalance(
+    currentUser?.id,
+    localStorage.getItem('localAdminToken') || undefined
+  );
 
   // Login form state
   const [loginForm, setLoginForm] = useState({
@@ -95,15 +105,28 @@ export default function LocalAdminPortal() {
   const { data: adminBalance, refetch: refetchBalance } = useQuery({
     queryKey: ['/api/admin/balance'],
     enabled: isAuthenticated,
-    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
+    refetchInterval: 30000, // Poll every 30 seconds for real-time updates
     retry: false,
     staleTime: 0, // Always fetch fresh data
     cacheTime: 0 // Don't cache the results
   });
 
+  // Listen for global updates and force refresh immediately
+  useStorageListener(['/api/admin/balance','/api/admin/local/dashboard','/api/admin/merchants']);
+
+  useEffect(() => {
+    const handler = () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/local/dashboard'] });
+      refetchBalance();
+    };
+    window.addEventListener('dataUpdate', handler);
+    return () => window.removeEventListener('dataUpdate', handler);
+  }, [queryClient, refetchBalance]);
+
   // Get current user's country dashboard data  
   const { data: localDashboard, isLoading: isDashboardLoading } = useQuery({
-    queryKey: ['/api/admin/local-dashboard', currentUser?.country],
+    queryKey: ['/api/admin/local/dashboard', currentUser?.country],
     enabled: isAuthenticated && !!currentUser?.country,
     refetchInterval: 30000, // Refresh every 30 seconds
     retry: false
@@ -116,10 +139,10 @@ export default function LocalAdminPortal() {
     queryFn: async () => {
       // Mock data for now - will be replaced with real API calls
       return {
-        totalMerchants: 25,
-        regularMerchants: 15,
-        eMerchants: 8,
-        starMerchants: 2,
+        totalMerchants: 0,
+        regularMerchants: 0,
+        eMerchants: 0,
+        starMerchants: 0,
         doubleStarMerchants: 0,
         tripleStarMerchants: 0,
         executiveMerchants: 0
@@ -133,8 +156,8 @@ export default function LocalAdminPortal() {
     queryFn: async () => {
       // Mock data for now
       return {
-        totalCustomers: 150,
-        activeCustomers: 120
+        totalCustomers: 0,
+        activeCustomers: 0
       };
     }
   });
@@ -307,8 +330,11 @@ export default function LocalAdminPortal() {
     onSuccess: () => {
       toast({ title: "Points Distributed", description: "Points have been distributed to merchant successfully!" });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/local-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/local/dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/merchants'] });
+      // Also invalidate merchant wallet cache to ensure merchant dashboard updates
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
       refetchBalance(); // Force immediate balance update
       setDistributeForm({ merchantId: "", points: "", description: "" });
     },
@@ -383,6 +409,8 @@ export default function LocalAdminPortal() {
     // Clear query cache to prevent stale data
     queryClient.clear();
     toast({ title: "Logged Out", description: "You have been logged out successfully." });
+    // Navigate to home page
+    window.location.href = "/";
   };
 
   const handleDistributePoints = () => {
@@ -502,7 +530,14 @@ export default function LocalAdminPortal() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <NotificationProvider 
+      currentUser={currentUser ? {
+        id: currentUser.id,
+        token: localStorage.getItem('localAdminToken') || '',
+        role: currentUser.role
+      } : undefined}
+    >
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -532,6 +567,18 @@ export default function LocalAdminPortal() {
                 <Shield className="w-4 h-4 mr-1" />
                 Local Administrator
               </Badge>
+              
+              {/* Notification Bell */}
+              <NotificationWrapper badgeProps={{ type: 'total', size: 'sm' }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveTab("chat")}
+                  className="relative"
+                >
+                  <Bell className="w-5 h-5 text-gray-600" />
+                </Button>
+              </NotificationWrapper>
               
               <div className="flex items-center space-x-2 text-sm text-gray-600">
                 <span>{currentUser?.firstName} {currentUser?.lastName}</span>
@@ -574,7 +621,7 @@ export default function LocalAdminPortal() {
                 className="w-full justify-start"
                 onClick={() => setActiveTab("dashboard")}
               >
-              <BarChart3 className="w-4 h-4 mr-2" />
+                <BarChart3 className="w-4 h-4 mr-2" />
                 Dashboard Overview
               </Button>
               
@@ -597,15 +644,6 @@ export default function LocalAdminPortal() {
               </Button>
               
               <Button
-                variant={activeTab === "cofounder-staff" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("cofounder-staff")}
-              >
-                <UserCheck className="w-4 h-4 mr-2" />
-                Co-Founder & Staff
-              </Button>
-              
-              <Button
                 variant={activeTab === "reward-points" ? "default" : "ghost"}
                 className="w-full justify-start"
                 onClick={() => setActiveTab("reward-points")}
@@ -621,42 +659,6 @@ export default function LocalAdminPortal() {
               >
                 <CreditCard className="w-4 h-4 mr-2" />
                 Withdrawals
-              </Button>
-              
-              <Button
-                variant={activeTab === "header-footer" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("header-footer")}
-              >
-                <Globe className="w-4 h-4 mr-2" />
-                Header & Footer
-              </Button>
-              
-              <Button
-                variant={activeTab === "user-roles" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("user-roles")}
-              >
-                <Shield className="w-4 h-4 mr-2" />
-                User Roles
-              </Button>
-              
-              <Button
-                variant={activeTab === "customer-care" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("customer-care")}
-              >
-                <Headphones className="w-4 h-4 mr-2" />
-                Customer Care
-              </Button>
-              
-              <Button
-                variant={activeTab === "vat-service" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("vat-service")}
-              >
-                <Calculator className="w-4 h-4 mr-2" />
-                VAT & Service Charge
               </Button>
               
               <Button
@@ -678,48 +680,12 @@ export default function LocalAdminPortal() {
               </Button>
               
               <Button
-                variant={activeTab === "analytics" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("analytics")}
-              >
-                <BarChart className="w-4 h-4 mr-2" />
-                Analytics & Reporting
-              </Button>
-              
-              <Button
-                variant={activeTab === "acquisition" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("acquisition")}
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                Acquisition Reports
-              </Button>
-              
-              <Button
-                variant={activeTab === "backup" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("backup")}
-              >
-                <Database className="w-4 h-4 mr-2" />
-                Backup System
-              </Button>
-              
-              <Button
-                variant={activeTab === "nps" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("nps")}
-              >
-                <StarIcon className="w-4 h-4 mr-2" />
-                NPS Setup
-              </Button>
-              
-              <Button
                 variant={activeTab === "distribute" ? "default" : "ghost"}
                 className="w-full justify-start"
                 onClick={() => setActiveTab("distribute")}
               >
-              <DollarSign className="w-4 h-4 mr-2" />
-              Distribute Points
+                <DollarSign className="w-4 h-4 mr-2" />
+                Distribute Points
               </Button>
               
               <Button
@@ -731,14 +697,16 @@ export default function LocalAdminPortal() {
                 Request Points
               </Button>
               
-              <Button
-                variant={activeTab === "chat" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("chat")}
-              >
-              <MessageCircle className="w-4 h-4 mr-2" />
-                Secure Chat
-              </Button>
+              <NotificationWrapper badgeProps={{ type: 'messages' }}>
+                <Button
+                  variant={activeTab === "chat" ? "default" : "ghost"}
+                  className="w-full justify-start"
+                  onClick={() => setActiveTab("chat")}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Secure Chat
+                </Button>
+              </NotificationWrapper>
             </nav>
           </ScrollArea>
         </div>
@@ -818,10 +786,10 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Active Merchants</p>
                       <p className="text-3xl font-bold text-blue-600">
-                            {localMerchantStats?.totalMerchants || 0}
+                            {localDashboard?.overview?.activeMerchants || 0}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
-                            {localMerchantStats?.regularMerchants || 0} Regular • {localMerchantStats?.eMerchants || 0} E-Merchants
+                            {localDashboard?.merchants?.regular || 0} Regular • {localDashboard?.merchants?.eMerchant || 0} E-Merchants
                       </p>
                     </div>
                         <Building2 className="w-8 h-8 text-blue-500" />
@@ -835,10 +803,10 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Customers</p>
                       <p className="text-3xl font-bold text-purple-600">
-                            {localCustomerStats?.totalCustomers || 0}
+                            {localDashboard?.overview?.totalCustomers || 0}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
-                            {localCustomerStats?.activeCustomers || 0} Active
+                            {localDashboard?.customers?.active || 0} Active
                       </p>
                     </div>
                     <Users className="w-8 h-8 text-purple-500" />
@@ -852,10 +820,10 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Distributed</p>
                       <p className="text-3xl font-bold text-orange-600">
-                            {localRewardStats?.distributedPoints?.toLocaleString() || 0}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {localRewardStats?.totalPoints?.toLocaleString() || 0} Total
+                            {adminBalance?.totalDistributed ? adminBalance.totalDistributed.toLocaleString() : 0}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                            {adminBalance?.totalReceived ? adminBalance.totalReceived.toLocaleString() : 0} Total Received
                       </p>
                     </div>
                     <TrendingUp className="w-8 h-8 text-orange-500" />
@@ -997,6 +965,48 @@ export default function LocalAdminPortal() {
               </div>
             )}
 
+            {/* Merchant List Tab */}
+            {activeTab === "merchant-list" && (
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Building className="w-5 h-5 mr-2" />
+                      Merchants in Your Country
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Business</TableHead>
+                          <TableHead>Owner</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Tier</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(merchants || []).map((m: any) => (
+                          <TableRow key={m.id || m.userId}>
+                            <TableCell>{m.businessName || 'Merchant'}</TableCell>
+                            <TableCell>{m.user ? `${m.user.firstName} ${m.user.lastName}` : '-'}</TableCell>
+                            <TableCell>{m.user?.email || '-'}</TableCell>
+                            <TableCell>{m.tier || 'Bronze'}</TableCell>
+                            <TableCell>
+                              <Badge variant={m.user?.isActive ? 'default' : 'destructive'}>
+                                {m.user?.isActive ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             {/* Local Country Customers Tab */}
             {activeTab === "customers" && (
               <div className="space-y-6">
@@ -1131,7 +1141,7 @@ export default function LocalAdminPortal() {
                         <p className="text-sm text-gray-600">Total Sales to Merchants</p>
                       </div>
                       <div className="text-center p-4 bg-green-50 rounded-lg">
-                        <p className="text-2xl font-bold text-green-600">{localRewardStats?.distributedPoints?.toLocaleString() || 0}</p>
+                        <p className="text-2xl font-bold text-green-600">{adminBalance?.totalDistributed ? adminBalance.totalDistributed.toLocaleString() : 0}</p>
                         <p className="text-sm text-gray-600">Total Distributed to Customers</p>
                       </div>
                     </div>
@@ -1377,5 +1387,6 @@ export default function LocalAdminPortal() {
         </div>
       </div>
     </div>
+    </NotificationProvider>
   );
 }

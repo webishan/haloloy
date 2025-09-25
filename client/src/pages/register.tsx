@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { Logo } from '@/components/ui/logo';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function Register() {
@@ -108,13 +109,13 @@ export default function Register() {
   };
 
   return (
-    <div className="pt-32 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
+    <div className="pt-32 min-h-screen bg-gradient-to-br from-gray-50 to-red-50 flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
-          <Link href="/" className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            KOMARCE
+          <Link href="/">
+            <Logo size="xl" className="justify-center hover:opacity-80 transition-opacity" />
           </Link>
-          <p className="mt-2 text-gray-600 font-medium">Create your account</p>
+          <p className="mt-4 text-gray-600 font-medium">Create your account</p>
         </div>
 
         <Card className="border-0 shadow-xl bg-white/95 backdrop-blur-sm">
@@ -127,10 +128,10 @@ export default function Register() {
           <CardContent>
             <Tabs value={formData.role} onValueChange={(value) => handleChange('role', value)}>
               <TabsList className="grid w-full grid-cols-2 bg-gray-100">
-                <TabsTrigger value="customer" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white font-semibold">
+                <TabsTrigger value="customer" className="data-[state=active]:bg-red-600 data-[state=active]:text-white font-semibold">
                   🛍️ Customer
                 </TabsTrigger>
-                <TabsTrigger value="merchant" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white font-semibold">
+                <TabsTrigger value="merchant" className="data-[state=active]:bg-red-500 data-[state=active]:text-white font-semibold">
                   🏪 Become a Merchant
                 </TabsTrigger>
               </TabsList>

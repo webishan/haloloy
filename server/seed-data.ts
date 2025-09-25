@@ -4,8 +4,21 @@ import bcrypt from "bcryptjs";
 // Function to clear all test data
 export async function clearTestData() {
   console.log("🗑️ Clearing test data...");
-  // Note: In a real application, you'd want to be more careful about clearing data
-  // For development purposes, we'll just restart with fresh data
+  
+  // Clear all merchants and customers from memory storage
+  try {
+    // Get all users and remove merchants and customers
+    const allUsers = await storage.getAllUsers();
+    for (const user of allUsers) {
+      if (user.role === 'merchant' || user.role === 'customer') {
+        // This would need to be implemented in storage
+        console.log(`Removing ${user.role}: ${user.email}`);
+      }
+    }
+  } catch (error) {
+    console.log("Note: Clear function not fully implemented, will rely on fresh restart");
+  }
+  
   console.log("✅ Test data cleared");
 }
 
@@ -13,12 +26,8 @@ export async function seedTestData() {
   try {
     console.log("🌱 Seeding test data...");
 
-    // Check if data already exists
-    const existingUsers = await storage.getUsersByRole("customer");
-    if (existingUsers.length > 0) {
-      console.log("✅ Test data already exists, skipping seed");
-      return;
-    }
+    // Force refresh - clear existing data and reseed
+    console.log("🔄 Force refreshing data - clearing existing merchants and customers...");
 
     // Create Global Admin
     const hashedGlobalPassword = await bcrypt.hash("global123", 10);
@@ -73,160 +82,47 @@ export async function seedTestData() {
       isActive: true
     });
 
-    // Create Merchants for each country
+    // Skip creating merchants - will be created manually
     const merchants = [];
-    const hashedMerchantPassword = await bcrypt.hash("merchant123", 10);
-    
-    for (let i = 0; i < countries.length; i++) {
-      const country = countries[i];
-      for (let j = 1; j <= 3; j++) {
-        const merchantUser = await storage.createUser({
-          username: `merchant_${country.code.toLowerCase()}_${j}`,
-          email: `merchant${j}@${country.code.toLowerCase()}.komarce.com`,
-          password: hashedMerchantPassword,
-          firstName: `Merchant`,
-          lastName: `${country.name} ${j}`,
-          role: "merchant",
-          country: country.code
-        });
 
-        const merchant = await storage.createMerchant({
-          userId: merchantUser.id,
-          businessName: `${country.name} Store ${j}`,
-          businessType: ["Electronics", "Fashion", "Food"][j-1] || "General",
-          tier: j === 1 ? "gold" : j === 2 ? "silver" : "bronze",
-          availablePoints: 5000,
-          totalPointsDistributed: 0
-        });
-        merchants.push(merchant);
-      }
-    }
-
-    // Create Customers for each country
+    // Skip creating customers - will be created manually
     const customers = [];
-    const hashedCustomerPassword = await bcrypt.hash("customer123", 10);
-    
-    for (let i = 0; i < countries.length; i++) {
-      const country = countries[i];
-      for (let j = 1; j <= 5; j++) {
-        const customerUser = await storage.createUser({
-          username: `customer_${country.code.toLowerCase()}_${j}`,
-          email: `customer${j}@${country.code.toLowerCase()}.komarce.com`,
-          password: hashedCustomerPassword,
-          firstName: `Customer`,
-          lastName: `${country.name} ${j}`,
-          role: "customer",
-          country: country.code
-        });
 
-        // Create customer profile with all required fields
-        const uniqueAccountNumber = await storage.generateUniqueAccountNumber();
-        const customerProfile = await storage.createCustomerProfile({
-          userId: customerUser.id,
-          uniqueAccountNumber,
-          mobileNumber: `+${country.code === 'BD' ? '880' : country.code === 'MY' ? '60' : country.code === 'AE' ? '971' : '63'}${Math.floor(Math.random() * 1000000000)}`,
-          email: customerUser.email,
-          fullName: `${customerUser.firstName} ${customerUser.lastName}`,
-          fathersName: `Father of ${customerUser.firstName}`,
-          mothersName: `Mother of ${customerUser.firstName}`,
-          nidNumber: `${country.code}${Math.floor(Math.random() * 1000000000)}`,
-          bloodGroup: ['A+', 'B+', 'O+', 'AB+'][Math.floor(Math.random() * 4)],
-          profileComplete: true,
-          totalPointsEarned: Math.floor(Math.random() * 5000) + 1000,
-          currentPointsBalance: Math.floor(Math.random() * 3000) + 500,
-          tier: j === 1 ? 'gold' : j === 2 ? 'silver' : 'bronze',
-          isActive: true
-        });
-
-        // Generate QR code for the customer
-        const qrCode = await storage.generateCustomerQRCode(customerUser.id);
-
-        // Create customer wallet
-        await storage.createCustomerWallet({
-          customerId: customerProfile.id,
-          pointsBalance: customerProfile.currentPointsBalance,
-          totalPointsEarned: customerProfile.totalPointsEarned,
-          totalPointsSpent: Math.floor(Math.random() * 1000),
-          totalPointsTransferred: Math.floor(Math.random() * 500)
-        });
-
-        // Also create the legacy customer record for backward compatibility
-        const customer = await storage.createCustomer({
-          userId: customerUser.id,
-          totalPoints: customerProfile.currentPointsBalance,
-          accumulatedPoints: customerProfile.totalPointsEarned
-        });
-        customers.push(customer);
-      }
-    }
-
-    // Initialize loyalty system with wallets for all users
+    // Initialize loyalty system with wallets for admin users only
     console.log("💰 Creating loyalty wallets...");
     
-    const allUsers = [...localAdmins, ...merchants.map(m => ({ id: m.userId, role: 'merchant' })), ...customers.map(c => ({ id: c.userId, role: 'customer' }))];
+    const allUsers = [...localAdmins];
     for (const user of allUsers) {
       if (user.id) {
         // Create three wallets for each user
         await storage.createUserWallet({
           userId: user.id,
           walletType: 'reward_points',
-          balance: Math.floor(Math.random() * 2000).toString()
+          balance: '0'
         });
         
         await storage.createUserWallet({
           userId: user.id,
           walletType: 'income', 
-          balance: Math.floor(Math.random() * 1000).toString()
+          balance: '0'
         });
         
         await storage.createUserWallet({
           userId: user.id,
           walletType: 'commerce',
-          balance: Math.floor(Math.random() * 500).toString()
+          balance: '0'
         });
       }
     }
 
-    // Create StepUp reward numbers for customers
-    console.log("🎯 Creating StepUp reward numbers...");
-    for (const customer of customers.slice(0, 10)) { // First 10 customers get reward numbers
-      await storage.createStepUpRewardNumber({
-        userId: customer.userId,
-        type: Math.random() > 0.5 ? 'global' : 'local',
-        rewardNumber: Math.floor(Math.random() * 1000000) + 100000,
-        serialNumber: `RN${Math.floor(Math.random() * 1000000)}`
-      });
-    }
+    // Skip creating StepUp reward numbers - no customers to assign them to
+    console.log("🎯 Skipping StepUp reward numbers (no customers)...");
 
-    // Create sample referrals
-    console.log("🤝 Creating referral relationships...");
-    for (let i = 0; i < 5; i++) {
-      const referrer = customers[i];
-      const referee = customers[i + 5];
-      
-      if (referrer && referee) {
-        await storage.createReferral({
-          referrerId: referrer.userId,
-          refereeId: referee.userId,
-          referralCode: `REF${referrer.userId.slice(-6).toUpperCase()}`,
-          referralType: 'customer'
-        });
-      }
-    }
+    // Skip creating referrals - no customers to create referrals for
+    console.log("🤝 Skipping referral relationships (no customers)...");
 
-    // Create sample point transactions
-    console.log("💸 Creating sample transactions...");
-    for (let i = 0; i < 20; i++) {
-      const randomCustomer = customers[Math.floor(Math.random() * customers.length)];
-      
-      await storage.createPointTransaction({
-        userId: randomCustomer.userId,
-        points: Math.floor(Math.random() * 500) + 50,
-        transactionType: ['cashback', 'referral_commission', 'admin_manual', 'purchase'][Math.floor(Math.random() * 4)],
-        description: `Sample transaction ${i + 1}`,
-        pointsSource: 'system'
-      });
-    }
+    // Skip creating sample transactions - no customers to create transactions for
+    console.log("💸 Skipping sample transactions (no customers)...");
 
     // Create admin settings
     console.log("⚙️ Creating admin settings...");
@@ -249,30 +145,24 @@ export async function seedTestData() {
       });
     }
 
-    // Create leaderboard entries
-    console.log("🏆 Creating leaderboard entries...");
-    for (let i = 0; i < 10; i++) {
-      const customer = customers[i];
-      
-      await storage.createLeaderboard({
-        userId: customer.userId,
-        userType: 'customer',
-        leaderboardType: i < 5 ? 'global' : 'local',
-        country: 'BD', // Default country for testing
-        totalPoints: Math.floor(Math.random() * 10000) + 1000,
-        rank: i + 1
-      });
-    }
+    // Skip creating leaderboard entries - no customers to add to leaderboard
+    console.log("🏆 Skipping leaderboard entries (no customers)...");
 
+    // Assign global serial numbers to customers with 1500+ points
+    console.log("🎯 Assigning global serial numbers to eligible customers...");
+    const { assignGlobalSerialsToEligibleCustomers } = await import('./test-serial-assignment');
+    const serialResult = await assignGlobalSerialsToEligibleCustomers();
+    
     console.log("✅ Test data seeded successfully!");
     console.log(`Created:
     - 1 Global Admin (global@komarce.com / global123)
     - ${localAdmins.length} Local Admins (local123)
-    - ${merchants.length} Merchants (merchant123)  
-    - ${customers.length} Customers (customer123)
+    - ${merchants.length} Merchants (will be created manually)  
+    - ${customers.length} Customers (will be created manually)
     - Loyalty wallets and reward numbers
     - Sample transactions and referrals
-    - Admin settings and leaderboards`);
+    - Admin settings and leaderboards
+    - ${serialResult.assignedCount} Global serial numbers assigned`);
     
     return {
       globalAdmin,

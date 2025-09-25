@@ -31,11 +31,15 @@ import Footer from "@/components/footer";
 import AuthGuard from "@/components/auth-guard";
 import About from "@/pages/about";
 import Contact from "@/pages/contact";
+import { useLocation } from "wouter";
 
 function Router() {
+  const [location] = useLocation();
+  const hideSiteChrome = location.startsWith("/global-admin-portal") || location.startsWith("/local-admin-portal");
+  
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
+      {!hideSiteChrome && <Header />}
       <main className="flex-1">
         <Switch>
           <Route path="/" component={Home} />
@@ -100,7 +104,7 @@ function Router() {
           <Route component={NotFound} />
         </Switch>
       </main>
-      <Footer />
+      {!hideSiteChrome && <Footer />}
     </div>
   );
 }

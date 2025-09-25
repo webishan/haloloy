@@ -65,28 +65,28 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="pt-20 min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50">
       <div className="container mx-auto px-4 py-12">
         <div className="mb-12">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl">
+              <div className="w-20 h-20 bg-gradient-to-br from-red-600 to-red-500 rounded-3xl flex items-center justify-center shadow-2xl">
                 <LayoutDashboard className="w-10 h-10 text-white" />
               </div>
               <div>
                 <h1 className="text-6xl font-black text-gray-900 mb-2">
                   {selectedCountry && selectedCountry !== 'global' ? `${countries.find(c => c.code === selectedCountry)?.flag} ${countries.find(c => c.code === selectedCountry)?.name}` : 'Global'}{' '}
-                  <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Admin</span>
+                  <span className="bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">Admin</span>
                 </h1>
                 <p className="text-2xl text-gray-600 font-medium">Manage the entire KOMARCE ecosystem</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                <SelectTrigger className="w-64 h-14 bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-2xl text-lg font-semibold">
+                <SelectTrigger className="w-64 h-14 bg-white/80 backdrop-blur-sm border-2 border-red-200 rounded-2xl text-lg font-semibold">
                   <SelectValue placeholder="🌍 Select Country" />
                 </SelectTrigger>
-                <SelectContent className="rounded-2xl border-2 border-blue-200">
+                <SelectContent className="rounded-2xl border-2 border-red-200">
                   <SelectItem value="global" className="text-lg font-semibold">🌍 Global View</SelectItem>
                   {countries.map((country) => (
                     <SelectItem key={country.code} value={country.code} className="text-lg font-semibold">
@@ -100,7 +100,7 @@ export default function AdminDashboard() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-5 lg:w-[600px] bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-2xl p-2 mx-auto items-center justify-center">
+          <TabsList className="grid w-full grid-cols-5 lg:w-[600px] bg-white/80 backdrop-blur-sm border-2 border-red-200 rounded-2xl p-2 mx-auto items-center justify-center">
             <TabsTrigger value="overview" className="text-lg font-semibold">Overview</TabsTrigger>
             <TabsTrigger value="merchants" className="text-lg font-semibold">Merchants</TabsTrigger>
             <TabsTrigger value="customers" className="text-lg font-semibold">Customers</TabsTrigger>
@@ -131,11 +131,11 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Total Customers</p>
-                      <p className="text-3xl font-bold text-blue-600">{selectedCountry && selectedCountry !== 'global' ? (customers as any[])?.length || 0 : (stats as any)?.totalCustomers || 0}</p>
+                      <p className="text-3xl font-bold text-red-600">{selectedCountry && selectedCountry !== 'global' ? (customers as any[])?.length || 0 : (stats as any)?.totalCustomers || 0}</p>
                       <p className="text-sm text-green-600">+8% from last month</p>
                     </div>
-                    <div className="p-3 bg-blue-100 rounded-lg">
-                      <Users className="w-8 h-8 text-blue-600" />
+                    <div className="p-3 bg-red-100 rounded-lg">
+                      <Users className="w-8 h-8 text-red-600" />
                     </div>
                   </div>
                 </CardContent>

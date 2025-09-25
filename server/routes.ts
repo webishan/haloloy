@@ -10,6 +10,7 @@ import merchantAdvancedRoutes from "./merchant-advanced-routes";
 import customerRoutes from "./customer-routes";
 import customerRewardRoutes from "./customer-reward-routes";
 import customerWalletRoutes from "./customer-wallet-routes";
+import { registerGlobalRewardRoutes } from "./global-reward-routes";
 import { 
   insertUserSchema, 
   insertProductSchema, 
@@ -373,7 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           orders = await storage.getOrders(customer.id);
         }
       } else if (req.user.role === 'merchant') {
-        const merchant = await storage.getMerchantByUserId(req.user.id);
+        const merchant = await storage.getMerchantByUserId(req.user.userId);
         if (merchant) {
           orders = await storage.getOrders(undefined, merchant.id);
         }
@@ -437,7 +438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "Unauthorized" });
         }
       } else if (req.user.role === 'merchant') {
-        const merchant = await storage.getMerchantByUserId(req.user.id);
+        const merchant = await storage.getMerchantByUserId(req.user.userId);
         if (!merchant || order.merchantId !== merchant.id) {
           return res.status(403).json({ message: "Unauthorized" });
         }
@@ -603,7 +604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/dashboard/merchant", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
-      const merchant = await storage.getMerchantByUserId(req.user.id);
+      const merchant = await storage.getMerchantByUserId(req.user.userId);
       if (!merchant) {
         return res.status(404).json({ message: "Merchant profile not found" });
       }
@@ -626,17 +627,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Merchant Rewards Management
   app.post("/api/merchant/rewards/send", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
-      const merchant = await storage.getMerchantByUserId(req.user.id);
+      const merchant = await storage.getMerchantByUserId(req.user.userId);
       if (!merchant) {
         return res.status(404).json({ message: "Merchant profile not found" });
       }
 
       const { customerId, points, description } = req.body;
       
-      // Find customer by ID (from scanned customers)
-      const customer = await storage.getCustomerProfileById(customerId);
+      // Find customer in merchant's scanned customers list
+      const merchantCustomer = await storage.getMerchantCustomer(req.user.userId, customerId);
+      if (!merchantCustomer) {
+        return res.status(404).json({ message: "Customer not found in your scanned customers list" });
+      }
+
+      // Get the main customer profile using the customer ID from merchant customer relationship
+      const customer = await storage.getCustomerProfileById(merchantCustomer.customerId);
       if (!customer) {
-        return res.status(404).json({ message: "Customer not found" });
+        return res.status(404).json({ message: "Customer profile not found" });
       }
 
       const customerUser = await storage.getUser(customer.userId);
@@ -651,7 +658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create reward transaction
       const transaction = await storage.createRewardTransaction({
-        fromUserId: req.user.id,
+        fromUserId: req.user.userId,
         toUserId: customerUser.id,
         points: parseInt(points),
         type: "transfer",
@@ -663,16 +670,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const instantCashback = points * 0.15;
 
       // Update merchant points and cashback
-      await storage.updateMerchant(req.user.id, {
+      await storage.updateMerchant(req.user.userId, {
+        loyaltyPointsBalance: (merchant.loyaltyPointsBalance || 0) - points,
         availablePoints: merchant.availablePoints - points,
         totalPointsDistributed: (merchant.totalPointsDistributed || 0) + points,
         instantCashback: (merchant.instantCashback || 0) + instantCashback
       });
 
       // Update customer points
-      await storage.updateCustomer(customerUser.id, {
-        totalPoints: customer.totalPoints + points,
-        accumulatedPoints: customer.accumulatedPoints + points
+      await storage.updateCustomerProfile(customer.userId, {
+        currentPointsBalance: customer.currentPointsBalance + points,
+        totalPointsEarned: customer.totalPointsEarned + points
       });
 
       res.json({ 
@@ -687,7 +695,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/merchant/points/purchase", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
-      const merchant = await storage.getMerchantByUserId(req.user.id);
+      const merchant = await storage.getMerchantByUserId(req.user.userId);
       if (!merchant) {
         return res.status(404).json({ message: "Merchant profile not found" });
       }
@@ -696,7 +704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create purchase transaction
       const transaction = await storage.createRewardTransaction({
-        fromUserId: req.user.id,
+        fromUserId: req.user.userId,
         toUserId: req.user.id,
         points: parseInt(points),
         type: "purchase",
@@ -704,8 +712,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "completed"
       });
 
-      // Update merchant points
-      await storage.updateMerchant(req.user.id, {
+      // Update merchant points - keep both fields in sync
+      await storage.updateMerchant(req.user.userId, {
+        loyaltyPointsBalance: (merchant.loyaltyPointsBalance || 0) + points,
         availablePoints: (merchant.availablePoints || 0) + points,
         totalPointsPurchased: (merchant.totalPointsPurchased || 0) + points
       });
@@ -723,14 +732,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Merchant Wallet Management
   app.get("/api/merchant/wallets", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
-      const merchant = await storage.getMerchantByUserId(req.user.id);
+      const merchant = await storage.getMerchantByUserId(req.user.userId);
       if (!merchant) {
         return res.status(404).json({ message: "Merchant profile not found" });
       }
 
       res.json({
         rewardPointWallet: {
-          availablePoints: merchant.availablePoints || 0,
+          availablePoints: (merchant.availablePoints ?? merchant.loyaltyPointsBalance ?? 0),
+          totalPurchased: merchant.totalPointsPurchased || 0,
+          totalDistributed: merchant.totalPointsDistributed || 0
+        },
+        incomeWallet: {
+          instantCashback: merchant.instantCashback || 0,
+          referralCommission: merchant.referralCommission || 0,
+          royaltyBonus: merchant.royaltyBonus || 0,
+          totalIncome: (merchant.instantCashback || 0) + (merchant.referralCommission || 0) + (merchant.royaltyBonus || 0)
+        },
+        komarceWallet: {
+          balance: merchant.komarceBalance || 500,
+          totalReceived: merchant.totalReceived || 0,
+          totalWithdrawn: merchant.totalWithdrawn || 0
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Add singular wallet endpoint for compatibility
+  app.get("/api/merchant/wallet", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
+    try {
+      const merchant = await storage.getMerchantByUserId(req.user.userId);
+      if (!merchant) {
+        return res.status(404).json({ message: "Merchant profile not found" });
+      }
+
+      res.json({
+        rewardPointWallet: {
+          availablePoints: (merchant.availablePoints ?? merchant.loyaltyPointsBalance ?? 0),
           totalPurchased: merchant.totalPointsPurchased || 0,
           totalDistributed: merchant.totalPointsDistributed || 0
         },
@@ -753,7 +793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/merchant/wallet/transfer", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
-      const merchant = await storage.getMerchantByUserId(req.user.id);
+      const merchant = await storage.getMerchantByUserId(req.user.userId);
       if (!merchant) {
         return res.status(404).json({ message: "Merchant profile not found" });
       }
@@ -765,7 +805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create transaction record
       const transaction = await storage.createRewardTransaction({
-        fromUserId: req.user.id,
+        fromUserId: req.user.userId,
         toUserId: req.user.id,
         points: 0,
         type: "wallet_transfer",
@@ -786,7 +826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/merchant/wallet/withdraw", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
-      const merchant = await storage.getMerchantByUserId(req.user.id);
+      const merchant = await storage.getMerchantByUserId(req.user.userId);
       if (!merchant) {
         return res.status(404).json({ message: "Merchant profile not found" });
       }
@@ -799,7 +839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create withdrawal transaction
       const transaction = await storage.createRewardTransaction({
-        fromUserId: req.user.id,
+        fromUserId: req.user.userId,
         toUserId: req.user.id,
         points: 0,
         type: "withdrawal",
@@ -808,7 +848,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Update merchant balance
-      await storage.updateMerchant(req.user.id, {
+      await storage.updateMerchant(req.user.userId, {
         komarceBalance: (merchant.komarceBalance || 0) - amount,
         totalWithdrawn: (merchant.totalWithdrawn || 0) + amount
       });
@@ -826,7 +866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Merchant Customer Management
   app.get("/api/merchant/customers", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
-      const merchant = await storage.getMerchantByUserId(req.user.id);
+      const merchant = await storage.getMerchantByUserId(req.user.userId);
       if (!merchant) {
         return res.status(404).json({ message: "Merchant profile not found" });
       }
@@ -912,7 +952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Track download
       const transaction = await storage.createRewardTransaction({
-        fromUserId: req.user.id,
+        fromUserId: req.user.userId,
         toUserId: req.user.id,
         points: 0,
         type: "template_download",
@@ -959,7 +999,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/merchant/profile", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
       const user = await storage.getUser(req.user.id);
-      const merchant = await storage.getMerchantByUserId(req.user.id);
+      const merchant = await storage.getMerchantByUserId(req.user.userId);
       
       if (!user || !merchant) {
         return res.status(404).json({ message: "Profile not found" });
@@ -1050,6 +1090,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Customer wallet system routes
   app.use('/api/customer', customerWalletRoutes);
+  
+  // Global reward system routes
+  registerGlobalRewardRoutes(app);
   
   // Import and register loyalty routes
   const { registerLoyaltyRoutes } = await import("./loyalty-routes");
@@ -1221,6 +1264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/distribute-points', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
     try {
       const { toUserId, points, description } = req.body;
+      const pts = Number(points);
       const distributionData = insertPointDistributionSchema.parse({
         fromUserId: req.user.userId,
         toUserId,
@@ -1232,13 +1276,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update sender points balance
       const senderAdmin = await storage.getAdmin(req.user.userId);
-      if (!senderAdmin || senderAdmin.pointsBalance < points) {
+      if (!senderAdmin || senderAdmin.pointsBalance < pts) {
         return res.status(400).json({ message: 'Insufficient points balance' });
       }
 
       await storage.updateAdmin(req.user.userId, {
-        pointsBalance: senderAdmin.pointsBalance - points,
-        totalPointsDistributed: senderAdmin.totalPointsDistributed + points
+        pointsBalance: senderAdmin.pointsBalance - pts,
+        totalPointsDistributed: (senderAdmin.totalPointsDistributed || 0) + pts
       });
 
       // Update receiver points balance
@@ -1247,21 +1291,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const receiverAdmin = await storage.getAdmin(toUserId);
         if (receiverAdmin) {
           await storage.updateAdmin(toUserId, {
-            pointsBalance: receiverAdmin.pointsBalance + points,
-            totalPointsReceived: receiverAdmin.totalPointsReceived + points
+            pointsBalance: (receiverAdmin.pointsBalance || 0) + pts,
+            totalPointsReceived: (receiverAdmin.totalPointsReceived || 0) + pts
           });
         }
       } else {
         // Distributing to merchant
         const merchant = await storage.getMerchantByUserId(toUserId);
         if (merchant) {
-          await storage.updateMerchant(merchant.id, {
-            availablePoints: Number(merchant.availablePoints) + points
+          // updateMerchant expects a userId, not the merchant.id
+          await storage.updateMerchant(toUserId, {
+            // Keep both fields in sync so all endpoints/UIs reflect correctly
+            loyaltyPointsBalance: (merchant.loyaltyPointsBalance || 0) + pts,
+            availablePoints: (merchant.availablePoints || 0) + pts,
+            totalPointsPurchased: (merchant.totalPointsPurchased || 0) + pts
           });
         }
       }
 
-      const distribution = await storage.createPointDistribution(distributionData);
+      const distribution = await storage.createPointDistribution({
+        ...distributionData,
+        points: pts
+      });
       res.json(distribution);
     } catch (error) {
       console.error('Distribute points error:', error);

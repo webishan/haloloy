@@ -261,7 +261,7 @@ export default function MerchantPanel() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-white flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold text-gray-800">Merchant Portal</CardTitle>
@@ -372,7 +372,7 @@ export default function MerchantPanel() {
                   <Card>
                     <CardContent className="p-6">
                       <div className="flex items-center">
-                        <TrendingUp className="h-8 w-8 text-blue-600" />
+                        <TrendingUp className="h-8 w-8 text-red-600" />
                         <div className="ml-4">
                           <p className="text-sm font-medium text-gray-600">Total Orders</p>
                           <p className="text-2xl font-bold text-gray-900" data-testid="text-total-orders">
@@ -386,7 +386,7 @@ export default function MerchantPanel() {
                   <Card>
                     <CardContent className="p-6">
                       <div className="flex items-center">
-                        <Package className="h-8 w-8 text-purple-600" />
+                        <Package className="h-8 w-8 text-red-500" />
                         <div className="ml-4">
                           <p className="text-sm font-medium text-gray-600">Active Products</p>
                           <p className="text-2xl font-bold text-gray-900" data-testid="text-active-products">
@@ -444,7 +444,7 @@ export default function MerchantPanel() {
                       <div
                         key={user.id}
                         className={`p-4 cursor-pointer hover:bg-gray-50 border-b ${
-                          selectedChatUser?.id === user.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                          selectedChatUser?.id === user.id ? 'bg-red-50 border-l-4 border-l-red-500' : ''
                         }`}
                         onClick={() => setSelectedChatUser(user)}
                         data-testid={`user-${user.id}`}
@@ -495,7 +495,7 @@ export default function MerchantPanel() {
                               <div
                                 className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                                   message.senderId === currentUser?.userId
-                                    ? 'bg-blue-500 text-white'
+                                    ? 'bg-red-500 text-white'
                                     : 'bg-gray-100 text-gray-900'
                                 }`}
                                 data-testid={`message-${message.id}`}

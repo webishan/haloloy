@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { Logo } from '@/components/ui/logo';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function Login() {
@@ -79,10 +80,10 @@ export default function Login() {
     <div className="pt-32 min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
-          <Link href="/" className="text-3xl font-bold text-primary">
-            KOMARCE
+          <Link href="/">
+            <Logo size="xl" className="justify-center hover:opacity-80 transition-opacity" />
           </Link>
-          <p className="mt-2 text-gray-600">Sign in to your account</p>
+          <p className="mt-4 text-gray-600">Sign in to your account</p>
         </div>
 
         <Card>

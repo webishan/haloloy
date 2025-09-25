@@ -121,6 +121,50 @@ export interface IStorage {
   getAdminsByType(adminType: 'global' | 'local'): Promise<Admin[]>;
   getAdminsByCountry(country: string): Promise<Admin[]>;
   
+  // Global Admin Analytics
+  getGlobalMerchants(period: string): Promise<any>;
+  getGlobalCustomers(period: string): Promise<any>;
+  getGlobalRewardPoints(period: string): Promise<any>;
+  getGlobalSerialNumbers(period: string): Promise<any>;
+  getGlobalWithdrawals(period: string): Promise<any>;
+  getGlobalVATServiceCharge(period: string): Promise<any>;
+  getCommissionSettings(): Promise<any>;
+  updateCommissionSettings(settings: any): Promise<any>;
+  distributePointsToLocalAdmin(data: any): Promise<any>;
+  distributePointsToMerchants(data: any): Promise<any>;
+  
+  // Local Admin Analytics
+  getLocalAdminDashboard(country: string, period: string): Promise<any>;
+  
+  // StepUp Reward Number Methods
+  createStepUpRewardNumber(data: InsertStepUpRewardNumber): Promise<StepUpRewardNumber>;
+  getStepUpRewardNumber(id: string): Promise<StepUpRewardNumber | undefined>;
+  updateStepUpRewardNumber(id: string, updates: Partial<StepUpRewardNumber>): Promise<StepUpRewardNumber>;
+  getActiveRewardNumbers(userId: string): Promise<StepUpRewardNumber[]>;
+  getRewardNumbersByUser(userId: string): Promise<StepUpRewardNumber[]>;
+  generateSerialNumber(): Promise<string>;
+  getNextGlobalRewardNumber(): Promise<number>;
+  getNextLocalRewardNumber(): Promise<number>;
+  
+  // Merchant Income Methods
+  getMerchantIncomes(merchantId: string, fromDate?: Date): Promise<any[]>;
+  createMerchantIncome(data: any): Promise<any>;
+  updateMerchantIncome(id: string, data: any): Promise<any>;
+  
+  // Withdrawal Methods
+  createWithdrawalRequest(data: any): Promise<any>;
+  getWithdrawalRequest(id: string): Promise<any>;
+  updateWithdrawalRequest(id: string, data: any): Promise<any>;
+  getWithdrawalRequests(merchantId: string): Promise<any[]>;
+  getWithdrawalHistory(merchantId: string, fromDate?: Date): Promise<any[]>;
+  
+  // Customer Withdrawal Methods
+  createCustomerWithdrawalRequest(data: any): Promise<any>;
+  getCustomerWithdrawalRequest(id: string): Promise<any>;
+  updateCustomerWithdrawalRequest(id: string, data: any): Promise<any>;
+  getCustomerWithdrawalRequests(customerId: string): Promise<any[]>;
+  getCustomerWithdrawalHistory(customerId: string, fromDate?: Date): Promise<any[]>;
+  
   // Point distribution
   getPointDistributions(userId?: string): Promise<PointDistribution[]>;
   createPointDistribution(distribution: InsertPointDistribution): Promise<PointDistribution>;
@@ -141,6 +185,8 @@ export interface IStorage {
   createSecureChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   markMessageAsRead(messageId: string): Promise<void>;
   markConversationMessagesAsRead(conversationId: string, userId: string): Promise<void>;
+  getUnreadMessageCount(conversationId: string, userId: string): Promise<number>;
+  getRecentUnreadMessages(userId: string, limit?: number): Promise<ChatMessage[]>;
   getChatRooms(userId: string): Promise<ChatRoom[]>;
   createChatRoom(room: InsertChatRoom): Promise<ChatRoom>;
   getOrdersByMerchant(merchantId: string): Promise<Order[]>;
@@ -254,6 +300,7 @@ export interface IStorage {
   getCustomerProfileById(customerId: string): Promise<CustomerProfile | undefined>;
   getCustomerProfileByMobile(mobileNumber: string): Promise<CustomerProfile | undefined>;
   getCustomerProfileByAccountNumber(accountNumber: string): Promise<CustomerProfile | undefined>;
+  getAllCustomerProfiles(): Promise<CustomerProfile[]>;
   updateCustomerProfile(userId: string, profile: Partial<CustomerProfile>): Promise<CustomerProfile>;
   generateUniqueAccountNumber(): Promise<string>;
 
@@ -272,6 +319,14 @@ export interface IStorage {
   getCustomerSerialNumber(customerId: string): Promise<CustomerSerialNumber | undefined>;
   getNextGlobalSerialNumber(): Promise<number>;
   assignSerialNumberToCustomer(customerId: string): Promise<CustomerSerialNumber>;
+
+  // Global Reward System
+  createGlobalRewardNumber(rewardNumber: any): Promise<any>;
+  getGlobalRewardNumber(id: string): Promise<any>;
+  updateGlobalRewardNumber(id: string, updates: any): Promise<any>;
+  getGlobalRewardNumbersByCustomer(customerId: string): Promise<any[]>;
+  createCustomerPointTransaction(transaction: any): Promise<any>;
+  getAllCustomerSerialNumbers(): Promise<any[]>;
 
   // Customer OTP
   createCustomerOTP(otp: InsertCustomerOTP): Promise<CustomerOTP>;
@@ -490,32 +545,7 @@ export class MemStorage implements IStorage {
       isActive: true
     });
 
-    // Create local admin users for different countries
-    const countries = ["BD", "MY", "AE", "PH"];
-    for (const country of countries) {
-      const localAdminUser = await this.createUser({
-        username: `local${country.toLowerCase()}`,
-        email: `local.${country.toLowerCase()}@komarce.com`,
-        password: await bcrypt.hash("local123", 10),
-        firstName: `Local ${country}`,
-        lastName: "Admin",
-        role: "local_admin",
-        country: country,
-        isActive: true
-      });
-
-      // Create local admin profile
-      await this.createAdmin({
-        userId: localAdminUser.id,
-        adminType: "local",
-        country: country,
-        pointsBalance: 50000,
-        totalPointsReceived: 50000,
-        totalPointsDistributed: 0,
-        permissions: ["manage_merchants", "distribute_points", "view_analytics"],
-        isActive: true
-      });
-    }
+    // Skip creating local admin users - will be created manually
 
     // Create legacy admin user for backward compatibility
     const adminUser = await this.createUser({
@@ -529,141 +559,10 @@ export class MemStorage implements IStorage {
       isActive: true
     });
 
-    // Create sample merchant users
-    const merchant1 = await this.createUser({
-      username: "techstore",
-      email: "merchant@techstore.com",
-      password: await bcrypt.hash("merchant123", 10),
-      firstName: "Tech",
-      lastName: "Store",
-      role: "merchant",
-      country: "BD",
-      isActive: true
-    });
+    // Skip creating merchants - will be created manually
+    // Skip creating customers - will be created manually
 
-    const merchant2 = await this.createUser({
-      username: "fashionhub",
-      email: "merchant@fashionhub.com",
-      password: await bcrypt.hash("merchant123", 10),
-      firstName: "Fashion",
-      lastName: "Hub",
-      role: "merchant",
-      country: "MY",
-      isActive: true
-    });
-
-    // Create sample customers
-    const customer1 = await this.createUser({
-      username: "customer1",
-      email: "customer@komarce.com",
-      password: await bcrypt.hash("customer123", 10),
-      firstName: "John",
-      lastName: "Customer",
-      role: "customer",
-      country: "BD",
-      isActive: true
-    });
-
-    const customer2 = await this.createUser({
-      username: "customer2",
-      email: "sarah@customer.com",
-      password: await bcrypt.hash("customer123", 10),
-      firstName: "Sarah",
-      lastName: "Wilson",
-      role: "customer",
-      country: "MY",
-      isActive: true
-    });
-
-    // Create merchant profiles
-    const techStoreMerchant = await this.createMerchant({
-      userId: merchant1.id,
-      businessName: "TechStore Electronics",
-      businessType: "Electronics Retailer",
-      tier: "Double Star"
-    });
-
-    const fashionHubMerchant = await this.createMerchant({
-      userId: merchant2.id,
-      businessName: "Fashion Hub Malaysia",
-      businessType: "Fashion Retailer", 
-      tier: "Star"
-    });
-
-    // Create sample products
-    const electronicsCategory = await this.getCategories();
-    const fashionCategory = electronicsCategory.find(c => c.slug === 'fashion');
-    const electronicsCat = electronicsCategory.find(c => c.slug === 'electronics');
-    const samsungBrand = await this.getBrands();
-    const appleBrand = samsungBrand.find(b => b.slug === 'apple');
-    const samsung = samsungBrand.find(b => b.slug === 'samsung');
-    const nike = samsungBrand.find(b => b.slug === 'nike');
-
-    const sampleProducts = [
-      {
-        name: "Samsung Galaxy S24 Ultra",
-        description: "Latest flagship smartphone with AI features and S Pen",
-        price: "1299.00",
-        originalPrice: "1499.00",
-        sku: "SGS24U-512",
-        stock: 25,
-        categoryId: electronicsCat?.id || "",
-        brandId: samsung?.id || "",
-        merchantId: techStoreMerchant.id,
-        pointsReward: 130,
-        images: ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9"],
-        isActive: true
-      },
-      {
-        name: "iPhone 15 Pro Max",
-        description: "Apple's most advanced iPhone with titanium design",
-        price: "1199.00", 
-        originalPrice: "1299.00",
-        sku: "IP15PM-256",
-        stock: 15,
-        categoryId: electronicsCat?.id || "",
-        brandId: appleBrand?.id || "",
-        merchantId: techStoreMerchant.id,
-        pointsReward: 120,
-        images: ["https://images.unsplash.com/photo-1592750475338-74b7b21085ab"],
-        isActive: true
-      },
-      {
-        name: "Nike Air Max 90",
-        description: "Classic Nike sneakers with comfortable cushioning",
-        price: "120.00",
-        originalPrice: "150.00", 
-        sku: "NAM90-10",
-        stock: 50,
-        categoryId: fashionCategory?.id || "",
-        brandId: nike?.id || "",
-        merchantId: fashionHubMerchant.id,
-        pointsReward: 12,
-        images: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff"],
-        isActive: true
-      },
-      {
-        name: "Samsung 4K Smart TV 65\"",
-        description: "Crystal UHD 4K Smart TV with Tizen OS",
-        price: "799.00",
-        originalPrice: "999.00",
-        sku: "SST65-4K",
-        stock: 10,
-        categoryId: electronicsCat?.id || "",
-        brandId: samsung?.id || "",
-        merchantId: techStoreMerchant.id,
-        pointsReward: 80,
-        images: ["https://images.unsplash.com/photo-1593359677879-a4bb92f829d1"],
-        isActive: true
-      }
-    ];
-
-    for (const product of sampleProducts) {
-      await this.createProduct({
-        ...product,
-        slug: product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-      });
-    }
+    // Skip creating sample products - no merchants to assign them to
   }
 
   // User methods
@@ -1093,30 +992,46 @@ export class MemStorage implements IStorage {
     const customer = await this.getCustomerByUserId(order.customerId);
     if (!customer) return;
 
-    // Add points to accumulated points
+    // Add points to accumulated points (max 1499, convert to reward number at 1500)
     const newAccumulatedPoints = customer.accumulatedPoints + order.pointsEarned;
     let updates: Partial<Customer> = {
-      accumulatedPoints: newAccumulatedPoints,
       totalPoints: customer.totalPoints + order.pointsEarned
     };
 
-    // Check if we need to create a reward number (every 1500 points)
+    // Implement Bengali document logic: accumulated points max 1499, convert at 1500
     if (newAccumulatedPoints >= 1500) {
-      const rewardNumbersToCreate = Math.floor(newAccumulatedPoints / 1500);
-      const remainingPoints = newAccumulatedPoints % 1500;
+      // Create global reward number when reaching 1500 points
+      const globalRewardNumber = await this.getNextGlobalRewardNumber();
+      const serialNumber = await this.generateSerialNumber();
+      
+      // Create StepUp reward number with 4-tier system (800/1500/3500/32200)
+      await this.createStepUpRewardNumber({
+        userId: customer.userId,
+        rewardNumber: globalRewardNumber,
+        serialNumber: serialNumber,
+        type: "global",
+        tier1Status: "active",
+        tier1Amount: 800,    // First tier: 800 points
+        tier2Status: "locked",
+        tier2Amount: 1500,   // Second tier: 1500 points  
+        tier3Status: "locked",
+        tier3Amount: 3500,   // Third tier: 3500 points
+        tier4Status: "locked",
+        tier4Amount: 32200,  // Final tier: 32200 points
+        tier4VoucherReserve: 6000,    // Voucher reserve: 6000
+        tier4RedeemableAmount: 20200, // Redeemable: 20200 (32200 - 6000)
+        currentPoints: 0,
+        totalPointsRequired: 38000,   // Total: 800+1500+3500+32200 = 38000
+        isCompleted: false,
+        country: customer.country || 'BD'
+      });
 
-      // Create reward numbers
-      for (let i = 0; i < rewardNumbersToCreate; i++) {
-        const globalRewardNumber = await this.getNextGlobalRewardNumber();
-        await this.createRewardNumber({
-          customerId: customer.id,
-          rewardNumber: globalRewardNumber,
-          type: "global"
-        });
-      }
-
-      updates.accumulatedPoints = remainingPoints;
-      updates.globalRewardNumbers = customer.globalRewardNumbers + rewardNumbersToCreate;
+      // Reset accumulated points to 0 after creating reward number
+      updates.accumulatedPoints = 0;
+      updates.globalRewardNumbers = (customer.globalRewardNumbers || 0) + 1;
+    } else {
+      // Keep accumulated points under 1500
+      updates.accumulatedPoints = newAccumulatedPoints;
     }
 
     await this.updateCustomer(customer.userId, updates);
@@ -1228,6 +1143,669 @@ export class MemStorage implements IStorage {
 
   async getAdminsByCountry(country: string): Promise<Admin[]> {
     return Array.from(this.admins.values()).filter(admin => admin.country === country);
+  }
+
+  // Global Admin Analytics Methods
+  async getGlobalMerchants(period: string): Promise<any> {
+    const merchants = Array.from(this.merchants.values());
+    const now = new Date();
+    let filteredMerchants = merchants;
+
+    if (period !== 'all') {
+      const periodDate = this.getPeriodDate(now, period);
+      filteredMerchants = merchants.filter(m => m.createdAt >= periodDate);
+    }
+
+    const merchantTypes = {
+      regular: filteredMerchants.filter(m => !m.isEMerchant).length,
+      eMerchant: filteredMerchants.filter(m => m.isEMerchant).length,
+      star: filteredMerchants.filter(m => m.rank === 'star').length,
+      doubleStar: filteredMerchants.filter(m => m.rank === 'double_star').length,
+      tripleStar: filteredMerchants.filter(m => m.rank === 'triple_star').length,
+      executive: filteredMerchants.filter(m => m.rank === 'executive').length,
+      total: filteredMerchants.length
+    };
+
+    return {
+      period,
+      merchantTypes,
+      merchants: filteredMerchants.map(m => ({
+        id: m.id,
+        businessName: m.businessName,
+        country: m.country,
+        rank: m.rank,
+        isEMerchant: m.isEMerchant,
+        createdAt: m.createdAt
+      }))
+    };
+  }
+
+  async getGlobalCustomers(period: string): Promise<any> {
+    const customers = Array.from(this.customers.values());
+    const now = new Date();
+    let filteredCustomers = customers;
+
+    if (period !== 'all') {
+      const periodDate = this.getPeriodDate(now, period);
+      filteredCustomers = customers.filter(c => c.createdAt >= periodDate);
+    }
+
+    // Get top customers by serial number and referral
+    const topBySerial = filteredCustomers
+      .sort((a, b) => (b.totalSerialNumbers || 0) - (a.totalSerialNumbers || 0))
+      .slice(0, 10);
+
+    const topByReferral = filteredCustomers
+      .sort((a, b) => (b.totalReferrals || 0) - (a.totalReferrals || 0))
+      .slice(0, 10);
+
+    return {
+      period,
+      total: filteredCustomers.length,
+      topBySerial: topBySerial.map(c => ({
+        id: c.id,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        totalSerialNumbers: c.totalSerialNumbers || 0,
+        country: c.country
+      })),
+      topByReferral: topByReferral.map(c => ({
+        id: c.id,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        totalReferrals: c.totalReferrals || 0,
+        country: c.country
+      }))
+    };
+  }
+
+  async getGlobalRewardPoints(period: string): Promise<any> {
+    const now = new Date();
+    let periodDate = new Date(0);
+    
+    if (period !== 'all') {
+      periodDate = this.getPeriodDate(now, period);
+    }
+
+    // Calculate total sales and distributions
+    const pointTransactions = Array.from(this.pointTransactions.values())
+      .filter(pt => pt.createdAt >= periodDate);
+
+    const totalSales = pointTransactions
+      .filter(pt => pt.transactionType === 'purchase')
+      .reduce((sum, pt) => sum + pt.points, 0);
+
+    const totalDistributed = pointTransactions
+      .filter(pt => pt.transactionType === 'reward' || pt.transactionType === 'bonus')
+      .reduce((sum, pt) => sum + pt.points, 0);
+
+    // Group by country
+    const countryStats = new Map();
+    pointTransactions.forEach(pt => {
+      const country = pt.country || 'Unknown';
+      if (!countryStats.has(country)) {
+        countryStats.set(country, { sales: 0, distributed: 0 });
+      }
+      const stats = countryStats.get(country);
+      if (pt.transactionType === 'purchase') {
+        stats.sales += pt.points;
+      } else if (pt.transactionType === 'reward' || pt.transactionType === 'bonus') {
+        stats.distributed += pt.points;
+      }
+    });
+
+    return {
+      period,
+      totalSales,
+      totalDistributed,
+      countryBreakdown: Array.from(countryStats.entries()).map(([country, stats]) => ({
+        country,
+        sales: stats.sales,
+        distributed: stats.distributed
+      }))
+    };
+  }
+
+  async getGlobalSerialNumbers(period: string): Promise<any> {
+    const now = new Date();
+    let periodDate = new Date(0);
+    
+    if (period !== 'all') {
+      periodDate = this.getPeriodDate(now, period);
+    }
+
+    const serialNumbers = Array.from(this.stepUpRewardNumbers.values())
+      .filter(sn => sn.createdAt >= periodDate);
+
+    const globalSerials = serialNumbers.filter(sn => sn.type === 'global');
+    const localSerials = serialNumbers.filter(sn => sn.type === 'local');
+
+    return {
+      period,
+      global: {
+        total: globalSerials.length,
+        completed: globalSerials.filter(sn => sn.isCompleted).length,
+        active: globalSerials.filter(sn => !sn.isCompleted).length
+      },
+      local: {
+        total: localSerials.length,
+        completed: localSerials.filter(sn => sn.isCompleted).length,
+        active: localSerials.filter(sn => !sn.isCompleted).length
+      },
+      countryBreakdown: this.getSerialNumbersByCountry(serialNumbers)
+    };
+  }
+
+  async getGlobalWithdrawals(period: string): Promise<any> {
+    const now = new Date();
+    let periodDate = new Date(0);
+    
+    if (period !== 'all') {
+      periodDate = this.getPeriodDate(now, period);
+    }
+
+    const withdrawals = Array.from(this.pointTransactions.values())
+      .filter(pt => pt.transactionType === 'withdrawal' && pt.createdAt >= periodDate);
+
+    const merchantWithdrawals = withdrawals.filter(pt => pt.userType === 'merchant');
+    const customerWithdrawals = withdrawals.filter(pt => pt.userType === 'customer');
+
+    const totalWithdrawn = withdrawals.reduce((sum, pt) => sum + Math.abs(pt.points), 0);
+    const totalVAT = withdrawals.reduce((sum, pt) => sum + parseFloat(pt.vatAmount || '0'), 0);
+    const totalServiceCharge = withdrawals.reduce((sum, pt) => sum + parseFloat(pt.serviceCharge || '0'), 0);
+
+    return {
+      period,
+      totalWithdrawn,
+      totalVAT,
+      totalServiceCharge,
+      merchant: {
+        count: merchantWithdrawals.length,
+        amount: merchantWithdrawals.reduce((sum, pt) => sum + Math.abs(pt.points), 0)
+      },
+      customer: {
+        count: customerWithdrawals.length,
+        amount: customerWithdrawals.reduce((sum, pt) => sum + Math.abs(pt.points), 0)
+      }
+    };
+  }
+
+  async getGlobalVATServiceCharge(period: string): Promise<any> {
+    const now = new Date();
+    let periodDate = new Date(0);
+    
+    if (period !== 'all') {
+      periodDate = this.getPeriodDate(now, period);
+    }
+
+    const transactions = Array.from(this.pointTransactions.values())
+      .filter(pt => pt.createdAt >= periodDate);
+
+    const totalVAT = transactions.reduce((sum, pt) => sum + parseFloat(pt.vatAmount || '0'), 0);
+    const totalServiceCharge = transactions.reduce((sum, pt) => sum + parseFloat(pt.serviceCharge || '0'), 0);
+
+    // Group by country
+    const countryStats = new Map();
+    transactions.forEach(pt => {
+      const country = pt.country || 'Unknown';
+      if (!countryStats.has(country)) {
+        countryStats.set(country, { vat: 0, serviceCharge: 0 });
+      }
+      const stats = countryStats.get(country);
+      stats.vat += parseFloat(pt.vatAmount || '0');
+      stats.serviceCharge += parseFloat(pt.serviceCharge || '0');
+    });
+
+    return {
+      period,
+      totalVAT,
+      totalServiceCharge,
+      countryBreakdown: Array.from(countryStats.entries()).map(([country, stats]) => ({
+        country,
+        vat: stats.vat,
+        serviceCharge: stats.serviceCharge
+      }))
+    };
+  }
+
+  async getCommissionSettings(): Promise<any> {
+    const settings = Array.from(this.adminSettings.values());
+    const commissionSettings = settings.filter(s => s.category === 'commission');
+    
+    const result: any = {};
+    commissionSettings.forEach(setting => {
+      result[setting.settingKey] = {
+        value: setting.settingValue,
+        description: setting.description,
+        isActive: setting.isActive
+      };
+    });
+
+    return result;
+  }
+
+  async updateCommissionSettings(settings: any): Promise<any> {
+    const updatedSettings = [];
+    
+    for (const [key, value] of Object.entries(settings)) {
+      if (key === 'confirmPassword') continue;
+      
+      const existing = Array.from(this.adminSettings.values())
+        .find(s => s.settingKey === key);
+      
+      if (existing) {
+        const updated = await this.updateAdminSetting(existing.id, {
+          settingValue: value as string,
+          updatedAt: new Date()
+        });
+        updatedSettings.push(updated);
+      } else {
+        const newSetting = await this.createAdminSetting({
+          settingKey: key,
+          settingValue: value as string,
+          category: 'commission',
+          description: `Commission setting for ${key}`,
+          isActive: true
+        });
+        updatedSettings.push(newSetting);
+      }
+    }
+
+    return updatedSettings;
+  }
+
+  async distributePointsToLocalAdmin(data: any): Promise<any> {
+    const { distributorId, receiverId, points, description, type } = data;
+    
+    // Update distributor balance
+    const distributor = await this.getAdmin(distributorId);
+    if (!distributor || distributor.pointsBalance < points) {
+      throw new Error('Insufficient points balance');
+    }
+
+    await this.updateAdmin(distributorId, {
+      pointsBalance: distributor.pointsBalance - points,
+      totalPointsDistributed: distributor.totalPointsDistributed + points
+    });
+
+    // Update receiver balance
+    const receiver = await this.getAdmin(receiverId);
+    if (!receiver) {
+      throw new Error('Receiver not found');
+    }
+
+    await this.updateAdmin(receiverId, {
+      pointsBalance: receiver.pointsBalance + points,
+      totalPointsReceived: receiver.totalPointsReceived + points
+    });
+
+    // Create distribution record
+    const distribution = await this.createPointDistribution({
+      fromUserId: distributorId,
+      toUserId: receiverId,
+      points,
+      description,
+      type,
+      status: 'completed'
+    });
+
+    return distribution;
+  }
+
+  async distributePointsToMerchants(data: any): Promise<any> {
+    const { distributorId, merchantIds, points, description, type } = data;
+    
+    const distributor = await this.getAdmin(distributorId);
+    if (!distributor || distributor.pointsBalance < points * merchantIds.length) {
+      throw new Error('Insufficient points balance');
+    }
+
+    const distributions = [];
+    
+    for (const merchantId of merchantIds) {
+      const merchant = await this.getMerchant(merchantId);
+      if (!merchant) continue;
+
+      // Update merchant wallet
+      const wallet = await this.getMerchantWallet(merchantId);
+      if (wallet) {
+        await this.updateMerchantWallet(merchantId, {
+          rewardPointBalance: wallet.rewardPointBalance + points
+        });
+      }
+
+      // FIXED: Update merchant main balance fields
+      const newLoyaltyBalance = (merchant.loyaltyPointsBalance || 0) + points;
+      const newAvailablePoints = (merchant.availablePoints || 0) + points;
+      const newTotalReceived = (merchant.totalPointsReceived || 0) + points;
+
+      await this.updateMerchant(merchant.userId, {
+        loyaltyPointsBalance: newLoyaltyBalance,
+        availablePoints: newAvailablePoints,
+        totalPointsReceived: newTotalReceived
+      });
+
+      console.log(`✅ Distributed ${points} points to merchant ${merchantId}`);
+      console.log(`   - Previous balance: ${merchant.loyaltyPointsBalance || 0}`);
+      console.log(`   - New balance: ${newLoyaltyBalance}`);
+      console.log(`   - Available points: ${newAvailablePoints}`);
+
+      // Verify the update worked
+      const updatedMerchant = await this.getMerchant(merchant.userId);
+      console.log(`   - Verified balance: ${updatedMerchant?.loyaltyPointsBalance || 0}`);
+
+      // Create distribution record
+      const distribution = await this.createPointDistribution({
+        fromUserId: distributorId,
+        toUserId: merchantId,
+        points,
+        description,
+        type,
+        status: 'completed'
+      });
+
+      distributions.push(distribution);
+    }
+
+    // Update distributor balance
+    await this.updateAdmin(distributorId, {
+      pointsBalance: distributor.pointsBalance - (points * merchantIds.length),
+      totalPointsDistributed: distributor.totalPointsDistributed + (points * merchantIds.length)
+    });
+
+    console.log(`🎯 Admin ${distributorId} distributed ${points * merchantIds.length} points to ${merchantIds.length} merchants`);
+
+    return distributions;
+  }
+
+  async getLocalAdminDashboard(country: string, period: string): Promise<any> {
+    const now = new Date();
+    let periodDate = new Date(0);
+    
+    if (period !== 'all') {
+      periodDate = this.getPeriodDate(now, period);
+    }
+
+    // Get country-specific data
+    const merchants = Array.from(this.merchants.values())
+      .filter(m => m.country === country && m.createdAt >= periodDate);
+
+    const customers = Array.from(this.customers.values())
+      .filter(c => c.country === country && c.createdAt >= periodDate);
+
+    const pointTransactions = Array.from(this.pointTransactions.values())
+      .filter(pt => pt.country === country && pt.createdAt >= periodDate);
+
+    const serialNumbers = Array.from(this.stepUpRewardNumbers.values())
+      .filter(sn => sn.country === country && sn.createdAt >= periodDate);
+
+    return {
+      period,
+      country,
+      merchants: {
+        total: merchants.length,
+        regular: merchants.filter(m => !m.isEMerchant).length,
+        eMerchant: merchants.filter(m => m.isEMerchant).length,
+        star: merchants.filter(m => m.rank === 'star').length,
+        doubleStar: merchants.filter(m => m.rank === 'double_star').length,
+        tripleStar: merchants.filter(m => m.rank === 'triple_star').length,
+        executive: merchants.filter(m => m.rank === 'executive').length
+      },
+      customers: {
+        total: customers.length,
+        topBySerial: customers
+          .sort((a, b) => (b.totalSerialNumbers || 0) - (a.totalSerialNumbers || 0))
+          .slice(0, 10),
+        topByReferral: customers
+          .sort((a, b) => (b.totalReferrals || 0) - (a.totalReferrals || 0))
+          .slice(0, 10)
+      },
+      rewardPoints: {
+        totalSales: pointTransactions
+          .filter(pt => pt.transactionType === 'purchase')
+          .reduce((sum, pt) => sum + pt.points, 0),
+        totalDistributed: pointTransactions
+          .filter(pt => pt.transactionType === 'reward' || pt.transactionType === 'bonus')
+          .reduce((sum, pt) => sum + pt.points, 0)
+      },
+      serialNumbers: {
+        global: serialNumbers.filter(sn => sn.type === 'global').length,
+        local: serialNumbers.filter(sn => sn.type === 'local').length,
+        completed: serialNumbers.filter(sn => sn.isCompleted).length,
+        active: serialNumbers.filter(sn => !sn.isCompleted).length
+      },
+      withdrawals: {
+        total: pointTransactions
+          .filter(pt => pt.transactionType === 'withdrawal')
+          .reduce((sum, pt) => sum + Math.abs(pt.points), 0),
+        merchant: pointTransactions
+          .filter(pt => pt.transactionType === 'withdrawal' && pt.userType === 'merchant')
+          .reduce((sum, pt) => sum + Math.abs(pt.points), 0),
+        customer: pointTransactions
+          .filter(pt => pt.transactionType === 'withdrawal' && pt.userType === 'customer')
+          .reduce((sum, pt) => sum + Math.abs(pt.points), 0)
+      }
+    };
+  }
+
+  // StepUp Reward Number Methods
+  async createStepUpRewardNumber(data: InsertStepUpRewardNumber): Promise<StepUpRewardNumber> {
+    const id = randomUUID();
+    const rewardNumber: StepUpRewardNumber = {
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...data
+    };
+    this.stepUpRewardNumbers.set(id, rewardNumber);
+    return rewardNumber;
+  }
+
+  async getStepUpRewardNumber(id: string): Promise<StepUpRewardNumber | undefined> {
+    return this.stepUpRewardNumbers.get(id);
+  }
+
+  async updateStepUpRewardNumber(id: string, updates: Partial<StepUpRewardNumber>): Promise<StepUpRewardNumber> {
+    const existing = this.stepUpRewardNumbers.get(id);
+    if (!existing) {
+      throw new Error("StepUp reward number not found");
+    }
+    const updated = { ...existing, ...updates, updatedAt: new Date() };
+    this.stepUpRewardNumbers.set(id, updated);
+    return updated;
+  }
+
+  async getActiveRewardNumbers(userId: string): Promise<StepUpRewardNumber[]> {
+    return Array.from(this.stepUpRewardNumbers.values())
+      .filter(rn => rn.userId === userId && !rn.isCompleted);
+  }
+
+  async getRewardNumbersByUser(userId: string): Promise<StepUpRewardNumber[]> {
+    return Array.from(this.stepUpRewardNumbers.values())
+      .filter(rn => rn.userId === userId);
+  }
+
+  async generateSerialNumber(): Promise<string> {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 8);
+    return `SN${timestamp}${random}`.toUpperCase();
+  }
+
+  async getNextGlobalRewardNumber(): Promise<number> {
+    const existing = Array.from(this.stepUpRewardNumbers.values())
+      .filter(rn => rn.type === 'global')
+      .map(rn => rn.rewardNumber);
+    
+    if (existing.length === 0) return 1;
+    return Math.max(...existing) + 1;
+  }
+
+  async getNextLocalRewardNumber(): Promise<number> {
+    const existing = Array.from(this.stepUpRewardNumbers.values())
+      .filter(rn => rn.type === 'local')
+      .map(rn => rn.rewardNumber);
+    
+    if (existing.length === 0) return 1;
+    return Math.max(...existing) + 1;
+  }
+
+  // Withdrawal Methods
+  async createWithdrawalRequest(data: any): Promise<any> {
+    const id = randomUUID();
+    const request = {
+      id,
+      createdAt: new Date(),
+      ...data
+    };
+    this.withdrawalRequests.set(id, request);
+    return request;
+  }
+
+  async getWithdrawalRequest(id: string): Promise<any> {
+    return this.withdrawalRequests.get(id);
+  }
+
+  async updateWithdrawalRequest(id: string, data: any): Promise<any> {
+    const existing = this.withdrawalRequests.get(id);
+    if (!existing) {
+      throw new Error("Withdrawal request not found");
+    }
+    const updated = { ...existing, ...data };
+    this.withdrawalRequests.set(id, updated);
+    return updated;
+  }
+
+  async getWithdrawalRequests(merchantId: string): Promise<any[]> {
+    return Array.from(this.withdrawalRequests.values())
+      .filter(request => request.merchantId === merchantId);
+  }
+
+  async getWithdrawalHistory(merchantId: string, fromDate?: Date): Promise<any[]> {
+    let requests = Array.from(this.withdrawalRequests.values())
+      .filter(request => request.merchantId === merchantId);
+    
+    if (fromDate) {
+      requests = requests.filter(request => request.createdAt >= fromDate);
+    }
+    
+    return requests;
+  }
+
+  // Customer Withdrawal Methods
+  async createCustomerWithdrawalRequest(data: any): Promise<any> {
+    const id = randomUUID();
+    const request = {
+      id,
+      createdAt: new Date(),
+      ...data
+    };
+    this.customerWithdrawalRequests.set(id, request);
+    return request;
+  }
+
+  async getCustomerWithdrawalRequest(id: string): Promise<any> {
+    return this.customerWithdrawalRequests.get(id);
+  }
+
+  async updateCustomerWithdrawalRequest(id: string, data: any): Promise<any> {
+    const existing = this.customerWithdrawalRequests.get(id);
+    if (!existing) {
+      throw new Error("Customer withdrawal request not found");
+    }
+    const updated = { ...existing, ...data };
+    this.customerWithdrawalRequests.set(id, updated);
+    return updated;
+  }
+
+  async getCustomerWithdrawalRequests(customerId: string): Promise<any[]> {
+    return Array.from(this.customerWithdrawalRequests.values())
+      .filter(request => request.customerId === customerId);
+  }
+
+  async getCustomerWithdrawalHistory(customerId: string, fromDate?: Date): Promise<any[]> {
+    let requests = Array.from(this.customerWithdrawalRequests.values())
+      .filter(request => request.customerId === customerId);
+    
+    if (fromDate) {
+      requests = requests.filter(request => request.createdAt >= fromDate);
+    }
+    
+    return requests;
+  }
+
+  // Merchant Income Methods
+  async getMerchantIncomes(merchantId: string, fromDate?: Date): Promise<any[]> {
+    let incomes = Array.from(this.merchantIncomes.values())
+      .filter(income => income.merchantId === merchantId);
+    
+    if (fromDate) {
+      incomes = incomes.filter(income => income.createdAt >= fromDate);
+    }
+    
+    return incomes;
+  }
+
+  async createMerchantIncome(data: any): Promise<any> {
+    const id = randomUUID();
+    const income = {
+      id,
+      createdAt: new Date(),
+      ...data
+    };
+    this.merchantIncomes.set(id, income);
+    return income;
+  }
+
+  async updateMerchantIncome(id: string, data: any): Promise<any> {
+    const existing = this.merchantIncomes.get(id);
+    if (!existing) {
+      throw new Error("Merchant income not found");
+    }
+    const updated = { ...existing, ...data };
+    this.merchantIncomes.set(id, updated);
+    return updated;
+  }
+
+  // Helper methods
+  private getPeriodDate(now: Date, period: string): Date {
+    const date = new Date(now);
+    switch (period) {
+      case 'daily':
+        date.setDate(date.getDate() - 1);
+        break;
+      case 'weekly':
+        date.setDate(date.getDate() - 7);
+        break;
+      case 'monthly':
+        date.setMonth(date.getMonth() - 1);
+        break;
+      case 'yearly':
+        date.setFullYear(date.getFullYear() - 1);
+        break;
+      default:
+        return new Date(0);
+    }
+    return date;
+  }
+
+  private getSerialNumbersByCountry(serialNumbers: any[]): any[] {
+    const countryStats = new Map();
+    serialNumbers.forEach(sn => {
+      const country = sn.country || 'Unknown';
+      if (!countryStats.has(country)) {
+        countryStats.set(country, { global: 0, local: 0, completed: 0, active: 0 });
+      }
+      const stats = countryStats.get(country);
+      if (sn.type === 'global') stats.global++;
+      if (sn.type === 'local') stats.local++;
+      if (sn.isCompleted) stats.completed++;
+      else stats.active++;
+    });
+
+    return Array.from(countryStats.entries()).map(([country, stats]) => ({
+      country,
+      ...stats
+    }));
   }
 
   // Point distribution methods
@@ -1531,6 +2109,37 @@ export class MemStorage implements IStorage {
       const updatedMessage = { ...message, isRead: true };
       this.chatMessages.set(message.id, updatedMessage);
     }
+  }
+
+  async getUnreadMessageCount(conversationId: string, userId: string): Promise<number> {
+    const unreadMessages = Array.from(this.chatMessages.values())
+      .filter(msg => 
+        msg.conversationId === conversationId && 
+        msg.receiverId === userId && 
+        !msg.isRead
+      );
+    
+    return unreadMessages.length;
+  }
+
+  async getRecentUnreadMessages(userId: string, limit: number = 10): Promise<ChatMessage[]> {
+    const unreadMessages = Array.from(this.chatMessages.values())
+      .filter(msg => msg.receiverId === userId && !msg.isRead)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+    
+    // Add sender names to messages
+    const messagesWithSenderNames = await Promise.all(
+      unreadMessages.map(async (msg) => {
+        const sender = this.users.get(msg.senderId);
+        return {
+          ...msg,
+          senderName: sender ? `${sender.firstName} ${sender.lastName}` : 'Unknown User'
+        };
+      })
+    );
+    
+    return messagesWithSenderNames;
   }
 
   // Legacy method for backward compatibility
@@ -2270,6 +2879,8 @@ export class MemStorage implements IStorage {
   private customerPointTransactions: Map<string, CustomerPointTransaction> = new Map();
   private customerSerialNumbers: Map<string, CustomerSerialNumber> = new Map();
   private customerOTPs: Map<string, CustomerOTP> = new Map();
+  private globalRewardNumbers: Map<string, any> = new Map();
+  private customerPointTransactions: Map<string, any> = new Map();
   private customerPointTransfers: Map<string, CustomerPointTransfer> = new Map();
   private customerPurchases: Map<string, CustomerPurchase> = new Map();
   private globalSerialCounter = 0;
@@ -2304,6 +2915,10 @@ export class MemStorage implements IStorage {
   async getCustomerProfileByAccountNumber(accountNumber: string): Promise<CustomerProfile | undefined> {
     return Array.from(this.customerProfiles.values())
       .find(p => p.uniqueAccountNumber === accountNumber);
+  }
+
+  async getAllCustomerProfiles(): Promise<CustomerProfile[]> {
+    return Array.from(this.customerProfiles.values());
   }
 
   async updateCustomerProfile(userId: string, profile: Partial<CustomerProfile>): Promise<CustomerProfile> {
@@ -2396,14 +3011,16 @@ export class MemStorage implements IStorage {
   }
 
   async assignSerialNumberToCustomer(customerId: string): Promise<CustomerSerialNumber> {
+    // Get the next sequential global serial number based on achievement order
     const globalSerialNumber = await this.getNextGlobalSerialNumber();
     const totalSerialCount = this.customerSerialNumbers.size + 1;
     
+    // Create the serial number record
     const serial = await this.createCustomerSerialNumber({
       customerId,
       globalSerialNumber,
       totalSerialCount,
-      pointsAtSerial: 1500,
+      pointsAtSerial: 1500, // Points at time of serial assignment
       isActive: true
     });
 
@@ -2414,9 +3031,32 @@ export class MemStorage implements IStorage {
         globalSerialNumber,
         localSerialNumber: totalSerialCount
       });
+      
+      console.log(`🎯 Customer ${profile.userId} assigned global serial #${globalSerialNumber} (achievement order)`);
     }
 
+    // Log the reward tier assignment
+    const rewardTier = this.getRewardTierBySerial(globalSerialNumber);
+    console.log(`🏆 Customer assigned to ${rewardTier.name} tier (Serial #${globalSerialNumber}, Reward: ${rewardTier.reward} points)`);
+
     return serial;
+  }
+
+  // Get reward tier based on global serial number (matching the Bengali logic)
+  private getRewardTierBySerial(serialNumber: number): { name: string; range: string; reward: number } {
+    if (serialNumber === 1) {
+      return { name: 'Champion', range: '1', reward: 38000 };
+    } else if (serialNumber >= 2 && serialNumber <= 5) {
+      return { name: 'Elite', range: '2-5', reward: 15000 };
+    } else if (serialNumber >= 6 && serialNumber <= 15) {
+      return { name: 'Premium', range: '6-15', reward: 8000 };
+    } else if (serialNumber >= 16 && serialNumber <= 37) {
+      return { name: 'Gold', range: '16-37', reward: 3500 };
+    } else if (serialNumber >= 38 && serialNumber <= 65) {
+      return { name: 'Silver', range: '38-65', reward: 1500 };
+    } else {
+      return { name: 'Bronze', range: '66+', reward: 800 };
+    }
   }
 
   // Customer OTP
@@ -3664,6 +4304,51 @@ export class MemStorage implements IStorage {
 
     this.merchantCustomers.set(existing.id, updated);
     return updated;
+  }
+
+  // Global Reward System Implementation
+  async createGlobalRewardNumber(rewardNumber: any): Promise<any> {
+    this.globalRewardNumbers.set(rewardNumber.id, rewardNumber);
+    return rewardNumber;
+  }
+
+  async getGlobalRewardNumber(id: string): Promise<any> {
+    return this.globalRewardNumbers.get(id);
+  }
+
+  async updateGlobalRewardNumber(id: string, updates: any): Promise<any> {
+    const existing = this.globalRewardNumbers.get(id);
+    if (!existing) {
+      throw new Error('Global reward number not found');
+    }
+    const updated = { ...existing, ...updates };
+    this.globalRewardNumbers.set(id, updated);
+    return updated;
+  }
+
+  async getGlobalRewardNumbersByCustomer(customerId: string): Promise<any[]> {
+    return Array.from(this.globalRewardNumbers.values())
+      .filter(rn => rn.customerId === customerId)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
+  async createCustomerPointTransaction(transaction: any): Promise<any> {
+    const id = randomUUID();
+    const newTransaction = {
+      id,
+      ...transaction,
+      createdAt: new Date()
+    };
+    this.customerPointTransactions.set(id, newTransaction);
+    return newTransaction;
+  }
+
+  async getAllCustomerSerialNumbers(): Promise<any[]> {
+    return Array.from(this.customerSerialNumbers.values());
+  }
+
+  async getAllCustomerProfiles(): Promise<CustomerProfile[]> {
+    return Array.from(this.customerProfiles.values());
   }
 }
 

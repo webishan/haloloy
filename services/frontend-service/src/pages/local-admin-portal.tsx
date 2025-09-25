@@ -103,7 +103,7 @@ export default function LocalAdminPortal() {
 
   // Get current user's country dashboard data  
   const { data: localDashboard, isLoading: isDashboardLoading } = useQuery({
-    queryKey: ['/api/admin/local-dashboard', currentUser?.country],
+    queryKey: ['/api/admin/local/dashboard', currentUser?.country],
     enabled: isAuthenticated && !!currentUser?.country,
     refetchInterval: 30000, // Refresh every 30 seconds
     retry: false
@@ -116,10 +116,10 @@ export default function LocalAdminPortal() {
     queryFn: async () => {
       // Mock data for now - will be replaced with real API calls
       return {
-        totalMerchants: 25,
-        regularMerchants: 15,
-        eMerchants: 8,
-        starMerchants: 2,
+        totalMerchants: 0,
+        regularMerchants: 0,
+        eMerchants: 0,
+        starMerchants: 0,
         doubleStarMerchants: 0,
         tripleStarMerchants: 0,
         executiveMerchants: 0
@@ -133,8 +133,8 @@ export default function LocalAdminPortal() {
     queryFn: async () => {
       // Mock data for now
       return {
-        totalCustomers: 150,
-        activeCustomers: 120
+        totalCustomers: 0,
+        activeCustomers: 0
       };
     }
   });
@@ -307,7 +307,7 @@ export default function LocalAdminPortal() {
     onSuccess: () => {
       toast({ title: "Points Distributed", description: "Points have been distributed to merchant successfully!" });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/local-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/local/dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/merchants'] });
       refetchBalance(); // Force immediate balance update
       setDistributeForm({ merchantId: "", points: "", description: "" });
@@ -818,10 +818,10 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Active Merchants</p>
                       <p className="text-3xl font-bold text-blue-600">
-                            {localMerchantStats?.totalMerchants || 0}
+                            {localDashboard?.overview?.activeMerchants || 0}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
-                            {localMerchantStats?.regularMerchants || 0} Regular • {localMerchantStats?.eMerchants || 0} E-Merchants
+                            {localDashboard?.merchants?.regular || 0} Regular • {localDashboard?.merchants?.eMerchant || 0} E-Merchants
                       </p>
                     </div>
                         <Building2 className="w-8 h-8 text-blue-500" />
@@ -835,10 +835,10 @@ export default function LocalAdminPortal() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Customers</p>
                       <p className="text-3xl font-bold text-purple-600">
-                            {localCustomerStats?.totalCustomers || 0}
+                            {localDashboard?.overview?.totalCustomers || 0}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
-                            {localCustomerStats?.activeCustomers || 0} Active
+                            {localDashboard?.customers?.active || 0} Active
                       </p>
                     </div>
                     <Users className="w-8 h-8 text-purple-500" />

@@ -382,14 +382,14 @@ export default function AdminPortal() {
   // Login Form
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-lg shadow-2xl border-0">
-          <CardHeader className="text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
+          <CardHeader className="text-center bg-gradient-to-r from-red-600 to-red-500 text-white rounded-t-lg">
             <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full mx-auto mb-4 flex items-center justify-center">
               <Shield className="w-10 h-10 text-white" />
             </div>
             <CardTitle className="text-3xl font-bold">KOMARCE Admin Portal</CardTitle>
-            <p className="text-blue-100">Secure administrative access</p>
+            <p className="text-red-100">Secure administrative access</p>
           </CardHeader>
           <CardContent className="p-8">
             <form onSubmit={handleLogin} className="space-y-6">
@@ -439,7 +439,7 @@ export default function AdminPortal() {
 
               <Button 
                 type="submit" 
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-lg"
+                className="w-full h-12 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white font-semibold text-lg"
                 disabled={loginMutation.isPending}
                 data-testid="button-admin-login"
               >
@@ -450,7 +450,7 @@ export default function AdminPortal() {
             <div className="mt-6 text-center text-sm text-gray-500">
               <p>Test Credentials:</p>
               <p>Global: global@komarce.com / global123</p>
-              <p>Local BD: local.bd@komarce.com / local123</p>
+              <p>Local BD: bd@komarce.com / local123</p>
             </div>
           </CardContent>
         </Card>
@@ -466,7 +466,7 @@ export default function AdminPortal() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-red-500 rounded-lg flex items-center justify-center">
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -515,7 +515,7 @@ export default function AdminPortal() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className={`grid w-full ${currentUser?.role === 'global_admin' ? 'grid-cols-7' : 'grid-cols-6'}`}>
+          <TabsList className={`grid w-full ${currentUser?.role === 'global_admin' ? 'grid-cols-9' : 'grid-cols-8'}`}>
             <TabsTrigger value="dashboard" data-testid="tab-dashboard">
               <BarChart3 className="w-4 h-4 mr-2" />
               Dashboard
@@ -526,6 +526,10 @@ export default function AdminPortal() {
                 Add Points
               </TabsTrigger>
             )}
+            <TabsTrigger value="analytics" data-testid="tab-analytics">
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Analytics
+            </TabsTrigger>
             <TabsTrigger value="points" data-testid="tab-points">
               <DollarSign className="w-4 h-4 mr-2" />
               Points
@@ -538,6 +542,10 @@ export default function AdminPortal() {
               <Star className="w-4 h-4 mr-2" />
               Merchants
             </TabsTrigger>
+            <TabsTrigger value="withdrawals" data-testid="tab-withdrawals">
+              <Zap className="w-4 h-4 mr-2" />
+              Withdrawals
+            </TabsTrigger>
             <TabsTrigger value="chat" data-testid="tab-chat">
               <MessageCircle className="w-4 h-4 mr-2" />
               Chat
@@ -547,6 +555,149 @@ export default function AdminPortal() {
               Settings
             </TabsTrigger>
           </TabsList>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Merchants</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardData?.merchants?.total || 0}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {dashboardData?.merchants?.regular || 0} Regular, {dashboardData?.merchants?.eMerchant || 0} E-Merchants
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+                  <UserCheck className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardData?.customers?.total || 0}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Active users across all countries
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Reward Points</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardData?.rewardPoints?.totalDistributed?.toLocaleString() || 0}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Total distributed to customers
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Serial Numbers</CardTitle>
+                  <Award className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardData?.serialNumbers?.global?.total || 0}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Global: {dashboardData?.serialNumbers?.global?.completed || 0} completed
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Merchant Types Distribution</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Regular Merchants</span>
+                      <span className="text-sm text-muted-foreground">{dashboardData?.merchants?.regular || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">E-Merchants</span>
+                      <span className="text-sm text-muted-foreground">{dashboardData?.merchants?.eMerchant || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Star Merchants</span>
+                      <span className="text-sm text-muted-foreground">{dashboardData?.merchants?.star || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Double Star</span>
+                      <span className="text-sm text-muted-foreground">{dashboardData?.merchants?.doubleStar || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Triple Star</span>
+                      <span className="text-sm text-muted-foreground">{dashboardData?.merchants?.tripleStar || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Executive</span>
+                      <span className="text-sm text-muted-foreground">{dashboardData?.merchants?.executive || 0}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Withdrawal Analytics</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Total Withdrawn</span>
+                      <span className="text-sm text-muted-foreground">${dashboardData?.withdrawals?.totalWithdrawn?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Merchant Withdrawals</span>
+                      <span className="text-sm text-muted-foreground">${dashboardData?.withdrawals?.merchant?.amount?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Customer Withdrawals</span>
+                      <span className="text-sm text-muted-foreground">${dashboardData?.withdrawals?.customer?.amount?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Total VAT & Service Charge</span>
+                      <span className="text-sm text-muted-foreground">${dashboardData?.vatServiceCharge?.totalVAT?.toLocaleString() || 0}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Country-wise Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {dashboardData?.countryBreakdown?.map((country: any) => (
+                    <div key={country.country} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <h4 className="font-medium">{country.country}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {country.merchants || 0} merchants, {country.customers || 0} customers
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">${country.sales?.toLocaleString() || 0}</p>
+                        <p className="text-xs text-muted-foreground">Total Sales</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Add Points Tab (Global Admin Only) */}
           {currentUser?.role === 'global_admin' && (
@@ -1111,6 +1262,96 @@ export default function AdminPortal() {
                     }}
                   />
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Withdrawals Tab */}
+          <TabsContent value="withdrawals" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Zap className="w-5 h-5 mr-2 text-blue-600" />
+                  Withdrawal Management
+                </CardTitle>
+                <CardDescription>
+                  Manage and monitor withdrawal requests from merchants and customers
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-yellow-600">0</div>
+                        <p className="text-xs text-muted-foreground">Awaiting approval</p>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Total Withdrawn</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-green-600">$0</div>
+                        <p className="text-xs text-muted-foreground">This month</p>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">VAT Collected</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-blue-600">$0</div>
+                        <p className="text-xs text-muted-foreground">12.5% on withdrawals</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Recent Withdrawal Requests</h3>
+                      <Select defaultValue="all">
+                        <SelectTrigger className="w-32">
+                          <SelectValue placeholder="Filter" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="approved">Approved</SelectItem>
+                          <SelectItem value="rejected">Rejected</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>User</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Method</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              No withdrawal requests found
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

@@ -39,7 +39,7 @@ function CustomerQRScanner({ currentUser }: { currentUser: MerchantUser | null }
   // Scan QR code mutation
   const scanQRMutation = useMutation({
     mutationFn: async (qrCode: string) => {
-      return await apiRequest('/api/customer/qr-scan', {
+      return await apiRequest('/api/merchant/scan-customer', {
         method: 'POST',
         body: JSON.stringify({ qrCode }),
         headers: { 'Content-Type': 'application/json' }
@@ -396,14 +396,14 @@ export default function MerchantPortal() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-lg shadow-2xl border-0">
-          <CardHeader className="text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
+          <CardHeader className="text-center bg-gradient-to-r from-red-600 to-red-500 text-white rounded-t-lg">
             <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full mx-auto mb-4 flex items-center justify-center">
               <Store className="w-10 h-10 text-white" />
             </div>
             <CardTitle className="text-3xl font-bold">Merchant Portal</CardTitle>
-            <p className="text-blue-100">KOMARCE Business Dashboard</p>
+            <p className="text-red-100">KOMARCE Business Dashboard</p>
           </CardHeader>
           <CardContent className="p-8">
             <form onSubmit={handleLogin} className="space-y-6">
@@ -437,7 +437,7 @@ export default function MerchantPortal() {
 
               <Button 
                 type="submit" 
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-lg"
+                className="w-full h-12 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white font-semibold text-lg"
                 disabled={loginMutation.isPending}
                 data-testid="button-merchant-login"
               >
@@ -464,7 +464,7 @@ export default function MerchantPortal() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-red-500 rounded-lg flex items-center justify-center">
                 <Store className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -530,11 +530,11 @@ export default function MerchantPortal() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Balance</p>
-                      <p className="text-3xl font-bold text-blue-600">
+                      <p className="text-3xl font-bold text-red-600">
                         {isDashboardLoading ? "..." : ((dashboardData as any)?.availablePoints?.toLocaleString() || 0)}
                       </p>
                     </div>
-                    <Coins className="w-8 h-8 text-blue-500" />
+                    <Coins className="w-8 h-8 text-red-500" />
                   </div>
                 </CardContent>
               </Card>
@@ -558,11 +558,11 @@ export default function MerchantPortal() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Distributed</p>
-                      <p className="text-3xl font-bold text-purple-600">
+                      <p className="text-3xl font-bold text-red-500">
                         {isDashboardLoading ? "..." : ((dashboardData as any)?.totalPointsDistributed?.toLocaleString() || 0)}
                       </p>
                     </div>
-                    <TrendingUp className="w-8 h-8 text-purple-500" />
+                    <TrendingUp className="w-8 h-8 text-red-400" />
                   </div>
                 </CardContent>
               </Card>
@@ -587,7 +587,7 @@ export default function MerchantPortal() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
-                    <Store className="w-5 h-5 mr-2 text-blue-600" />
+                    <Store className="w-5 h-5 mr-2 text-red-600" />
                     Business Profile
                   </CardTitle>
                   <CardDescription>Your merchant account information and tier status</CardDescription>
@@ -613,7 +613,7 @@ export default function MerchantPortal() {
                     
                     <div>
                       <p className="text-sm font-medium text-gray-600">Points Available</p>
-                      <p className="text-lg font-semibold text-blue-600">
+                      <p className="text-lg font-semibold text-red-600">
                         {merchantProfile.availablePoints?.toLocaleString()} points
                       </p>
                     </div>
@@ -662,7 +662,7 @@ export default function MerchantPortal() {
                         <TableRow key={transaction.id}>
                           <TableCell>{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>
                           <TableCell>{transaction.customerName || 'Customer'}</TableCell>
-                          <TableCell className="font-medium text-blue-600">
+                          <TableCell className="font-medium text-red-600">
                             +{transaction.points}
                           </TableCell>
                           <TableCell>
@@ -688,7 +688,7 @@ export default function MerchantPortal() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <Gift className="w-5 h-5 mr-2 text-blue-600" />
+                  <Gift className="w-5 h-5 mr-2 text-red-600" />
                   Distribute Points to Customers
                 </CardTitle>
                 <CardDescription>
@@ -759,12 +759,12 @@ export default function MerchantPortal() {
                   </div>
 
                   <div className="space-y-4">
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                      <h4 className="font-semibold text-blue-800 mb-2">Available Points</h4>
-                      <p className="text-2xl font-bold text-blue-600">
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                      <h4 className="font-semibold text-red-800 mb-2">Available Points</h4>
+                      <p className="text-2xl font-bold text-red-600">
                         {merchantProfile?.availablePoints?.toLocaleString() || 0} Points
                       </p>
-                      <p className="text-sm text-blue-600 mt-1">Current balance</p>
+                      <p className="text-sm text-red-600 mt-1">Current balance</p>
                     </div>
 
                     <div className="bg-green-50 border border-green-200 p-4 rounded-lg">

@@ -10,17 +10,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtimeBalance } from "@/hooks/use-realtime-balance";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   Shield, Crown, LogOut, Users, DollarSign, BarChart3, Star, Settings, MessageCircle,
   TrendingUp, Coins, CheckCircle, Send, Plus, AlertCircle, Check, X, Menu, X as XIcon,
   Building2, UserCheck, Award, CreditCard, Globe, FileText, Headphones, 
   Database, BarChart, UserPlus, Building, Calendar, Download, Star as StarIcon,
-  Percent, Calculator, Eye, Edit, Trash2, Save, RefreshCw, Filter, Search
+  Percent, Calculator, Eye, Edit, Trash2, Save, RefreshCw, Filter, Search, Bell
 } from "lucide-react";
 import io from "socket.io-client";
 import SecureChat from "@/components/SecureChat";
 import PointsManagementPanel from "@/components/PointsManagementPanel";
+import { useStorageListener } from "@/hooks/use-storage-listener";
+import { NotificationProvider } from "@/hooks/use-notifications";
+import NotificationBadge, { NotificationWrapper, MessageNotificationBadge } from "@/components/NotificationBadge";
 
 interface GlobalAdminUser {
   id: string;
@@ -80,9 +84,21 @@ export default function GlobalAdminPortal() {
       if (!res.ok) throw new Error('Approve failed');
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/pending-point-requests'] });
+      // Optimistically set new balance if backend returned it
+      if (data?.newGlobalBalance !== undefined) {
+        queryClient.setQueryData(['/api/admin/balance'], (prev: any) => ({
+          ...(prev || {}),
+          balance: data.newGlobalBalance
+        }));
+      }
+      // Force immediate refresh of balance and dashboard everywhere
       queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+      // Broadcast a custom event so other tabs/components refresh now
+      window.dispatchEvent(new CustomEvent('dataUpdate'));
+      localStorage.setItem('lastAdminUpdate', Date.now().toString());
     }
   });
 
@@ -175,6 +191,12 @@ export default function GlobalAdminPortal() {
 
     verifyAuth();
   }, []);
+
+  // Real-time balance updates
+  const { isConnected: balanceSocketConnected } = useRealtimeBalance(
+    currentUser?.id,
+    localStorage.getItem('globalAdminToken') || undefined
+  );
 
   // Socket connection for real-time chat
   useEffect(() => {
@@ -360,17 +382,20 @@ export default function GlobalAdminPortal() {
   const { data: adminBalance, refetch: refetchBalance } = useQuery({
     queryKey: ['/api/admin/balance'],
     enabled: isAuthenticated,
-    refetchInterval: 5000, // Poll every 5 seconds
+    refetchInterval: 30000, // Poll every 30 seconds
     retry: false,
     staleTime: 0, // Always fetch fresh data
     cacheTime: 0 // Don't cache the results
   });
 
+  // Listen for storage/custom events to force immediate refresh
+  useStorageListener(['/api/admin/balance','/api/admin/dashboard']);
+
   // Transaction history from database
   const { data: transactionHistory, refetch: refetchTransactions } = useQuery({
     queryKey: ['/api/admin/transactions'],
     enabled: isAuthenticated,
-    refetchInterval: 10000, // Poll every 10 seconds
+    refetchInterval: 30000, // Poll every 30 seconds
     retry: false
   });
 
@@ -438,10 +463,14 @@ export default function GlobalAdminPortal() {
         description: `${data.distribution?.points?.toLocaleString()} points distributed. Remaining balance: ${data.remainingBalance?.toLocaleString()}` 
       });
       
-      // Refresh balance and transaction history
+      // Refresh my balance and dashboard
       refetchBalance();
       refetchTransactions();
       queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+      
+      // Notify other tabs (e.g., local admin) to refresh immediately
+      window.dispatchEvent(new CustomEvent('dataUpdate'));
+      localStorage.setItem('lastAdminUpdate', Date.now().toString());
       
       setDistributePointsForm({ toUserId: "", points: "", description: "" });
     },
@@ -471,6 +500,8 @@ export default function GlobalAdminPortal() {
       setSocket(null);
     }
     toast({ title: "Logged Out", description: "You have been logged out successfully." });
+    // Navigate to main home page
+    window.location.href = "/";
   };
 
   const handleAddPoints = () => {
@@ -598,7 +629,14 @@ export default function GlobalAdminPortal() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <NotificationProvider 
+      currentUser={currentUser ? {
+        id: currentUser.id,
+        token: localStorage.getItem('globalAdminToken') || '',
+        role: currentUser.role
+      } : undefined}
+    >
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -626,6 +664,18 @@ export default function GlobalAdminPortal() {
                 <Crown className="w-4 h-4 mr-1" />
                 Global Administrator
               </Badge>
+              
+              {/* Notification Bell */}
+              <NotificationWrapper badgeProps={{ type: 'total', size: 'sm' }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveTab("chat")}
+                  className="relative"
+                >
+                  <Bell className="w-5 h-5 text-gray-600" />
+                </Button>
+              </NotificationWrapper>
               
               <div className="flex items-center space-x-2 text-sm text-gray-600">
                 <span>{currentUser?.firstName} {currentUser?.lastName}</span>
@@ -834,23 +884,27 @@ export default function GlobalAdminPortal() {
               Distribute Points
               </Button>
               
-              <Button
-                variant={activeTab === "requests" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("requests")}
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Manage Requests
-              </Button>
+              <NotificationWrapper badgeProps={{ type: 'custom', size: 'sm', count: pendingRequests?.length || 0 }}>
+                <Button
+                  variant={activeTab === "requests" ? "default" : "ghost"}
+                  className="w-full justify-start"
+                  onClick={() => setActiveTab("requests")}
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Manage Requests
+                </Button>
+              </NotificationWrapper>
               
-              <Button
-                variant={activeTab === "chat" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("chat")}
-              >
-              <MessageCircle className="w-4 h-4 mr-2" />
-                Secure Chat
-              </Button>
+              <NotificationWrapper badgeProps={{ type: 'messages' }}>
+                <Button
+                  variant={activeTab === "chat" ? "default" : "ghost"}
+                  className="w-full justify-start"
+                  onClick={() => setActiveTab("chat")}
+                >
+                <MessageCircle className="w-4 h-4 mr-2" />
+                  Secure Chat
+                </Button>
+              </NotificationWrapper>
             </nav>
           </ScrollArea>
         </div>
@@ -903,6 +957,93 @@ export default function GlobalAdminPortal() {
             {/* Content based on active tab */}
             {activeTab === "dashboard" && (
               <div className="space-y-6">
+                {/* Global Admin Balance Card - Prominent Display */}
+                <Card className="border-2 border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                  <CardContent className="p-8">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center mb-2">
+                          <Crown className="w-6 h-6 text-green-600 mr-2" />
+                          <h2 className="text-2xl font-bold text-green-800">Global Admin Balance</h2>
+                        </div>
+                        <p className="text-4xl font-bold text-green-600 mb-2">
+                          {adminBalance?.balance ? adminBalance.balance.toLocaleString() : '0'} Points
+                        </p>
+                        <p className="text-green-700 text-lg">
+                          Available for distribution to local admins
+                        </p>
+                        <div className="flex items-center mt-3 space-x-4">
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                            <span className="text-sm text-green-600 font-medium">Live Balance</span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => refetchBalance()}
+                            className="text-green-600 border-green-300 hover:bg-green-50"
+                          >
+                            <RefreshCw className="w-3 h-3 mr-1" />
+                            Refresh
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Recent Balance Transactions */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <TrendingUp className="w-5 h-5 mr-2" />
+                      Recent Balance Activity
+                    </CardTitle>
+                    <CardDescription>
+                      Latest point generation and distribution activities
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {transactionHistory?.transactions && transactionHistory.transactions.length > 0 ? (
+                      <div className="space-y-3">
+                        {transactionHistory.transactions.slice(0, 5).map((transaction: any) => (
+                          <div key={transaction.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center">
+                              {transaction.type === 'credit' ? (
+                                <Plus className="w-4 h-4 text-green-600 mr-2" />
+                              ) : (
+                                <Send className="w-4 h-4 text-blue-600 mr-2" />
+                              )}
+                              <div>
+                                <p className="font-medium text-gray-900">
+                                  {transaction.type === 'credit' ? 'Points Generated' : 'Points Distributed'}
+                                </p>
+                                <p className="text-sm text-gray-500">
+                                  {new Date(transaction.createdAt).toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`font-bold ${transaction.type === 'credit' ? 'text-green-600' : 'text-blue-600'}`}>
+                                {transaction.type === 'credit' ? '+' : '-'}{transaction.amount?.toLocaleString() || '0'} Points
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Balance: {transaction.balanceAfter?.toLocaleString() || '0'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <TrendingUp className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                        <p>No recent transactions</p>
+                        <p className="text-sm">Generate or distribute points to see activity here</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* Dashboard Overview Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <Card>
@@ -1846,5 +1987,6 @@ export default function GlobalAdminPortal() {
         </div>
       </div>
     </div>
+    </NotificationProvider>
   );
 }
