@@ -12,7 +12,7 @@ export async function apiRequest(
   method: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  // Check for all possible token types
+  // Check for all possible token types (prioritize customerToken for customer routes)
   const globalToken = localStorage.getItem('globalAdminToken');
   const localToken = localStorage.getItem('localAdminToken');
   const merchantToken = localStorage.getItem('merchantToken');
@@ -20,7 +20,8 @@ export async function apiRequest(
   const adminToken = localStorage.getItem('adminToken');
   const customerToken = localStorage.getItem('customerToken');
   
-  const token = globalToken || localToken || merchantToken || userToken || adminToken || customerToken;
+  // Prioritize customerToken for customer API routes
+  const token = customerToken || globalToken || localToken || merchantToken || userToken || adminToken;
   const headers: Record<string, string> = {};
   
   if (data) {
@@ -48,7 +49,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    // Check for all possible token types
+    // Check for all possible token types (prioritize customerToken for customer routes)
     const globalToken = localStorage.getItem('globalAdminToken');
     const localToken = localStorage.getItem('localAdminToken');
     const merchantToken = localStorage.getItem('merchantToken');
@@ -56,7 +57,8 @@ export const getQueryFn: <T>(options: {
     const adminToken = localStorage.getItem('adminToken');
     const customerToken = localStorage.getItem('customerToken');
     
-    const token = globalToken || localToken || merchantToken || userToken || adminToken || customerToken;
+    // Prioritize customerToken for customer API routes
+    const token = customerToken || globalToken || localToken || merchantToken || userToken || adminToken;
     const headers: Record<string, string> = {};
     
     if (token) {

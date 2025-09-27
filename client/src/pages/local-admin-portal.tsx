@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +17,7 @@ import {
   TrendingUp, Coins, CheckCircle, Send, Plus, AlertCircle, Menu, X as XIcon,
   Building2, UserCheck, Award, CreditCard, Globe, FileText, Headphones, 
   Database, BarChart, UserPlus, Building, Calendar, Download, Star as StarIcon, Star,
-  Percent, Calculator, Eye, Edit, Trash2, Save, RefreshCw, Filter, Search, Bell
+  Percent, Calculator, Eye, Edit, Trash2, Save, RefreshCw, Filter, Search, Bell, History
 } from "lucide-react";
 import SecureChat from "@/components/SecureChat";
 import { useStorageListener } from "@/hooks/use-storage-listener";
@@ -42,6 +42,54 @@ export default function LocalAdminPortal() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState("daily");
+  // Local admin point transaction history
+  const localTransactionsKey = ['/api/admin/local/transactions', currentUser?.id] as const;
+  const { data: localTransactions = [], refetch: refetchLocalTransactions, isFetching: txLoading } = useQuery({
+    queryKey: localTransactionsKey as unknown as any,
+    enabled: isAuthenticated && !!currentUser,
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/local/transactions/${currentUser?.id}?t=${Date.now()}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return Array.isArray(json) ? json : (json?.transactions || []);
+    },
+    select: (data: any) => Array.isArray(data) ? data : (data?.transactions || []),
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    staleTime: 0,
+    gcTime: 0
+  });
+
+  // Helper: compute totals and running balances
+  const localTotals = useMemo(() => {
+    const totals = { credits: 0, debits: 0, net: 0 } as { credits: number; debits: number; net: number };
+    for (const tx of localTransactions) {
+      const amt = Number(tx.amount || 0);
+      if (tx.type === 'credit') totals.credits += amt; else totals.debits += amt;
+    }
+    totals.net = totals.credits - totals.debits;
+    return totals;
+  }, [localTransactions]);
+
+  const transactionsWithRunning = useMemo(() => {
+    if (!Array.isArray(localTransactions)) return [] as any[];
+    // If backend doesn't return balanceAfter, compute running from first balance we find
+    let running: number | null = null;
+    const items = [...localTransactions].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return items.map((tx: any) => {
+      const amount = Number(tx.amount || 0);
+      if (typeof tx.balanceAfter === 'number') {
+        running = tx.balanceAfter;
+      } else {
+        if (running == null) running = 0; // start from 0 if unknown
+        running = tx.type === 'credit' ? running + amount : running - amount;
+      }
+      return { ...tx, _runningBalance: running };
+    }).reverse(); // show newest first
+  }, [localTransactions]);
   const [authLoading, setAuthLoading] = useState(true);
   
   const { toast } = useToast();
@@ -82,8 +130,10 @@ export default function LocalAdminPortal() {
       try {
         const userData = JSON.parse(user);
         if (userData.role === 'local_admin') {
-      setIsAuthenticated(true);
+          setIsAuthenticated(true);
           setCurrentUser(userData);
+          // Warm up local transactions on load
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/local/transactions', userData.id] });
         } else {
           setIsAuthenticated(false);
           setCurrentUser(null);
@@ -332,6 +382,8 @@ export default function LocalAdminPortal() {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/local/dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/merchants'] });
+      queryClient.invalidateQueries({ queryKey: localTransactionsKey as unknown as any });
+      refetchLocalTransactions();
       // Also invalidate merchant wallet cache to ensure merchant dashboard updates
       queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
@@ -363,6 +415,8 @@ export default function LocalAdminPortal() {
     onSuccess: () => {
       toast({ title: 'Request submitted', description: 'Your request has been sent to Global Admin.' });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/point-generation-requests'] });
+      queryClient.invalidateQueries({ queryKey: localTransactionsKey as unknown as any });
+      refetchLocalTransactions();
       setRequestForm({ pointsRequested: "", reason: "" });
     },
     onError: (error: Error) => {
@@ -586,9 +640,9 @@ export default function LocalAdminPortal() {
               
               <Button 
                 onClick={handleLogout} 
-                variant="outline" 
+                variant="default" 
                 size="sm" 
-                className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 flex items-center"
+                className="bg-red-600 hover:bg-red-700 text-white flex items-center"
                 data-testid="button-local-admin-logout"
               >
                 <LogOut className="w-4 h-4 mr-2" />
@@ -615,10 +669,10 @@ export default function LocalAdminPortal() {
           </div>
           
           <ScrollArea className="h-[calc(100vh-4rem)]">
-            <nav className="p-4 space-y-2">
+            <nav className="p-4 space-y-2 text-gray-700">
               <Button
-                variant={activeTab === "dashboard" ? "default" : "ghost"}
-                className="w-full justify-start"
+                variant={activeTab === "dashboard" ? "default" : "outline"}
+                className={`w-full justify-start ${activeTab !== "dashboard" ? "bg-white" : ""}`}
                 onClick={() => setActiveTab("dashboard")}
               >
                 <BarChart3 className="w-4 h-4 mr-2" />
@@ -626,8 +680,8 @@ export default function LocalAdminPortal() {
               </Button>
               
               <Button
-                variant={activeTab === "merchants" ? "default" : "ghost"}
-                className="w-full justify-start"
+                variant={activeTab === "merchants" ? "default" : "outline"}
+                className={`w-full justify-start ${activeTab !== "merchants" ? "bg-white" : ""}`}
                 onClick={() => setActiveTab("merchants")}
               >
                 <Building2 className="w-4 h-4 mr-2" />
@@ -635,8 +689,8 @@ export default function LocalAdminPortal() {
               </Button>
               
               <Button
-                variant={activeTab === "customers" ? "default" : "ghost"}
-                className="w-full justify-start"
+                variant={activeTab === "customers" ? "default" : "outline"}
+                className={`w-full justify-start ${activeTab !== "customers" ? "bg-white" : ""}`}
                 onClick={() => setActiveTab("customers")}
               >
                 <Users className="w-4 h-4 mr-2" />
@@ -697,6 +751,15 @@ export default function LocalAdminPortal() {
                 Request Points
               </Button>
               
+              <Button
+                variant={activeTab === "transactions" ? "default" : "outline"}
+                className={`w-full justify-start ${activeTab !== "transactions" ? "bg-white" : ""}`}
+                onClick={() => setActiveTab("transactions")}
+              >
+                <History className="w-4 h-4 mr-2" />
+                Point Transaction History
+              </Button>
+              
               <NotificationWrapper badgeProps={{ type: 'messages' }}>
                 <Button
                   variant={activeTab === "chat" ? "default" : "ghost"}
@@ -720,6 +783,7 @@ export default function LocalAdminPortal() {
                 <Button
                   variant={timeFilter === "daily" ? "default" : "outline"}
                   size="sm"
+                  className={`${timeFilter === "daily" ? 'rounded-full px-4' : 'rounded-full px-4 text-gray-700'}`}
                   onClick={() => setTimeFilter("daily")}
                 >
                   Daily
@@ -727,6 +791,7 @@ export default function LocalAdminPortal() {
                 <Button
                   variant={timeFilter === "weekly" ? "default" : "outline"}
                   size="sm"
+                  className={`${timeFilter === "weekly" ? 'rounded-full px-4' : 'rounded-full px-4 text-gray-700'}`}
                   onClick={() => setTimeFilter("weekly")}
                 >
                   Weekly
@@ -734,6 +799,7 @@ export default function LocalAdminPortal() {
                 <Button
                   variant={timeFilter === "monthly" ? "default" : "outline"}
                   size="sm"
+                  className={`${timeFilter === "monthly" ? 'rounded-full px-4' : 'rounded-full px-4 text-gray-700'}`}
                   onClick={() => setTimeFilter("monthly")}
                 >
                   Monthly
@@ -741,6 +807,7 @@ export default function LocalAdminPortal() {
                 <Button
                   variant={timeFilter === "yearly" ? "default" : "outline"}
                   size="sm"
+                  className={`${timeFilter === "yearly" ? 'rounded-full px-4' : 'rounded-full px-4 text-gray-700'}`}
                   onClick={() => setTimeFilter("yearly")}
                 >
                   Yearly
@@ -749,6 +816,7 @@ export default function LocalAdminPortal() {
               <Button
                 variant="outline"
                 size="sm"
+                className="rounded-full px-4 text-gray-700 hover:text-red-600"
                 onClick={() => queryClient.invalidateQueries()}
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -871,6 +939,77 @@ export default function LocalAdminPortal() {
                 </div>
               </CardContent>
             </Card>
+              </div>
+            )}
+            {activeTab === "transactions" && (
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Point Transaction History</CardTitle>
+                    <CardDescription>All credits, debits and balances for this local admin</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div className="p-4 rounded-lg border bg-white">
+                        <p className="text-xs text-gray-500">Total Credits</p>
+                        <p className="text-2xl font-bold text-green-600">{localTotals.credits.toLocaleString()}</p>
+                      </div>
+                      <div className="p-4 rounded-lg border bg-white">
+                        <p className="text-xs text-gray-500">Total Debits</p>
+                        <p className="text-2xl font-bold text-red-600">{localTotals.debits.toLocaleString()}</p>
+                      </div>
+                      <div className="p-4 rounded-lg border bg-white">
+                        <p className="text-xs text-gray-500">Net Change</p>
+                        <p className={`text-2xl font-bold ${localTotals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{localTotals.net >= 0 ? '+' : ''}{localTotals.net.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead className="text-right">Running Balance</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {transactionsWithRunning.length > 0 ? (
+                          transactionsWithRunning.map((tx: any) => (
+                            <TableRow key={tx.id}>
+                              <TableCell>{new Date(tx.createdAt).toLocaleString()}</TableCell>
+                              <TableCell>
+                                <Badge variant={tx.type === 'credit' ? 'default' : 'destructive'}>
+                                  {tx.type === 'credit' ? 'Credit' : 'Debit'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{tx.description || (tx.type === 'credit' ? 'Points credited' : 'Points debited')}</TableCell>
+                              <TableCell className={`text-right ${tx.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                                {tx.type === 'credit' ? '+' : '-'}{Number(tx.amount || 0).toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right">{Number(tx._runningBalance ?? tx.balanceAfter ?? 0).toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-gray-500">
+                              {txLoading ? 'Loading transactions…' : 'No transactions found'}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                    <div className="flex justify-end mt-4">
+                      <Button variant="outline" size="sm" className="rounded-full px-4" onClick={() => {
+                        queryClient.invalidateQueries({ queryKey: localTransactionsKey as unknown as any });
+                        refetchLocalTransactions();
+                      }}>
+                        <RefreshCw className="w-4 h-4 mr-2" /> Refresh
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
 
@@ -1035,7 +1174,7 @@ export default function LocalAdminPortal() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Top 10 Customers by Serial Number</CardTitle>
+                    <CardTitle>Top 10 Customers by Global Number</CardTitle>
                   </CardHeader>
                   <CardContent>
                   <Table>
@@ -1043,7 +1182,7 @@ export default function LocalAdminPortal() {
                       <TableRow>
                           <TableHead>Rank</TableHead>
                           <TableHead>Customer</TableHead>
-                          <TableHead>Serial Number</TableHead>
+                          <TableHead>Global Number</TableHead>
                           <TableHead>Points</TableHead>
                           <TableHead>Referrals</TableHead>
                       </TableRow>

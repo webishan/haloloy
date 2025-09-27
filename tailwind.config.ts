@@ -11,6 +11,16 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       colors: {
+        // KOMARCE Brand Colors - Red and White Theme
+        brand: {
+          primary: "#DC2626", // Red-600
+          "primary-dark": "#B91C1C", // Red-700
+          "primary-light": "#EF4444", // Red-500
+          secondary: "#FFFFFF", // Pure White
+          "secondary-dark": "#F8FAFC", // Slate-50
+          accent: "#FEE2E2", // Red-100
+        },
+        // Semantic Colors
         background: "var(--background)",
         foreground: "var(--foreground)",
         card: {

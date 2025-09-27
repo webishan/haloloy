@@ -59,6 +59,15 @@ app.use((req, res, next) => {
     }
   }
 
+  // Initialize Global Number System
+  try {
+    const { storage } = await import("./storage");
+    await storage.initializeStepUpConfig();
+    console.log("✅ Global Number System initialized");
+  } catch (error) {
+    console.log("❌ Error initializing Global Number System:", error);
+  }
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes

@@ -27,12 +27,22 @@ export default function MerchantLogin() {
             'Content-Type': 'application/json',
           },
           credentials: 'include',
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email: email.trim(), password: password.trim() }),
         });
 
         if (!response.ok) {
-          const errorData = await response.text();
-          throw new Error(errorData || 'Login failed');
+          // Try to parse JSON error first, then fallback to text
+          let message = 'Login failed';
+          try {
+            const json = await response.json();
+            if (json && (json.message || json.error)) {
+              message = json.message || json.error;
+            }
+          } catch (_) {
+            const text = await response.text();
+            if (text) message = text;
+          }
+          throw new Error(message);
         }
 
         return await response.json();
@@ -72,24 +82,28 @@ export default function MerchantLogin() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password) {
-      loginMutation.mutate({ email, password });
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+    if (!trimmedEmail || !trimmedPassword) {
+      toast({ title: 'Missing credentials', description: 'Enter both email and password.', variant: 'destructive' });
+      return;
     }
+    loginMutation.mutate({ email: trimmedEmail, password: trimmedPassword });
   };
 
   return (
     <div className="pt-32 min-h-screen bg-gradient-to-br from-orange-50 to-primary/5 flex items-center justify-center">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-md mx-auto">
-          <Card className="shadow-xl border-0">
+          <Card className="shadow-xl border border-gray-100 bg-neutral-900 text-white">
             <CardHeader className="text-center pb-8">
               <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Store className="w-8 h-8 text-white" />
               </div>
-              <CardTitle className="text-2xl font-bold text-gray-900">
+              <CardTitle className="text-2xl font-bold text-white">
                 Merchant Portal
               </CardTitle>
-              <p className="text-gray-600 mt-2">
+              <p className="text-white/70 mt-2">
                 Access your KOMARCE merchant dashboard
               </p>
             </CardHeader>
@@ -97,7 +111,7 @@ export default function MerchantLogin() {
             <CardContent className="space-y-6">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Business Email</Label>
+                  <Label htmlFor="email" className="text-white">Business Email</Label>
                   <Input
                     id="email"
                     type="email"
@@ -110,7 +124,7 @@ export default function MerchantLogin() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password" className="text-white">Password</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -129,9 +143,9 @@ export default function MerchantLogin() {
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-400" />
+                        <EyeOff className="h-4 w-4 text-white/60" />
                       ) : (
-                        <Eye className="h-4 w-4 text-gray-400" />
+                        <Eye className="h-4 w-4 text-white/60" />
                       )}
                     </Button>
                   </div>
@@ -147,7 +161,7 @@ export default function MerchantLogin() {
               </form>
 
               <div className="text-center">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-white/80">
                   Want to become a merchant?{' '}
                   <Link href="/register?role=merchant" className="text-primary hover:underline font-medium">
                     Apply here
@@ -155,19 +169,19 @@ export default function MerchantLogin() {
                 </p>
               </div>
 
-              <div className="text-center pt-6 border-t">
-                <p className="text-sm text-gray-600 mb-4">
+              <div className="text-center pt-6 border-t border-white/10">
+                <p className="text-sm text-white mb-4">
                   Demo merchant credentials for testing:
                 </p>
-                <div className="bg-gray-50 rounded-lg p-3 text-sm mb-2">
-                  <p><strong>TechStore (BD)</strong></p>
-                  <p>Email: merchant@techstore.com</p>
-                  <p>Password: merchant123</p>
+                <div className="bg-white/5 rounded-xl p-3 text-sm mb-3 border border-white/10">
+                  <p className="font-semibold text-white">TechStore (BD)</p>
+                  <p className="text-white/80">Email: merchant@techstore.com</p>
+                  <p className="text-white/80">Password: merchant123</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-sm">
-                  <p><strong>Fashion Hub (MY)</strong></p>
-                  <p>Email: merchant@fashionhub.com</p>
-                  <p>Password: merchant123</p>
+                <div className="bg-white/5 rounded-xl p-3 text-sm border border-white/10">
+                  <p className="font-semibold text-white">Fashion Hub (MY)</p>
+                  <p className="text-white/80">Email: merchant@fashionhub.com</p>
+                  <p className="text-white/80">Password: merchant123</p>
                 </div>
                 <Button 
                   onClick={() => {
@@ -176,7 +190,7 @@ export default function MerchantLogin() {
                   }}
                   variant="outline" 
                   size="sm" 
-                  className="w-full mt-2 mr-2"
+                  className="w-full mt-3"
                 >
                   Use TechStore Login
                 </Button>

@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { User, Eye, EyeOff } from 'lucide-react';
 
 export default function CustomerLogin() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState(''); // Changed from email to identifier
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [, setLocation] = useLocation();
@@ -19,15 +19,15 @@ export default function CustomerLogin() {
   const { login } = useAuth();
 
   const loginMutation = useMutation({
-    mutationFn: async ({ email, password }: { email: string; password: string }) => {
+    mutationFn: async ({ identifier, password }: { identifier: string; password: string }) => {
       try {
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch('/api/customer/login', { // Changed to customer-specific endpoint
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           credentials: 'include',
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ identifier, password }),
         });
 
         if (!response.ok) {
@@ -72,8 +72,8 @@ export default function CustomerLogin() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password) {
-      loginMutation.mutate({ email, password });
+    if (identifier && password) {
+      loginMutation.mutate({ identifier, password });
     }
   };
 
@@ -97,16 +97,19 @@ export default function CustomerLogin() {
             <CardContent className="space-y-6">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
+                  <Label htmlFor="identifier">Email or Phone Number</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="identifier"
+                    type="text"
+                    placeholder="Enter your email or phone number"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                     required
                     className="h-12"
                   />
+                  <p className="text-xs text-gray-500">
+                    You can login with either your email address or phone number
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -157,23 +160,37 @@ export default function CustomerLogin() {
 
               <div className="text-center pt-6 border-t">
                 <p className="text-sm text-gray-600 mb-4">
-                  Default customer credentials for testing:
+                  Login Options:
                 </p>
-                <div className="bg-gray-50 rounded-lg p-3 text-sm">
-                  <p><strong>Email:</strong> customer@komarce.com</p>
+                <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-2">
+                  <p><strong>With Email:</strong> customer@komarce.com</p>
+                  <p><strong>With Phone:</strong> +8801234567890</p>
                   <p><strong>Password:</strong> customer123</p>
                 </div>
-                <Button 
-                  onClick={() => {
-                    setEmail('customer@komarce.com');
-                    setPassword('customer123');
-                  }}
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full mt-2"
-                >
-                  Use Default Credentials
-                </Button>
+                <div className="flex space-x-2 mt-2">
+                  <Button 
+                    onClick={() => {
+                      setIdentifier('customer@komarce.com');
+                      setPassword('customer123');
+                    }}
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                  >
+                    Use Email
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setIdentifier('+8801234567890');
+                      setPassword('customer123');
+                    }}
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                  >
+                    Use Phone
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

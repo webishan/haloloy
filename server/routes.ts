@@ -10,7 +10,8 @@ import merchantAdvancedRoutes from "./merchant-advanced-routes";
 import customerRoutes from "./customer-routes";
 import customerRewardRoutes from "./customer-reward-routes";
 import customerWalletRoutes from "./customer-wallet-routes";
-import { registerGlobalRewardRoutes } from "./global-reward-routes";
+import customerRewardSystemRoutes from "./customer-reward-system-routes";
+import globalRewardRoutes from "./global-reward-routes";
 import { 
   insertUserSchema, 
   insertProductSchema, 
@@ -92,6 +93,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           profileComplete: false,
           totalPointsEarned: 0,
           currentPointsBalance: 0,
+          accumulatedPoints: 0,
+          globalSerialNumber: 0, // Start with 0 (not assigned yet)
+          localSerialNumber: 0,  // Start with 0 (not assigned yet)
           tier: 'bronze',
           isActive: true
         });
@@ -640,16 +644,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Customer not found in your scanned customers list" });
       }
 
-      // Get the main customer profile using the customer ID from merchant customer relationship
-      const customer = await storage.getCustomerProfileById(merchantCustomer.customerId);
+      // Get the main customer profile using the user ID from merchant customer relationship
+      console.log(`🔍 Looking for customer profile with user ID: ${merchantCustomer.customerId}`);
+      const customer = await storage.getCustomerProfile(merchantCustomer.customerId);
       if (!customer) {
+        console.log(`❌ Customer profile not found for user ID: ${merchantCustomer.customerId}`);
         return res.status(404).json({ message: "Customer profile not found" });
       }
+      console.log(`✅ Found customer profile: ${customer.fullName}`);
 
-      const customerUser = await storage.getUser(customer.userId);
-      if (!customerUser || customerUser.role !== 'customer') {
-        return res.status(404).json({ message: "Customer user not found" });
-      }
+      // Customer profile found, proceed with point transfer
 
       // Check if merchant has enough points
       if (merchant.availablePoints < points) {
@@ -658,10 +662,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create reward transaction
       const transaction = await storage.createRewardTransaction({
-        fromUserId: req.user.userId,
-        toUserId: customerUser.id,
-        points: parseInt(points),
+        userId: customer.userId,
         type: "transfer",
+        amount: parseInt(points),
         description: description || `Points transfer from ${merchant.businessName}`,
         status: "completed"
       });
@@ -677,11 +680,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         instantCashback: (merchant.instantCashback || 0) + instantCashback
       });
 
-      // Update customer points
+      // Update customer profile with the points before checking global number assignment
+      console.log(`🔍 Updating customer profile with ${points} points`);
       await storage.updateCustomerProfile(customer.userId, {
-        currentPointsBalance: customer.currentPointsBalance + points,
-        totalPointsEarned: customer.totalPointsEarned + points
+        totalPointsEarned: (customer.totalPointsEarned || 0) + parseInt(points),
+        currentPointsBalance: (customer.currentPointsBalance || 0) + parseInt(points),
+        accumulatedPoints: (customer.accumulatedPoints || 0) + parseInt(points)
       });
+
+      // Use the new Global Number system
+      console.log(`🔍 Calling GlobalNumberSystem with ${points} points`);
+      const { globalNumberSystem } = await import('./services/GlobalNumberSystem');
+      const result = await globalNumberSystem.checkAndAssignGlobalNumber(
+        customer.userId, 
+        parseInt(points), 
+        false // These are earned points, not reward points
+      );
+
+      if (result.globalNumberAssigned) {
+        console.log(`🎯 Global Number #${result.globalNumber} assigned to customer ${customer.fullName}`);
+        
+        // Award StepUp rewards if any
+        for (const reward of result.stepUpRewards) {
+          console.log(`🎁 StepUp Reward awarded: ${reward.rewardPoints} points to customer with Global #${reward.globalNumber}`);
+        }
+      }
 
       res.json({ 
         message: "Points sent successfully", 
@@ -1044,32 +1067,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Customer login route
-  app.post('/api/customer/login', async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      
-      const user = await storage.getUserByEmail(email);
-      if (!user || !await bcrypt.compare(password, user.password)) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-      
-      if (user.role !== 'customer') {
-        return res.status(403).json({ message: 'Not authorized as customer' });
-      }
-      
-      const token = jwt.sign(
-        { userId: user.id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-      
-      res.json({ user, token });
-    } catch (error) {
-      console.error('Customer login error:', error);
-      res.status(500).json({ message: 'Login failed' });
-    }
-  });
+  // Customer login route is handled in customer-routes.ts
 
   // Set up specialized route modules
   setupAdminRoutes(app);
@@ -1091,8 +1089,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer wallet system routes
   app.use('/api/customer', customerWalletRoutes);
   
+  // Customer reward system routes (new comprehensive system)
+  app.use('/api/customer', customerRewardSystemRoutes);
+  
   // Global reward system routes
-  registerGlobalRewardRoutes(app);
+  app.use('/api/global-reward', globalRewardRoutes);
   
   // Import and register loyalty routes
   const { registerLoyaltyRoutes } = await import("./loyalty-routes");

@@ -780,6 +780,7 @@ export const customerProfiles = pgTable("customer_profiles", {
   localSerialNumber: integer("local_serial_number"),
   totalPointsEarned: integer("total_points_earned").notNull().default(0),
   currentPointsBalance: integer("current_points_balance").notNull().default(0),
+  accumulatedPoints: integer("accumulated_points").notNull().default(0), // Points accumulating towards Global Number
   tier: text("tier", { enum: ["bronze", "silver", "gold", "platinum"] }).notNull().default("bronze"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -921,6 +922,24 @@ export const merchantCustomers = pgTable("merchant_customers", {
 export type MerchantCustomer = typeof merchantCustomers.$inferSelect;
 export const insertMerchantCustomerSchema = createInsertSchema(merchantCustomers).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertMerchantCustomer = z.infer<typeof insertMerchantCustomerSchema>;
+
+// Blocked Customers table (for tracking customers blocked by merchants)
+export const blockedCustomers = pgTable("blocked_customers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  merchantId: varchar("merchant_id").notNull(),
+  customerId: varchar("customer_id").notNull(),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email"),
+  customerMobile: text("customer_mobile").notNull(),
+  accountNumber: text("account_number").notNull(),
+  reason: text("reason").default("Deleted by merchant"),
+  blockedAt: timestamp("blocked_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type BlockedCustomer = typeof blockedCustomers.$inferSelect;
+export const insertBlockedCustomerSchema = createInsertSchema(blockedCustomers).omit({ id: true, createdAt: true, blockedAt: true });
+export type InsertBlockedCustomer = z.infer<typeof insertBlockedCustomerSchema>;
 
 export type CustomerPurchase = typeof customerPurchases.$inferSelect;
 export const insertCustomerPurchaseSchema = createInsertSchema(customerPurchases).omit({ id: true, purchaseDate: true });
@@ -1151,3 +1170,62 @@ export type InsertWasteManagementReward = z.infer<typeof insertWasteManagementRe
 export type MedicalFacilityBenefit = typeof medicalFacilityBenefits.$inferSelect;
 export const insertMedicalFacilityBenefitSchema = createInsertSchema(medicalFacilityBenefits).omit({ id: true, createdAt: true, usedAt: true });
 export type InsertMedicalFacilityBenefit = z.infer<typeof insertMedicalFacilityBenefitSchema>;
+
+// Global Number System Tables
+export const globalNumbers = pgTable("global_numbers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  globalNumber: integer("global_number").notNull().unique(), // Sequential: 1, 2, 3, ...
+  customerId: varchar("customer_id").notNull(),
+  pointsAccumulated: integer("points_accumulated").notNull().default(1500), // Points that triggered this Global Number
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// StepUp Multiplier Configuration
+export const stepUpConfig = pgTable("stepup_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  multiplier: integer("multiplier").notNull().unique(), // 5, 25, 125, 500, 2500
+  rewardPoints: integer("reward_points").notNull(), // 500, 1500, 3000, 30000, 160000
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// StepUp Rewards Tracking (idempotent rewards)
+export const stepUpRewards = pgTable("stepup_rewards", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recipientCustomerId: varchar("recipient_customer_id").notNull(), // Customer receiving the reward
+  recipientGlobalNumber: integer("recipient_global_number").notNull(), // Their Global Number (G)
+  triggerGlobalNumber: integer("trigger_global_number").notNull(), // New Global Number (N) that triggered reward
+  multiplier: integer("multiplier").notNull(), // The multiplier used (G × multiplier = N)
+  rewardPoints: integer("reward_points").notNull(), // Points awarded
+  isAwarded: boolean("is_awarded").notNull().default(false),
+  awardedAt: timestamp("awarded_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Global Number System Configuration
+export const globalNumberConfig = pgTable("global_number_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pointsThreshold: integer("points_threshold").notNull().default(1500), // Points needed for Global Number
+  rewardPointsCountTowardThreshold: boolean("reward_points_count_toward_threshold").notNull().default(false), // Policy choice
+  isActive: boolean("is_active").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Global Number System Types
+export type GlobalNumber = typeof globalNumbers.$inferSelect;
+export const insertGlobalNumberSchema = createInsertSchema(globalNumbers).omit({ id: true, createdAt: true });
+export type InsertGlobalNumber = z.infer<typeof insertGlobalNumberSchema>;
+
+export type StepUpConfig = typeof stepUpConfig.$inferSelect;
+export const insertStepUpConfigSchema = createInsertSchema(stepUpConfig).omit({ id: true, createdAt: true });
+export type InsertStepUpConfig = z.infer<typeof insertStepUpConfigSchema>;
+
+export type StepUpReward = typeof stepUpRewards.$inferSelect;
+export const insertStepUpRewardSchema = createInsertSchema(stepUpRewards).omit({ id: true, createdAt: true, awardedAt: true });
+export type InsertStepUpReward = z.infer<typeof insertStepUpRewardSchema>;
+
+export type GlobalNumberConfig = typeof globalNumberConfig.$inferSelect;
+export const insertGlobalNumberConfigSchema = createInsertSchema(globalNumberConfig).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertGlobalNumberConfig = z.infer<typeof insertGlobalNumberConfigSchema>;

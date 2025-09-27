@@ -109,7 +109,7 @@ export default function Register() {
   };
 
   return (
-    <div className="pt-32 min-h-screen bg-gradient-to-br from-gray-50 to-red-50 flex items-center justify-center py-12 px-4">
+    <div className="pt-32 min-h-screen bg-gradient-to-br from-gray-50 to-purple-50 flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <Link href="/">
@@ -128,10 +128,10 @@ export default function Register() {
           <CardContent>
             <Tabs value={formData.role} onValueChange={(value) => handleChange('role', value)}>
               <TabsList className="grid w-full grid-cols-2 bg-gray-100">
-                <TabsTrigger value="customer" className="data-[state=active]:bg-red-600 data-[state=active]:text-white font-semibold">
+                <TabsTrigger value="customer" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white font-semibold">
                   🛍️ Customer
                 </TabsTrigger>
-                <TabsTrigger value="merchant" className="data-[state=active]:bg-red-500 data-[state=active]:text-white font-semibold">
+                <TabsTrigger value="merchant" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white font-semibold">
                   🏪 Become a Merchant
                 </TabsTrigger>
               </TabsList>

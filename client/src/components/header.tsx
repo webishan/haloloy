@@ -82,12 +82,12 @@ export default function Header() {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-b border-gray-100 shadow-sm">
+    <header className="fixed top-0 left-0 right-0 z-50 komarce-nav">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link href="/">
-            <Logo size="lg" className="hover:opacity-80 transition-opacity" />
+            <Logo size="xl" className="hover:opacity-80 transition-opacity" />
           </Link>
 
           {/* Desktop Navigation */}
@@ -144,7 +144,7 @@ export default function Header() {
             {!adminUser && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="bg-gradient-to-r from-red-600 to-red-500 text-white border-0 hover:from-red-700 hover:to-red-600">
+                  <Button variant="outline" size="sm" className="bg-gradient-to-r from-red-600 via-red-500 to-red-700 text-white border-0 hover:from-red-700 hover:via-red-600 hover:to-red-800">
                     <Shield className="w-4 h-4 mr-1" />
                     Admin Access
                   </Button>
@@ -170,7 +170,7 @@ export default function Header() {
             {adminUser ? (
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-red-500 rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-gradient-to-r from-red-600 via-red-500 to-red-700 rounded-full flex items-center justify-center">
                     <Shield className="w-4 h-4 text-white" />
                   </div>
                   <div className="hidden md:block">
@@ -186,7 +186,7 @@ export default function Header() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 flex items-center"
+                    className="text-red-500 border-red-500/40 hover:bg-red-500/10 hover:border-red-500 flex items-center"
                   >
                     <Shield className="w-4 h-4 mr-2" />
                     Dashboard
@@ -196,7 +196,7 @@ export default function Header() {
                   onClick={handleAdminLogout}
                   variant="outline" 
                   size="sm" 
-                  className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 flex items-center"
+                  className="text-red-400 border-red-500/40 hover:bg-red-500/10 hover:border-red-500 flex items-center"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
                   Logout
@@ -237,33 +237,33 @@ export default function Header() {
               <div className="flex items-center space-x-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="default" size="sm" className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white font-semibold px-6">
+                  <Button variant="default" size="sm" className="bg-gradient-to-r from-red-600 via-red-500 to-red-700 hover:from-red-700 hover:via-red-600 hover:to-red-800 text-white font-semibold px-6">
                       Login Portal
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem asChild>
                       <Link href="/customer-login" className="flex items-center space-x-2">
-                        <User className="w-4 h-4 text-red-600" />
+                        <User className="w-4 h-4 text-blue-600" />
                         <span>Customer Login</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/merchant-login" className="flex items-center space-x-2">
-                        <Store className="w-4 h-4 text-red-500" />
+                        <Store className="w-4 h-4 text-purple-600" />
                         <span>Merchant Portal</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/admin-login" className="flex items-center space-x-2">
-                        <Shield className="w-4 h-4 text-red-400" />
+                        <Shield className="w-4 h-4 text-purple-500" />
                         <span>Admin Access</span>
                       </Link>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Link href="/register">
-                  <Button size="sm" variant="outline" className="border-2 border-red-300 text-red-700 hover:bg-red-50 font-semibold px-6">
+                  <Button size="sm" className="komarce-button">
                     Sign Up
                   </Button>
                 </Link>

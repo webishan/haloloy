@@ -13,7 +13,13 @@ export function authenticateToken(req: Request, res: Response, next: Function) {
   }
 
   jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) return res.status(403).json({ message: 'Invalid or expired token' });
+    if (err) {
+      console.log(`❌ JWT verification failed:`, err.message);
+      console.log(`🔍 Token:`, token.substring(0, 20) + '...');
+      console.log(`🔍 JWT_SECRET:`, JWT_SECRET);
+      return res.status(403).json({ message: 'Invalid or expired token' });
+    }
+    console.log(`✅ JWT verification successful for user:`, user);
     req.user = user;
     next();
   });

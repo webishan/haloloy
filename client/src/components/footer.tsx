@@ -6,7 +6,7 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-gray-900 text-white">
+    <footer className="bg-gradient-to-r from-red-600 to-red-700 text-white">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Company Info */}
@@ -20,16 +20,16 @@ export default function Footer() {
               with every purchase.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-400 hover:text-primary transition-colors">
+              <a href="#" className="text-white/70 hover:text-white transition-colors">
                 <Facebook className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-primary transition-colors">
+              <a href="#" className="text-white/70 hover:text-white transition-colors">
                 <Twitter className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-primary transition-colors">
+              <a href="#" className="text-white/70 hover:text-white transition-colors">
                 <Instagram className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-primary transition-colors">
+              <a href="#" className="text-white/70 hover:text-white transition-colors">
                 <Linkedin className="w-5 h-5" />
               </a>
             </div>
@@ -41,22 +41,22 @@ export default function Footer() {
             <ul className="space-y-2">
               <li>
                 <Link href="/marketplace">
-                  <span className="text-gray-400 hover:text-primary transition-colors">Marketplace</span>
+                  <span className="text-white/70 hover:text-white transition-colors">Marketplace</span>
                 </Link>
               </li>
               <li>
                 <Link href="/about">
-                  <span className="text-gray-400 hover:text-primary transition-colors">About Us</span>
+                  <span className="text-white/70 hover:text-white transition-colors">About Us</span>
                 </Link>
               </li>
               <li>
                 <Link href="/contact">
-                  <span className="text-gray-400 hover:text-primary transition-colors">Contact</span>
+                  <span className="text-white/70 hover:text-white transition-colors">Contact</span>
                 </Link>
               </li>
               <li>
                 <Link href="/help">
-                  <span className="text-gray-400 hover:text-primary transition-colors">Help Center</span>
+                  <span className="text-white/70 hover:text-white transition-colors">Help Center</span>
                 </Link>
               </li>
             </ul>
@@ -67,16 +67,16 @@ export default function Footer() {
             <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
             <ul className="space-y-3">
               <li className="flex items-center space-x-3">
-                <Mail className="w-4 h-4 text-primary" />
-                <span className="text-gray-400">support@komarce.com</span>
+                <Mail className="w-4 h-4 text-white" />
+                <span className="text-white/70">support@komarce.com</span>
               </li>
               <li className="flex items-center space-x-3">
-                <Phone className="w-4 h-4 text-primary" />
-                <span className="text-gray-400">+1 (555) 123-4567</span>
+                <Phone className="w-4 h-4 text-white" />
+                <span className="text-white/70">+1 (555) 123-4567</span>
               </li>
               <li className="flex items-start space-x-3">
-                <MapPin className="w-4 h-4 text-primary mt-1" />
-                <span className="text-gray-400">
+                <MapPin className="w-4 h-4 text-white mt-1" />
+                <span className="text-white/70">
                   Global Operations<br />
                   Bangladesh • Malaysia • UAE • Philippines
                 </span>
@@ -85,24 +85,24 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 mt-8 pt-8">
+        <div className="border-t border-white/20 mt-8 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-400 text-sm">
+            <p className="text-white/70 text-sm">
               © {currentYear} KOMARCE. All rights reserved.
             </p>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <Link href="/privacy">
-                <span className="text-gray-400 hover:text-primary text-sm transition-colors">
+                <span className="text-white/70 hover:text-white text-sm transition-colors">
                   Privacy Policy
                 </span>
               </Link>
               <Link href="/terms">
-                <span className="text-gray-400 hover:text-primary text-sm transition-colors">
+                <span className="text-white/70 hover:text-white text-sm transition-colors">
                   Terms of Service
                 </span>
               </Link>
               <Link href="/cookies">
-                <span className="text-gray-400 hover:text-primary text-sm transition-colors">
+                <span className="text-white/70 hover:text-white text-sm transition-colors">
                   Cookie Policy
                 </span>
               </Link>

@@ -56,6 +56,9 @@ const getCustomerId = async (userId: string) => {
       profileComplete: false,
       totalPointsEarned: 0,
       currentPointsBalance: 0,
+      accumulatedPoints: 0,
+      globalSerialNumber: 0,
+      localSerialNumber: 0,
       tier: 'bronze',
       isActive: true
     });
@@ -103,7 +106,12 @@ router.post('/register', async (req, res) => {
     const user = await storage.createUser({
       email,
       password: hashedPassword,
-      role: 'customer'
+      role: 'customer',
+      username: email.split('@')[0] + '_' + Date.now(),
+      firstName: fullName.split(' ')[0] || fullName,
+      lastName: fullName.split(' ').slice(1).join(' ') || '',
+      country: 'BD',
+      phone: mobileNumber
     });
 
     // Generate unique account number
@@ -119,6 +127,9 @@ router.post('/register', async (req, res) => {
       profileComplete: false,
       totalPointsEarned: 0,
       currentPointsBalance: 0,
+      accumulatedPoints: 0,
+      globalSerialNumber: 0, // Start with 0 (not assigned yet)
+      localSerialNumber: 0,  // Start with 0 (not assigned yet)
       tier: 'bronze',
       isActive: true
     });
@@ -133,7 +144,7 @@ router.post('/register', async (req, res) => {
     });
 
     // Generate QR code
-    const qrCode = await storage.generateCustomerQRCode(req.user.userId);
+    const qrCode = await storage.generateCustomerQRCode(user.id);
 
     res.json({ 
       success: true, 
@@ -148,37 +159,47 @@ router.post('/register', async (req, res) => {
 
 // ==================== CUSTOMER LOGIN ====================
 
-// Customer login with mobile number and password
+// Customer login with email or mobile number and password
 router.post('/login', async (req, res) => {
   try {
-    const { mobileNumber, password } = req.body;
+    const { identifier, password } = req.body; // Changed from mobileNumber to identifier
     
-    if (!mobileNumber || !password) {
-      return res.status(400).json({ error: 'Mobile number and password are required' });
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Email/phone number and password are required' });
     }
 
-    // Get customer profile by mobile number
-    const profile = await storage.getCustomerProfileByMobile(mobileNumber);
-    if (!profile) {
-      return res.status(401).json({ error: 'Invalid mobile number or password' });
+    let user = null;
+    let profile = null;
+
+    // Check if identifier is an email (contains @) or phone number
+    if (identifier.includes('@')) {
+      // Login with email
+      user = await storage.getUserByEmail(identifier);
+      if (user && user.role === 'customer') {
+        profile = await storage.getCustomerProfile(user.id);
+      }
+    } else {
+      // Login with phone number
+      profile = await storage.getCustomerProfileByMobile(identifier);
+      if (profile) {
+        user = await storage.getUser(profile.userId);
+      }
     }
 
-    // Get user
-    const user = await storage.getUser(profile.userId);
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid mobile number or password' });
+    if (!user || !profile) {
+      return res.status(401).json({ error: 'Invalid email/phone number or password' });
     }
 
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid mobile number or password' });
+      return res.status(401).json({ error: 'Invalid email/phone number or password' });
     }
 
     // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, role: user.role },
-      process.env.JWT_SECRET || 'fallback-secret',
+      process.env.JWT_SECRET || 'komarce-secret-key',
       { expiresIn: '24h' }
     );
 
@@ -302,21 +323,24 @@ router.get('/profile', authenticateToken, async (req, res) => {
     const totalPointsEarned = profile.totalPointsEarned || 0;
     if (totalPointsEarned >= 1500 && !profile.globalSerialNumber) {
       try {
-        const customerId = await getCustomerId(req.user.userId);
-        if (customerId) {
-          const existingSerial = await storage.getCustomerSerialNumber(customerId);
-          if (!existingSerial) {
-            console.log(`🎯 Customer ${req.user.userId} has ${totalPointsEarned} points, assigning global serial number based on achievement order...`);
-            const serialData = await storage.assignSerialNumberToCustomer(customerId);
-            
-            // Get updated profile
-            profile = await storage.getCustomerProfile(req.user.userId);
-            console.log(`✅ Global serial number #${serialData.globalSerialNumber} assigned to customer ${req.user.userId} (achievement order)`);
-            
-            // Log reward tier information
-            const rewardTier = getRewardTierBySerial(serialData.globalSerialNumber);
-            console.log(`🏆 Customer ${req.user.userId} assigned to ${rewardTier.name} tier (Reward: ${rewardTier.reward} points)`);
-          }
+        // Use GlobalNumberSystem to ensure proper totalPointsEarned update
+        const { globalNumberSystem } = await import('./services/GlobalNumberSystem');
+        const result = await globalNumberSystem.checkAndAssignGlobalNumber(
+          req.user.userId,
+          totalPointsEarned,
+          false // These are earned points, not reward points
+        );
+        
+        if (result.globalNumberAssigned) {
+          console.log(`🎯 Global Number #${result.globalNumber} assigned to customer ${req.user.userId}`);
+          
+          // Get updated profile
+          profile = await storage.getCustomerProfile(req.user.userId);
+          console.log(`✅ Global serial number #${result.globalNumber} assigned to customer ${req.user.userId} (achievement order)`);
+          
+          // Log reward tier information
+          const rewardTier = getRewardTierBySerial(result.globalNumber);
+          console.log(`🏆 Customer ${req.user.userId} assigned to ${rewardTier.name} tier (Reward: ${rewardTier.reward} points)`);
         }
       } catch (error) {
         console.error('Error assigning global serial number:', error);
@@ -558,14 +582,35 @@ router.get('/serial-number', authenticateToken, async (req, res) => {
 
 // ==================== QR CODE ====================
 
+// Debug endpoint to test authentication
+router.get('/debug-auth', authenticateToken, async (req, res) => {
+  try {
+    console.log(`🔍 Debug auth - User ID: ${req.user.userId}`);
+    res.json({ 
+      success: true, 
+      userId: req.user.userId,
+      email: req.user.email,
+      message: 'Authentication working' 
+    });
+  } catch (error) {
+    console.error(`❌ Debug auth failed:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get customer QR code
 router.get('/qr-code', authenticateToken, async (req, res) => {
   try {
+    console.log(`🔍 Generating QR code for user: ${req.user.userId}`);
+    
     // First check if customer profile exists
     let profile = await storage.getCustomerProfile(req.user.userId);
+    console.log(`🔍 Profile found: ${profile ? 'Yes' : 'No'}`);
     
     // If profile doesn't exist, create it
     if (!profile) {
+      console.log(`🔍 Creating new customer profile for user: ${req.user.userId}`);
+      
       // Generate unique account number
       const uniqueAccountNumber = await storage.generateUniqueAccountNumber();
       
@@ -579,6 +624,9 @@ router.get('/qr-code', authenticateToken, async (req, res) => {
         profileComplete: false,
         totalPointsEarned: 0,
         currentPointsBalance: 0,
+        accumulatedPoints: 0,
+        globalSerialNumber: 0,
+        localSerialNumber: 0,
         tier: 'bronze',
         isActive: true
       });
@@ -591,12 +639,17 @@ router.get('/qr-code', authenticateToken, async (req, res) => {
         totalPointsSpent: 0,
         totalPointsTransferred: 0
       });
+      
+      console.log(`✅ Customer profile created successfully`);
     }
     
+    console.log(`🔍 Generating QR code for profile: ${profile.id}`);
     const qrCode = await storage.generateCustomerQRCode(req.user.userId);
+    console.log(`✅ QR code generated: ${qrCode}`);
     
     res.json({ qrCode });
   } catch (error) {
+    console.error(`❌ QR code generation failed:`, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -604,11 +657,16 @@ router.get('/qr-code', authenticateToken, async (req, res) => {
 // Get customer QR code as image
 router.get('/qr-code-image', authenticateToken, async (req, res) => {
   try {
+    console.log(`🔍 Generating QR code image for user: ${req.user.userId}`);
+    
     // First check if customer profile exists
     let profile = await storage.getCustomerProfile(req.user.userId);
+    console.log(`🔍 Profile found: ${profile ? 'Yes' : 'No'}`);
     
     // If profile doesn't exist, create it
     if (!profile) {
+      console.log(`🔍 Creating new customer profile for user: ${req.user.userId}`);
+      
       // Generate unique account number
       const uniqueAccountNumber = await storage.generateUniqueAccountNumber();
       
@@ -622,6 +680,9 @@ router.get('/qr-code-image', authenticateToken, async (req, res) => {
         profileComplete: false,
         totalPointsEarned: 0,
         currentPointsBalance: 0,
+        accumulatedPoints: 0,
+        globalSerialNumber: 0,
+        localSerialNumber: 0,
         tier: 'bronze',
         isActive: true
       });
@@ -634,24 +695,32 @@ router.get('/qr-code-image', authenticateToken, async (req, res) => {
         totalPointsSpent: 0,
         totalPointsTransferred: 0
       });
+      
+      console.log(`✅ Customer profile created successfully`);
     }
     
+    console.log(`🔍 Generating QR code for profile: ${profile.id}`);
     const qrCode = await storage.generateCustomerQRCode(req.user.userId);
+    console.log(`✅ QR code generated: ${qrCode}`);
     
     // Import QRCode library dynamically
     const QRCode = await import('qrcode');
+    console.log(`🔍 QRCode library imported successfully`);
     
-    // Generate QR code as PNG buffer
+    // Generate QR code as PNG buffer with better visibility
     const qrBuffer = await QRCode.toBuffer(qrCode, {
       type: 'png',
-      width: 400,
-      margin: 4,
+      width: 300,
+      margin: 2,
       color: {
         dark: '#000000',
         light: '#FFFFFF'
       },
-      errorCorrectionLevel: 'M'
+      errorCorrectionLevel: 'H', // High error correction for better scanning
+      maskPattern: 0 // Use mask pattern 0 for better readability
     });
+    
+    console.log(`✅ QR code image generated, size: ${qrBuffer.length} bytes`);
     
     // Set response headers for image
     res.set({
@@ -662,6 +731,7 @@ router.get('/qr-code-image', authenticateToken, async (req, res) => {
     
     res.send(qrBuffer);
   } catch (error) {
+    console.error(`❌ QR code image generation failed:`, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -715,6 +785,16 @@ router.post('/earn-points', authenticateToken, async (req, res) => {
       finalAmount: finalAmount.toString()
     });
 
+    // Initialize Global Number system if needed
+    await storage.initializeStepUpConfig();
+
+    // Process Global Number eligibility (these are earned points, not reward points)
+    const globalNumberResult = await storage.processGlobalNumberEligibility(
+      customerId,
+      pointsEarned,
+      false // These are earned points from merchant purchases
+    );
+
     // Update customer wallet
     const wallet = await storage.getCustomerWallet(customerId);
     if (wallet) {
@@ -724,7 +804,7 @@ router.post('/earn-points', authenticateToken, async (req, res) => {
         lastTransactionAt: new Date()
       });
 
-      // Create transaction record
+      // Create transaction record (this will also trigger Global Number processing)
       await storage.createCustomerPointTransaction({
         customerId,
         merchantId,
@@ -734,22 +814,148 @@ router.post('/earn-points', authenticateToken, async (req, res) => {
         description: `Earned ${pointsEarned} points from purchase`,
         referenceId: purchase.id
       });
-
-      // Check if customer qualifies for serial number (1500 points)
-      if (wallet.totalPointsEarned + pointsEarned >= 1500) {
-        const existingSerial = await storage.getCustomerSerialNumber(customerId);
-        if (!existingSerial) {
-          await storage.assignSerialNumberToCustomer(customerId);
-        }
-      }
     }
 
-    res.json({ 
+    // Prepare response with Global Number information
+    const response: any = { 
       success: true, 
       purchase,
-      message: 'Points earned successfully' 
+      message: 'Points earned successfully'
+    };
+
+    if (globalNumberResult.globalNumberAwarded) {
+      response.globalNumber = {
+        awarded: true,
+        number: globalNumberResult.globalNumber,
+        message: `🎉 Congratulations! You've been awarded Global Number ${globalNumberResult.globalNumber}!`
+      };
+    }
+
+    if (globalNumberResult.stepUpRewards.length > 0) {
+      response.stepUpRewards = globalNumberResult.stepUpRewards.map(reward => ({
+        recipientGlobalNumber: reward.globalNumber,
+        rewardPoints: reward.rewardPoints,
+        message: `💰 Global Number ${reward.globalNumber} received ${reward.rewardPoints} StepUp reward points!`
+      }));
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error in earn-points:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== GLOBAL NUMBER SYSTEM ====================
+
+// Get customer's Global Numbers
+router.get('/global-numbers', authenticateToken, async (req, res) => {
+  try {
+    const customerId = await getCustomerId(req.user.userId);
+    const globalNumbers = await storage.getCustomerGlobalNumbers(customerId);
+    
+    res.json({
+      globalNumbers,
+      count: globalNumbers.length
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get StepUp configuration
+router.get('/stepup-config', authenticateToken, async (req, res) => {
+  try {
+    const configs = await storage.getStepUpConfigs();
+    res.json(configs);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get Global Number system configuration
+router.get('/global-number-config', authenticateToken, async (req, res) => {
+  try {
+    const config = await storage.getGlobalNumberConfig();
+    res.json(config);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manual Global Number eligibility check (for testing)
+router.post('/check-global-number-eligibility', authenticateToken, async (req, res) => {
+  try {
+    const { points, isRewardPoints = false } = req.body;
+    const customerId = await getCustomerId(req.user.userId);
+    
+    if (!points || points <= 0) {
+      return res.status(400).json({ error: 'Valid points amount required' });
+    }
+
+    await storage.initializeStepUpConfig();
+    
+    const result = await storage.processGlobalNumberEligibility(
+      customerId,
+      points,
+      isRewardPoints
+    );
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test endpoint to simulate earning points (for testing Global Number system)
+router.post('/test-earn-points', authenticateToken, async (req, res) => {
+  try {
+    const { points = 1500 } = req.body;
+    const customerId = await getCustomerId(req.user.userId);
+    
+    console.log(`🧪 Testing: Adding ${points} points to customer ${customerId}`);
+    
+    // Get current customer profile
+    const profile = await storage.getCustomerProfile(req.user.userId);
+    console.log(`📊 Current profile:`, {
+      accumulatedPoints: profile?.accumulatedPoints || 0,
+      globalSerialNumber: profile?.globalSerialNumber || 0,
+      totalPointsEarned: profile?.totalPointsEarned || 0
+    });
+    
+    await storage.initializeStepUpConfig();
+    
+    const result = await storage.processGlobalNumberEligibility(
+      customerId,
+      points,
+      false // These are earned points
+    );
+
+    // Note: Wallet is updated inside processGlobalNumberEligibility, no need to update here
+
+    // Get updated profile
+    const updatedProfile = await storage.getCustomerProfile(req.user.userId);
+    console.log(`📊 Updated profile:`, {
+      accumulatedPoints: updatedProfile?.accumulatedPoints || 0,
+      globalSerialNumber: updatedProfile?.globalSerialNumber || 0,
+      totalPointsEarned: updatedProfile?.totalPointsEarned || 0
+    });
+
+    res.json({
+      success: true,
+      pointsAdded: points,
+      globalNumberResult: result,
+      updatedProfile: {
+        accumulatedPoints: updatedProfile?.accumulatedPoints || 0,
+        globalSerialNumber: updatedProfile?.globalSerialNumber || 0,
+        totalPointsEarned: updatedProfile?.totalPointsEarned || 0
+      },
+      message: result.globalNumberAwarded 
+        ? `🎉 Global Number ${result.globalNumber} awarded!` 
+        : `Points added. Need ${1500 - (updatedProfile?.accumulatedPoints || 0)} more points for Global Number.`
+    });
+  } catch (error) {
+    console.error('Error in test-earn-points:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -771,24 +977,39 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
       storage.getCustomerSerialNumber(customerId)
     ]);
 
-    // Check if customer qualifies for global serial number (1500 points)
-    const totalPointsEarned = profile?.totalPointsEarned || 0;
-    if (totalPointsEarned >= 1500 && !serialNumber) {
+    // Check if customer qualifies for global number (1500 points) using new system
+    const accumulatedPoints = profile?.accumulatedPoints || 0;
+    const currentGlobalNumber = profile?.globalSerialNumber || 0;
+    
+    if (accumulatedPoints >= 1500 && currentGlobalNumber === 0) {
       try {
-        console.log(`🎯 Customer ${req.user.userId} has ${totalPointsEarned} points, assigning global serial number...`);
-        await storage.assignSerialNumberToCustomer(customerId);
+        console.log(`🎯 Customer ${req.user.userId} has ${accumulatedPoints} accumulated points, checking Global Number eligibility...`);
         
-        // Get updated serial number
-        const updatedSerialNumber = await storage.getCustomerSerialNumber(customerId);
+        // Initialize Global Number system
+        await storage.initializeStepUpConfig();
+        
+        // Process Global Number eligibility using new system
+        const result = await storage.processGlobalNumberEligibility(
+          customerId,
+          0, // Don't add points, just check eligibility
+          false
+        );
+        
+        if (result.globalNumberAwarded) {
+          console.log(`🎉 Global Number #${result.globalNumber} awarded to customer ${req.user.userId}`);
+        }
+        
+        // Get updated profile
         const updatedProfile = await storage.getCustomerProfile(req.user.userId);
-        
-        console.log(`✅ Global serial number ${updatedSerialNumber?.globalSerialNumber} assigned to customer ${req.user.userId}`);
         
         // Use updated data
         const dashboardData = {
           profile: updatedProfile,
           wallet,
-          serialNumber: updatedSerialNumber,
+          serialNumber: { 
+            globalSerialNumber: updatedProfile?.globalSerialNumber || 0,
+            localSerialNumber: updatedProfile?.localSerialNumber || 0
+          },
           statistics: {
             totalEarned: transactions.filter(t => t.transactionType === 'earned').reduce((sum, t) => sum + t.points, 0),
             totalSpent: transactions.filter(t => t.transactionType === 'spent').reduce((sum, t) => sum + Math.abs(t.points), 0),
@@ -799,13 +1020,13 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
           },
           recentTransactions: transactions.slice(0, 10),
           recentPurchases: purchases.slice(0, 5),
-          globalSerialAssigned: true,
-          globalSerialNumber: updatedSerialNumber?.globalSerialNumber
+          globalSerialAssigned: result.globalNumberAwarded,
+          globalSerialNumber: updatedProfile?.globalSerialNumber || 0
         };
 
         return res.json(dashboardData);
       } catch (error) {
-        console.error('Error assigning global serial number:', error);
+        console.error('Error processing Global Number eligibility:', error);
       }
     }
 
@@ -825,7 +1046,10 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
     const dashboardData = {
       profile,
       wallet,
-      serialNumber,
+      serialNumber: {
+        globalSerialNumber: profile?.globalSerialNumber || 0,
+        localSerialNumber: profile?.localSerialNumber || 0
+      },
       statistics: {
         totalEarned,
         totalSpent,
@@ -1339,6 +1563,19 @@ router.post('/convert-points-to-reward', authenticateToken, async (req, res) => 
     });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to convert points to reward number' });
+  }
+});
+
+// Simple test endpoint without authentication (for debugging)
+router.get('/test-simple', async (req, res) => {
+  try {
+    res.json({ 
+      success: true, 
+      message: 'Customer routes are working!',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

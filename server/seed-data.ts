@@ -82,19 +82,109 @@ export async function seedTestData() {
       isActive: true
     });
 
-    // Skip creating merchants - will be created manually
-    const merchants = [];
+    // Create persistent merchant account
+    console.log("🏪 Creating persistent merchant account...");
+    const hashedMerchantPassword = await bcrypt.hash("ishan007", 10);
+    const merchantUser = await storage.createUser({
+      username: "tkhanishan",
+      email: "tkhanishan@gmail.com",
+      password: hashedMerchantPassword,
+      firstName: "Ishan",
+      lastName: "Merchant",
+      role: "merchant",
+      country: "BD",
+      phone: "+8801234567890"
+    });
 
-    // Skip creating customers - will be created manually
-    const customers = [];
+    // Create merchant profile
+    const merchant = await storage.createMerchant({
+      userId: merchantUser.id,
+      businessName: "Ishan's Business",
+      businessType: "retail",
+      accountType: "merchant",
+      tier: "merchant",
+      referralId: `REF_${merchantUser.id.substring(0, 8).toUpperCase()}`,
+      loyaltyPointsBalance: 10000, // Give some initial points
+      availablePoints: 10000,
+      komarceBalance: "500.00"
+    });
 
-    // Initialize loyalty system with wallets for admin users only
-    console.log("💰 Creating loyalty wallets...");
+    // Create merchant wallets
+    await storage.createUserWallet({
+      userId: merchantUser.id,
+      walletType: 'reward_points',
+      balance: '10000'
+    });
     
-    const allUsers = [...localAdmins];
-    for (const user of allUsers) {
+    await storage.createUserWallet({
+      userId: merchantUser.id,
+      walletType: 'income', 
+      balance: '0'
+    });
+    
+    await storage.createUserWallet({
+      userId: merchantUser.id,
+      walletType: 'commerce',
+      balance: '500'
+    });
+
+    const merchants = [merchant];
+
+    // Create persistent customer account
+    console.log("👤 Creating persistent customer account...");
+    const hashedCustomerPassword = await bcrypt.hash("samin007", 10);
+    const customerUser = await storage.createUser({
+      username: "samin",
+      email: "samin@gmail.com",
+      password: hashedCustomerPassword,
+      firstName: "Samin",
+      lastName: "Customer",
+      role: "customer",
+      country: "BD",
+      phone: "+8801234567891"
+    });
+
+    // Generate unique account number
+    const uniqueAccountNumber = await storage.generateUniqueAccountNumber();
+
+    // Create customer profile
+    const customerProfile = await storage.createCustomerProfile({
+      userId: customerUser.id,
+      uniqueAccountNumber,
+      mobileNumber: "+8801234567891",
+      email: "samin@gmail.com",
+      fullName: "Samin Customer",
+      profileComplete: true,
+      totalPointsEarned: 0,
+      currentPointsBalance: 0,
+      accumulatedPoints: 0,
+      globalSerialNumber: 0,
+      localSerialNumber: 0,
+      tier: 'bronze',
+      isActive: true
+    });
+
+    // Create customer wallet
+    await storage.createCustomerWallet({
+      customerId: customerProfile.id,
+      pointsBalance: 0,
+      totalPointsEarned: 0,
+      totalPointsSpent: 0,
+      totalPointsTransferred: 0
+    });
+
+    // Generate QR code for customer
+    await storage.generateCustomerQRCode(customerUser.id);
+
+    const customers = [customerProfile];
+
+    // Initialize loyalty system with wallets for admin users
+    console.log("💰 Creating loyalty wallets for admins...");
+    
+    const allAdminUsers = [...localAdmins];
+    for (const user of allAdminUsers) {
       if (user.id) {
-        // Create three wallets for each user
+        // Create three wallets for each admin user
         await storage.createUserWallet({
           userId: user.id,
           walletType: 'reward_points',
@@ -115,14 +205,15 @@ export async function seedTestData() {
       }
     }
 
-    // Skip creating StepUp reward numbers - no customers to assign them to
-    console.log("🎯 Skipping StepUp reward numbers (no customers)...");
+    // Initialize Global Number system
+    console.log("🎯 Initializing Global Number system...");
+    await storage.initializeStepUpConfig();
 
-    // Skip creating referrals - no customers to create referrals for
-    console.log("🤝 Skipping referral relationships (no customers)...");
+    // Skip creating referrals for now
+    console.log("🤝 Skipping referral relationships...");
 
-    // Skip creating sample transactions - no customers to create transactions for
-    console.log("💸 Skipping sample transactions (no customers)...");
+    // Skip creating sample transactions for now  
+    console.log("💸 Skipping sample transactions...");
 
     // Create admin settings
     console.log("⚙️ Creating admin settings...");
@@ -145,20 +236,19 @@ export async function seedTestData() {
       });
     }
 
-    // Skip creating leaderboard entries - no customers to add to leaderboard
-    console.log("🏆 Skipping leaderboard entries (no customers)...");
+    // Skip creating leaderboard entries for now
+    console.log("🏆 Skipping leaderboard entries...");
 
-    // Assign global serial numbers to customers with 1500+ points
-    console.log("🎯 Assigning global serial numbers to eligible customers...");
-    const { assignGlobalSerialsToEligibleCustomers } = await import('./test-serial-assignment');
-    const serialResult = await assignGlobalSerialsToEligibleCustomers();
+    // Global Number system is ready for use
+    console.log("🎯 Global Number system initialized and ready...");
+    const serialResult = { assignedCount: 0 };
     
     console.log("✅ Test data seeded successfully!");
     console.log(`Created:
     - 1 Global Admin (global@komarce.com / global123)
     - ${localAdmins.length} Local Admins (local123)
-    - ${merchants.length} Merchants (will be created manually)  
-    - ${customers.length} Customers (will be created manually)
+    - 1 Persistent Merchant (tkhanishan@gmail.com / ishan007)  
+    - 1 Persistent Customer (samin@gmail.com / samin007)
     - Loyalty wallets and reward numbers
     - Sample transactions and referrals
     - Admin settings and leaderboards

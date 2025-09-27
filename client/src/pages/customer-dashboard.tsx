@@ -19,11 +19,13 @@ import { apiRequest } from '@/lib/queryClient';
 import { useSimpleRealtime } from '@/hooks/use-simple-realtime';
 import RewardNumberSystem from '@/components/RewardNumberSystem';
 import AccumulatedPointsDisplay from '@/components/AccumulatedPointsDisplay';
+import CustomerRewardSystem from '@/components/CustomerRewardSystem';
+import GlobalNumberDisplay from '@/components/GlobalNumberDisplay';
 import { 
   User, Wallet, Coins, TrendingUp, History, QrCode, Send, 
   Download, Gift, Crown, Star, Award, Calendar, Eye, Settings, 
   Target, Copy, ArrowUpRight, ArrowDownRight, Filter, Search, 
-  MoreHorizontal, Bell, Menu, X as XIcon, Home, Plus, Edit,
+  MoreHorizontal, Bell, Menu, X as XIcon, Home, Plus, Edit, RefreshCw,
   Smartphone, Mail, Lock, Shield, CheckCircle, AlertCircle,
   Building2, Package, ShoppingCart, BarChart, PieChart, LineChart,
   Zap, Percent, Recycle, Heart, ArrowRight, ArrowLeft
@@ -43,9 +45,11 @@ function QRCodeImage() {
         setLoading(true);
         setError(false);
         
-        // Get the token from localStorage
+        // Get the token from localStorage (check both customerToken and token)
+        const customerToken = localStorage.getItem('customerToken');
         const token = localStorage.getItem('token');
-        if (!token) {
+        const authToken = customerToken || token;
+        if (!authToken) {
           setError(true);
           setLoading(false);
           return;
@@ -54,7 +58,7 @@ function QRCodeImage() {
         // Create a blob URL for the authenticated image request
         const response = await fetch('/api/customer/qr-code-image', {
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${authToken}`
           }
         });
 
@@ -94,22 +98,33 @@ function QRCodeImage() {
 
   if (error || !qrImageUrl) {
     return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <svg className="w-32 h-32 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
-        </svg>
-        <p className="text-xs text-gray-500 mt-2">QR Code</p>
-        <p className="text-xs text-red-500 mt-1">Failed to load</p>
+      <div className="flex flex-col items-center justify-center h-full p-4">
+        <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center mb-3">
+          <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+          </svg>
+        </div>
+        <p className="text-sm font-medium text-gray-700 mb-1">QR Code</p>
+        <p className="text-xs text-red-500">Failed to load</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-2 px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry
+        </button>
       </div>
     );
   }
 
   return (
-    <img 
-      src={qrImageUrl} 
-      alt="Customer QR Code" 
-      className="w-full h-full object-contain p-2"
-    />
+    <div className="flex flex-col items-center justify-center h-full">
+      <img 
+        src={qrImageUrl} 
+        alt="Customer QR Code" 
+        className="w-48 h-48 object-contain border-2 border-gray-200 rounded-lg shadow-sm"
+      />
+      <p className="text-xs text-gray-500 mt-2">Scan with merchant app</p>
+    </div>
   );
 }
 
@@ -126,6 +141,48 @@ export default function CustomerDashboard() {
   const { data: dashboardData = {}, isLoading } = useQuery({
     queryKey: ['/api/customer/dashboard'],
     enabled: !!user && user.role === 'customer'
+  });
+
+  // Global Number System Queries
+  const { data: globalNumbersData = { globalNumbers: [], count: 0 } } = useQuery({
+    queryKey: ['/api/customer/global-numbers'],
+    enabled: !!user && user.role === 'customer'
+  });
+
+  const { data: stepUpConfig = [] } = useQuery({
+    queryKey: ['/api/customer/stepup-config'],
+    enabled: !!user && user.role === 'customer'
+  });
+
+  const { data: globalNumberConfig = null } = useQuery({
+    queryKey: ['/api/customer/global-number-config'],
+    enabled: !!user && user.role === 'customer'
+  });
+
+  // QR Code query
+  const { data: qrCodeData } = useQuery({
+    queryKey: ['/api/customer/qr-code'],
+    enabled: !!user && user.role === 'customer'
+  });
+
+  // QR Code generation mutation
+  const generateQRCodeMutation = useMutation({
+    mutationFn: async () => {
+      const customerToken = localStorage.getItem('customerToken');
+      const token = localStorage.getItem('token');
+      const authToken = customerToken || token;
+      const response = await fetch('/api/customer/qr-code', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to generate QR code');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customer/qr-code'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customer/dashboard'] });
+    }
   });
 
   const { data: customerProfile = {} } = useQuery({
@@ -240,21 +297,32 @@ export default function CustomerDashboard() {
     enabled: !!user && user.role === 'customer'
   });
 
-  // Mock data for demonstration
+  // Enhanced customer data with Global Number system - using dashboard data as primary source
+  const profileData = dashboardData.profile || customerProfile;
+  const serialData = dashboardData.serialNumber || serialNumber;
+  const walletInfo = dashboardData.wallet || walletData;
+  
   const customerData = {
-    fullName: customerProfile.fullName || 'John Doe',
-    accountNumber: customerProfile.uniqueAccountNumber || 'KOM00000001',
-    mobileNumber: customerProfile.mobileNumber || '+8801234567890',
-    email: customerProfile.email || 'john.doe@example.com',
-    tier: customerProfile.tier || 'bronze',
-    pointsBalance: customerProfile.currentPointsBalance ?? walletData.pointsBalance ?? 0,
-    totalEarned: customerProfile.totalPointsEarned ?? walletData.totalPointsEarned ?? 0,
-    totalSpent: walletData.totalPointsSpent || 0,
-    totalTransferred: walletData.totalPointsTransferred || 0,
-    globalSerialNumber: serialNumber.globalSerialNumber || 1,
-    localSerialNumber: serialNumber.localSerialNumber || 1,
-    profileComplete: customerProfile.profileComplete || false,
-    qrCode: customerProfile.qrCode
+    fullName: profileData.fullName || 'John Doe',
+    accountNumber: profileData.uniqueAccountNumber || 'KOM00000001',
+    mobileNumber: profileData.mobileNumber || '+8801234567890',
+    email: profileData.email || 'john.doe@example.com',
+    tier: profileData.tier || 'bronze',
+    pointsBalance: profileData.currentPointsBalance ?? 0,
+    accumulatedPoints: profileData.accumulatedPoints ?? 0,
+    totalEarned: profileData.totalPointsEarned ?? walletInfo.totalPointsEarned ?? 0,
+    totalSpent: walletInfo.totalPointsSpent || 0,
+    totalTransferred: walletInfo.totalPointsTransferred || 0,
+    globalSerialNumber: serialData.globalSerialNumber || profileData.globalSerialNumber || 0,
+    localSerialNumber: serialData.localSerialNumber || profileData.localSerialNumber || 0,
+    profileComplete: profileData.profileComplete || false,
+    qrCode: qrCodeData?.qrCode || profileData.qrCode || (profileData.id && profileData.uniqueAccountNumber ? `KOMARCE:CUSTOMER:${profileData.id}:${profileData.uniqueAccountNumber}` : null),
+    // Global Number System data
+    globalNumbers: globalNumbersData.globalNumbers || [],
+    globalNumberCount: globalNumbersData.count || 0,
+    stepUpConfig: stepUpConfig || [],
+    globalNumberConfig: globalNumberConfig,
+    pointsToNextGlobalNumber: globalNumberConfig ? Math.max(0, (globalNumberConfig.pointsThreshold || 1500) - (profileData.accumulatedPoints ?? 0)) : 1500
   };
 
   // Render Dashboard Section
@@ -266,9 +334,9 @@ export default function CustomerDashboard() {
           <Badge variant="outline" className="bg-blue-100 text-blue-800">
             {customerData.tier.toUpperCase()}
           </Badge>
-          {customerData.globalSerialNumber && (
+          {customerData.globalSerialNumber > 0 && (
             <Badge variant="outline" className="bg-green-100 text-green-800">
-              Serial #{customerData.globalSerialNumber}
+              Global #{customerData.globalSerialNumber}
             </Badge>
           )}
         </div>
@@ -337,23 +405,33 @@ export default function CustomerDashboard() {
                   </Card>
                 </div>
 
+
+
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card>
                   <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <QrCode className="w-5 h-5" />
-              <span>QR Code</span>
+              <QrCode className="w-5 h-5 text-blue-600" />
+              <span>My QR Code</span>
             </CardTitle>
                   </CardHeader>
                   <CardContent>
-            <p className="text-sm text-gray-600 mb-4">
-              Share your QR code for easy point transfers
-            </p>
-            <Button onClick={() => setShowQRDialog(true)} className="w-full">
-              <QrCode className="w-4 h-4 mr-2" />
-              Show QR Code
-            </Button>
+            <div className="text-center space-y-3">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center mx-auto">
+                <QrCode className="w-8 h-8 text-blue-600" />
+              </div>
+              <p className="text-sm text-gray-600">
+                Unique QR code for merchant scanning
+              </p>
+              <Button 
+                onClick={() => setShowQRDialog(true)} 
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+              >
+                <QrCode className="w-4 h-4 mr-2" />
+                View & Share QR Code
+              </Button>
+            </div>
                   </CardContent>
                 </Card>
 
@@ -490,10 +568,10 @@ export default function CustomerDashboard() {
                 {customerData.tier.toUpperCase()}
               </Badge>
                               </div>
-            {customerData.globalSerialNumber && (
+            {customerData.globalSerialNumber > 0 && (
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Serial Number</span>
-                <span className="font-semibold">#{customerData.globalSerialNumber}</span>
+                <span className="text-gray-600">Global Number</span>
+                <span className="font-semibold text-xl">#{customerData.globalSerialNumber}</span>
                             </div>
             )}
           </CardContent>
@@ -676,6 +754,9 @@ export default function CustomerDashboard() {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Reward System</h2>
       
+      {/* Complete Customer Reward System */}
+      <CustomerRewardSystem currentUser={user} />
+      
       {/* Accumulated Points System */}
       <AccumulatedPointsDisplay currentUser={user} />
       
@@ -698,7 +779,7 @@ export default function CustomerDashboard() {
                 {rewardStatus.rewardProgress?.global || 0}/4
               </p>
               <p className="text-xs text-gray-500">
-                {rewardStatus.hasGlobalSerial ? `Serial #${rewardStatus.globalSerialNumber}` : 'No serial assigned'}
+                {(rewardStatus.hasGlobalSerial && rewardStatus.globalSerialNumber > 0) ? `Global #${rewardStatus.globalSerialNumber}` : 'No Global Number assigned'}
               </p>
             </div>
                   </CardContent>
@@ -718,7 +799,7 @@ export default function CustomerDashboard() {
                 {rewardStatus.rewardProgress?.local || 0}/4
               </p>
               <p className="text-xs text-gray-500">
-                {rewardStatus.hasLocalSerial ? `Serial #${rewardStatus.localSerialNumber}` : 'No serial assigned'}
+                {rewardStatus.hasLocalSerial ? `Local #${rewardStatus.localSerialNumber}` : 'No Local Number assigned'}
               </p>
             </div>
           </CardContent>
@@ -1529,35 +1610,20 @@ export default function CustomerDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">KOMARCE Customer Portal</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm">
-                <Bell className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/logout">Logout</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-white via-red-50 to-white pt-20">
+
+
+
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar */}
           <div className="lg:w-64 flex-shrink-0">
             <div className="bg-white rounded-lg shadow-sm border p-6">
-              <nav className="space-y-2">
+              <nav className="space-y-2 text-gray-700">
                 <Button
-                  variant={activeSection === "dashboard" ? "default" : "ghost"}
-                  className="w-full justify-start"
+                  variant={activeSection === "dashboard" ? "default" : "outline"}
+                  className={`w-full justify-start ${activeSection !== "dashboard" ? "bg-white" : ""}`}
                   onClick={() => setActiveSection("dashboard")}
                 >
                   <Home className="w-4 h-4 mr-2" />
@@ -1565,8 +1631,8 @@ export default function CustomerDashboard() {
                 </Button>
                 
                 <Button
-                  variant={activeSection === "wallet" ? "default" : "ghost"}
-                  className="w-full justify-start"
+                  variant={activeSection === "wallet" ? "default" : "outline"}
+                  className={`w-full justify-start ${activeSection !== "wallet" ? "bg-white" : ""}`}
                   onClick={() => setActiveSection("wallet")}
                 >
                   <Wallet className="w-4 h-4 mr-2" />
@@ -1574,8 +1640,8 @@ export default function CustomerDashboard() {
                 </Button>
                 
                 <Button
-                  variant={activeSection === "transactions" ? "default" : "ghost"}
-                  className="w-full justify-start"
+                  variant={activeSection === "transactions" ? "default" : "outline"}
+                  className={`w-full justify-start ${activeSection !== "transactions" ? "bg-white" : ""}`}
                   onClick={() => setActiveSection("transactions")}
                 >
                   <History className="w-4 h-4 mr-2" />
@@ -1583,8 +1649,8 @@ export default function CustomerDashboard() {
                 </Button>
                 
                 <Button
-                  variant={activeSection === "transfers" ? "default" : "ghost"}
-                  className="w-full justify-start"
+                  variant={activeSection === "transfers" ? "default" : "outline"}
+                  className={`w-full justify-start ${activeSection !== "transfers" ? "bg-white" : ""}`}
                   onClick={() => setActiveSection("transfers")}
                 >
                   <Send className="w-4 h-4 mr-2" />
@@ -1723,27 +1789,101 @@ export default function CustomerDashboard() {
 
       {/* QR Code Dialog */}
       <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>My QR Code</DialogTitle>
+            <DialogTitle className="text-center text-xl font-bold">My QR Code</DialogTitle>
           </DialogHeader>
-          <div className="text-center space-y-4">
-            <div className="w-64 h-64 bg-white rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center mx-auto">
-              <QRCodeImage />
+          <div className="text-center space-y-6">
+            {/* Enhanced QR Code Display */}
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-2xl">
+              <div className="w-72 h-72 bg-white rounded-xl border-4 border-blue-200 shadow-lg flex items-center justify-center mx-auto p-4">
+                <QRCodeImage />
+              </div>
+              
+              {/* Customer Info */}
+              <div className="mt-4 p-4 bg-white/70 rounded-lg">
+                <p className="text-sm font-semibold text-gray-800">{customerData.fullName}</p>
+                <p className="text-xs text-gray-600">Account: {customerData.accountNumber}</p>
+                <p className="text-xs text-blue-600 font-mono mt-1">
+                  {customerData.qrCode ? customerData.qrCode.substring(0, 30) + '...' : 'Loading...'}
+                </p>
+              </div>
             </div>
-            <p className="text-sm text-gray-600">
-              Share this QR code with merchants for easy point transfers
-            </p>
-            <div className="flex gap-2 justify-center">
-              <Button onClick={() => {
-                navigator.clipboard.writeText(customerData.qrCode);
-                toast({ title: "QR Code copied to clipboard" });
+            
+            {/* Instructions */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="font-semibold text-blue-800 mb-2">How to use:</h4>
+              <ul className="text-sm text-blue-700 space-y-1 text-left">
+                <li>• Show this QR code to merchants</li>
+                <li>• They can scan it to add you as a customer</li>
+                <li>• Or copy the code and paste it manually</li>
+                <li>• Download the image for offline use</li>
+              </ul>
+            </div>
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <Button 
+                disabled={generateQRCodeMutation.isPending}
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                onClick={async () => {
+                try {
+                  let qrCodeData = customerData.qrCode;
+                  
+                  console.log('Copying QR code:', qrCodeData); // Debug log
+                  
+                  // If QR code is not available or invalid, try to generate it
+                  if (!qrCodeData || qrCodeData === 'undefined' || qrCodeData === 'null' || !qrCodeData.startsWith('KOMARCE:CUSTOMER:')) {
+                    console.log('QR code not valid, generating new one...');
+                    
+                    try {
+                      const result = await generateQRCodeMutation.mutateAsync();
+                      qrCodeData = result.qrCode;
+                      console.log('Generated QR code:', qrCodeData);
+                    } catch (generateError) {
+                      console.error('Failed to generate QR code:', generateError);
+                      toast({
+                        title: "QR Code generation failed",
+                        description: "Please try refreshing the page",
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                  }
+                  
+                  // Final validation
+                  if (!qrCodeData || !qrCodeData.startsWith('KOMARCE:CUSTOMER:')) {
+                    toast({
+                      title: "QR Code not ready",
+                      description: "Please refresh the page and try again",
+                      variant: "destructive"
+                    });
+                    return;
+                  }
+                  
+                  await navigator.clipboard.writeText(qrCodeData);
+                  toast({ 
+                    title: "QR Code copied to clipboard",
+                    description: "You can now paste this in the merchant portal"
+                  });
+                } catch (error) {
+                  console.error('Error copying QR code:', error);
+                  toast({
+                    title: "Copy failed",
+                    description: "Failed to copy QR code to clipboard",
+                    variant: "destructive"
+                  });
+                }
               }}>
-                <Copy className="w-4 h-4 mr-2" />
-                Copy QR Code
+                {generateQRCodeMutation.isPending ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Copy className="w-4 h-4 mr-2" />
+                )}
+                {generateQRCodeMutation.isPending ? 'Generating...' : 'Copy QR Code'}
               </Button>
               <Button 
                 variant="outline"
+                className="w-full border-2 border-green-500 text-green-600 hover:bg-green-50"
                 onClick={async () => {
                   try {
                     const token = localStorage.getItem('token');
@@ -1788,7 +1928,7 @@ export default function CustomerDashboard() {
                 }}
               >
                 <Download className="w-4 h-4 mr-2" />
-                Download
+                Download PNG
               </Button>
             </div>
         </div>

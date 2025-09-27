@@ -15,10 +15,7 @@ export const useSimpleRealtime = (queryKeys: string[], interval: number = 1000) 
     intervalRef.current = setInterval(() => {
       queryKeys.forEach(key => {
         // Force refetch without cache
-        queryClient.refetchQueries({ 
-          queryKey: [key],
-          type: 'active'
-        });
+        queryClient.invalidateQueries({ queryKey: [key] });
       });
     }, interval);
 
@@ -32,10 +29,7 @@ export const useSimpleRealtime = (queryKeys: string[], interval: number = 1000) 
 
   const forceRefresh = () => {
     queryKeys.forEach(key => {
-      queryClient.refetchQueries({ 
-        queryKey: [key],
-        type: 'active'
-      });
+      queryClient.invalidateQueries({ queryKey: [key] });
     });
   };
 

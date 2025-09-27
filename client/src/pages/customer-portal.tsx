@@ -33,9 +33,11 @@ function QRCodeImage() {
         setLoading(true);
         setError(false);
         
-        // Get the token from localStorage
+        // Get the token from localStorage (check both customerToken and token)
+        const customerToken = localStorage.getItem('customerToken');
         const token = localStorage.getItem('token');
-        if (!token) {
+        const authToken = customerToken || token;
+        if (!authToken) {
           setError(true);
           setLoading(false);
           return;
@@ -44,7 +46,7 @@ function QRCodeImage() {
         // Create a blob URL for the authenticated image request
         const response = await fetch('/api/customer/qr-code-image', {
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${authToken}`
           }
         });
 
@@ -726,17 +728,17 @@ export default function CustomerPortal() {
                 </CardContent>
               </Card>
 
-              {((customerProfile as any)?.globalSerialNumber || (dashboardData as any)?.serialNumber?.globalSerialNumber) && (
+              {(((customerProfile as any)?.globalSerialNumber > 0) || ((dashboardData as any)?.serialNumber?.globalSerialNumber > 0)) && (
                 <Card className="komarce-card animate-slide-up hover:shadow-komarce-lg transition-all duration-300 border-4 border-gradient-to-r from-yellow-400 to-orange-500 bg-gradient-to-br from-yellow-50 to-orange-50 animate-glow" style={{ animationDelay: '0.2s' }}>
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-bold text-orange-700 uppercase tracking-wide">🏆 Global Serial Number</p>
-                        <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 to-orange-600">
-                          #{(customerProfile as any)?.globalSerialNumber || (dashboardData as any)?.serialNumber?.globalSerialNumber}
+                        <p className="text-lg font-bold text-orange-700 uppercase tracking-wide">🏆 Global Number</p>
+                        <p className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 to-orange-600 drop-shadow-2xl">
+                          #{(customerProfile as any)?.globalSerialNumber > 0 ? (customerProfile as any)?.globalSerialNumber : (dashboardData as any)?.serialNumber?.globalSerialNumber}
                         </p>
-                        <p className="text-xs text-orange-600 font-semibold mt-1">
-                          Achievement Order Ranking
+                        <p className="text-sm text-orange-600 font-semibold mt-2">
+                          Company-wide Sequential Achievement
                         </p>
                       </div>
                       <div className="relative animate-float">
@@ -810,18 +812,18 @@ export default function CustomerPortal() {
                       </p>
                     </div>
                     
-                    {(customerProfile.globalSerialNumber || customerProfile.globalRewardNumbers) && (
+                    {(customerProfile.globalSerialNumber > 0 || customerProfile.globalRewardNumbers) && (
                       <div className="col-span-full">
                         <div className="komarce-gradient p-6 rounded-2xl text-white animate-glow">
                           <div className="flex items-center space-x-4">
                             <Crown className="w-12 h-12 text-yellow-300 animate-pulse" />
                             <div>
-                              <p className="text-sm font-bold uppercase tracking-wide mb-2">🏆 Global Serial Number</p>
-                              <p className="text-4xl font-black mb-2">
-                                #{customerProfile.globalSerialNumber || 'Pending Assignment'}
+                              <p className="text-lg font-bold uppercase tracking-wide mb-3">🏆 Global Number</p>
+                              <p className="text-8xl font-black mb-3 drop-shadow-2xl">
+                                #{customerProfile.globalSerialNumber > 0 ? customerProfile.globalSerialNumber : 'Pending'}
                               </p>
-                              <p className="text-sm font-semibold text-blue-100">
-                                {customerProfile.globalSerialNumber ? 'Achievement Order Ranking' : 'Earn 1,500 points to qualify'}
+                              <p className="text-base font-semibold text-blue-100">
+                                {customerProfile.globalSerialNumber > 0 ? 'Company-wide Sequential Achievement' : 'Earn 1,500 points to qualify'}
                               </p>
                             </div>
                           </div>
@@ -831,7 +833,7 @@ export default function CustomerPortal() {
                     
                     {(customerProfile.localSerialNumber || customerProfile.localRewardNumbers) && (
                       <div className="p-4 bg-orange-50 rounded-xl border border-orange-200">
-                        <p className="text-sm font-medium text-orange-700 mb-2">Local Serial Number</p>
+                        <p className="text-sm font-medium text-orange-700 mb-2">Local Number</p>
                         <p className="text-lg font-bold text-orange-600">
                           #{customerProfile.localSerialNumber || 'Pending'}
                         </p>

@@ -30,7 +30,8 @@ import {
   RefreshCw, MessageCircle,
   QrCode, UserPlus, Activity, PieChart, LineChart, Bell,
   Menu, X as XIcon, Home, Infinity, Trophy, User, Zap,
-  AlertCircle, Percent, Calculator, Building2, Upload
+  AlertCircle, Percent, Calculator, Building2, Upload,
+  Smartphone, Mail, CheckCircle
 } from 'lucide-react';
 import { ResponsiveContainer, LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
          BarChart as RechartsBar, Bar, PieChart as RechartsPie, Pie, Cell } from 'recharts';
@@ -65,7 +66,15 @@ function QRScanComponent({ onCustomerScanned, onError }: {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to scan QR code');
+        
+        // Handle blocked customer error specifically
+        if (response.status === 403 && errorData.details?.blockedAt) {
+          const blockedDate = new Date(errorData.details.blockedAt).toLocaleDateString();
+          const errorMessage = `❌ Customer Access Denied\n\n${errorData.details.customerName} (${errorData.details.accountNumber}) was previously removed from your customer list on ${blockedDate}.\n\nYou cannot re-add them using their QR code. If you need to re-add this customer, please use the "Create Customer" option instead.`;
+          throw new Error(errorMessage);
+        }
+        
+        throw new Error(errorData.message || errorData.error || 'Failed to scan QR code');
       }
 
       const result = await response.json();
@@ -237,6 +246,7 @@ export default function MerchantDashboard() {
   const [showSaleDialog, setShowSaleDialog] = useState(false);
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [showQRScanDialog, setShowQRScanDialog] = useState(false);
+  const [showCreateCustomerDialog, setShowCreateCustomerDialog] = useState(false);
 
   const { data: dashboardData = {}, isLoading } = useQuery({
     queryKey: ['/api/dashboard/merchant'],
@@ -260,25 +270,35 @@ export default function MerchantDashboard() {
     refetchOnMount: true // Only refetch on component mount
   });
 
-  const { data: customers = [], refetch: refetchCustomers } = useQuery({
+  const { data: rawCustomers = [], refetch: refetchCustomers, isLoading: customersLoading } = useQuery({
     queryKey: ['/api/merchant/scanned-customers'],
     enabled: !!user && user.role === 'merchant',
-    refetchInterval: 30000, // Refresh every 30 seconds instead of 3 seconds
-    refetchIntervalInBackground: false, // Don't refetch in background
-    staleTime: 10000, // Consider data fresh for 10 seconds
-    cacheTime: 300000, // Cache for 5 minutes
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnMount: true, // Only refetch on component mount
-    retry: 3, // Retry failed requests
-    retryDelay: 1000, // Wait 1 second between retries
+    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchIntervalInBackground: false,
+    staleTime: 5000, // Consider data fresh for 5 seconds (reduced for faster updates)
+    cacheTime: 60000, // Cache for 1 minute (reduced for faster updates)
+    refetchOnWindowFocus: true, // Enable refetch on window focus for better UX
+    refetchOnMount: true,
+    retry: 3,
+    retryDelay: 1000,
     onSuccess: (data) => {
       console.log('✅ Customer list updated:', data);
-      // Force re-render if we have customers
       if (data && data.length > 0) {
-        console.log('📋 Available customers:', data.map(c => `${c.fullName} - ${c.accountNumber}`));
+        console.log('📋 Available customers:', data.map((c: any) => `${c.fullName} - ${c.accountNumber}`));
       }
+    },
+    onError: (error) => {
+      console.error('❌ Failed to fetch customers:', error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to load customer list",
+        variant: "destructive"
+      });
     }
   });
+
+  // Use raw customers data directly - no localStorage filtering
+  const customers = rawCustomers;
 
   // Only refresh on component mount, not continuously
   useEffect(() => {
@@ -288,14 +308,18 @@ export default function MerchantDashboard() {
     }
   }, [user, queryClient]);
 
-  // Simple real-time updates for all merchant data - reduced frequency
+  // Real-time updates for all merchant data including reports
   const { forceRefresh } = useSimpleRealtime([
     '/api/merchant/wallet',
     '/api/dashboard/merchant',
     '/api/merchant/scanned-customers',
     '/api/merchant/profile',
-    '/api/merchant/leaderboard'
-  ], 30000); // Update every 30 seconds instead of 1 second
+    '/api/merchant/leaderboard',
+    '/api/merchant/point-transfers',
+    '/api/merchant/points-received',
+    '/api/merchant/transactions',
+    '/api/merchant/reports'
+  ], 5000); // Update every 5 seconds for real-time reports
 
   // Manual refresh function for immediate updates
   const handleManualRefresh = () => {
@@ -340,26 +364,102 @@ export default function MerchantDashboard() {
     enabled: !!user && user.role === 'merchant'
   });
 
+  const { data: pointTransfers = [] } = useQuery({
+    queryKey: ['/api/merchant/point-transfers'],
+    enabled: !!user && user.role === 'merchant',
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    staleTime: 10000,
+    cacheTime: 300000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true
+  });
+
+  const { data: merchantReports = {} } = useQuery({
+    queryKey: ['/api/merchant/reports'],
+    enabled: !!user && user.role === 'merchant',
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    staleTime: 10000,
+    cacheTime: 300000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true
+  });
+
+  const { data: pointsReceived = [] } = useQuery({
+    queryKey: ['/api/merchant/points-received'],
+    enabled: !!user && user.role === 'merchant',
+    refetchInterval: 5000, // More frequent updates for real-time data
+    refetchIntervalInBackground: false,
+    staleTime: 2000, // Consider data fresh for 2 seconds only
+    cacheTime: 60000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true
+  });
+
+  const { data: merchantTransactions = [] } = useQuery({
+    queryKey: ['/api/merchant/transactions'],
+    enabled: !!user && user.role === 'merchant',
+    refetchInterval: 5000, // Real-time updates
+    refetchIntervalInBackground: false,
+    staleTime: 2000,
+    cacheTime: 60000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true
+  });
+
   // Mutations
   const sendPointsMutation = useMutation({
     mutationFn: (data: { customerId: string; points: number; description: string }) => {
       return apiRequest('/api/merchant/rewards/send', 'POST', data);
     },
-    onSuccess: () => {
+    onMutate: async (variables) => {
+      // Optimistically update customer points
+      await queryClient.cancelQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      
+      const previousCustomers = queryClient.getQueryData(['/api/merchant/scanned-customers']);
+      
+      queryClient.setQueryData(['/api/merchant/scanned-customers'], (old: any) => {
+        if (!old) return [];
+        return old.map((customer: any) => {
+          if (customer.id === variables.customerId) {
+            return {
+              ...customer,
+              currentPointsBalance: (customer.currentPointsBalance || 0) + variables.points
+            };
+          }
+          return customer;
+        });
+      });
+      
+      return { previousCustomers };
+    },
+    onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Points sent successfully!" });
+      
+      // Force comprehensive refresh of all related data including reports
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/point-transfers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/points-received'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/reports'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
       
       // Force immediate refresh
       forceRefresh();
       
       // Additional immediate updates
       setTimeout(() => {
-        refetchCustomers(); // Refresh customer list immediately
-        forceRefresh(); // Force another refresh
+        refetchCustomers();
+        forceRefresh();
       }, 100);
       
       setShowSendPointsDialog(false);
     },
-    onError: (error: any) => {
+    onError: (error: any, variables, context) => {
+      // Roll back optimistic update
+      queryClient.setQueryData(['/api/merchant/scanned-customers'], context?.previousCustomers);
       toast({ title: "Error", description: error.message || "Failed to send points" });
     }
   });
@@ -394,6 +494,253 @@ export default function MerchantDashboard() {
     }
   });
 
+  const createCustomerMutation = useMutation({
+    mutationFn: async (data: { fullName: string; mobileNumber: string; email?: string }) => {
+      const response = await fetch('/api/merchant/create-customer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create customer');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const isReAdded = data.message && data.message.includes('re-added');
+      
+      // Show different messages based on whether customer was created or re-added
+      if (isReAdded) {
+        toast({ 
+          title: "Customer Re-added Successfully!", 
+          description: `${data.customer.fullName} has been re-added to your customer list.`
+        });
+      } else {
+        // Show temporary password for newly created customers
+        const tempPassword = data.customer.tempPassword;
+        const loginInfo = data.customer.loginInfo;
+        
+        toast({ 
+          title: "Customer Created Successfully!", 
+          description: `${data.customer.fullName} has been added to your customer list.\n\n🔑 Temporary Password: ${tempPassword}\n📱 Login Options: ${loginInfo.canLoginWith}\n\nPlease share these credentials with the customer.`,
+          duration: 10000 // Show for 10 seconds so merchant can copy the password
+        });
+        
+        // Also show an alert with the login details
+        setTimeout(() => {
+          alert(`Customer Created Successfully!\n\nCustomer: ${data.customer.fullName}\nPhone: ${data.customer.mobileNumber}\nEmail: ${data.customer.email || 'Not provided'}\nAccount Number: ${data.customer.accountNumber}\n\n🔑 TEMPORARY PASSWORD: ${tempPassword}\n\nLogin Options: ${loginInfo.canLoginWith}\n\nPlease share these credentials with the customer so they can log in to their account.`);
+        }, 1000);
+      }
+      
+
+      
+      // Comprehensive refresh of customer data
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      queryClient.removeQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
+      
+      // Force immediate refresh with multiple attempts
+      setTimeout(() => {
+        refetchCustomers();
+      }, 100);
+      
+      setTimeout(() => {
+        refetchCustomers();
+      }, 500);
+      
+      setTimeout(() => {
+        refetchCustomers();
+      }, 1000);
+      
+      setShowCreateCustomerDialog(false);
+    },
+    onError: (error: any) => {
+      let errorMessage = "Failed to create customer";
+      let title = "Cannot Create Customer";
+      
+      // Parse the error response to get more details
+      try {
+        const response = JSON.parse(error.message);
+        if (response.details?.canUnblock) {
+          title = "Customer Previously Removed";
+          errorMessage = `${response.message}\n\nWould you like to unblock this customer so they can be re-added?`;
+          // TODO: Add unblock functionality here
+        } else {
+          errorMessage = response.message || response.error || errorMessage;
+        }
+      } catch (e) {
+        // Handle string error messages
+        if (error.message.includes("previously removed")) {
+          title = "Customer Previously Removed";
+          errorMessage = error.message;
+        } else if (error.message.includes("already exists")) {
+          if (error.message.includes("already in your customer list")) {
+            errorMessage = "This customer is already in your customer list. Please check the Customers section.";
+          } else if (error.message.includes("mobile number")) {
+            errorMessage = "A customer with this phone number already exists. Please use a different phone number.";
+          } else if (error.message.includes("email")) {
+            errorMessage = "A customer with this email already exists. Please use a different email address.";
+          }
+        } else {
+          errorMessage = error.message || errorMessage;
+        }
+      }
+      
+      toast({ 
+        title, 
+        description: errorMessage,
+        variant: "destructive",
+        duration: 8000 // Longer duration for blocked customer messages
+      });
+    }
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (customerId: string) => {
+      const response = await fetch(`/api/merchant/reset-customer-password/${customerId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reset password');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const customer = data.customer;
+      const tempPassword = data.tempPassword;
+      
+      toast({ 
+        title: "Password Reset Successfully!", 
+        description: `New password for ${customer.fullName}: ${tempPassword}`,
+        duration: 10000
+      });
+      
+      // Show detailed alert with login information
+      setTimeout(() => {
+        alert(`Password Reset Successful!\n\nCustomer: ${customer.fullName}\nPhone: ${customer.mobileNumber}\nEmail: ${customer.email || 'Not provided'}\nAccount: ${customer.accountNumber}\n\n🔑 NEW PASSWORD: ${tempPassword}\n\nPlease share this new password with the customer so they can log in.`);
+      }, 1000);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Password Reset Failed", 
+        description: error.message || "Failed to reset customer password",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const deleteCustomerMutation = useMutation({
+    mutationFn: async (customerId: string) => {
+      console.log('🗑️ Attempting to delete customer:', customerId);
+      console.log('🔍 Available customers:', customers.map(c => ({ id: c.id, name: c.fullName })));
+      
+      // Use the primary POST endpoint which has better debugging
+      try {
+        const response = await fetch(`/api/merchant/delete-customer/${customerId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        console.log('📡 Delete response status:', response.status);
+        
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const result = await response.json();
+          
+          if (response.ok) {
+            console.log('✅ Delete successful:', result);
+            return result;
+          } else {
+            console.error('❌ Delete failed:', result);
+            throw new Error(result.error || 'Failed to delete customer');
+          }
+        } else {
+          const textResponse = await response.text();
+          console.error('❌ Server returned non-JSON response:', textResponse);
+          throw new Error('Server returned invalid response format');
+        }
+      } catch (error) {
+        console.error('❌ Delete request failed:', error);
+        throw error;
+      }
+    },
+    onMutate: async (customerId: string) => {
+      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+
+      // Snapshot the previous value
+      const previousCustomers = queryClient.getQueryData(['/api/merchant/scanned-customers']);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(['/api/merchant/scanned-customers'], (old: any) => {
+        if (!old) return [];
+        return old.filter((customer: any) => customer.id !== customerId);
+      });
+
+      // Return a context object with the snapshotted value
+      return { previousCustomers };
+    },
+    onSuccess: (data, customerId) => {
+      toast({ 
+        title: "Customer Removed", 
+        description: "Customer has been removed from your customer list." 
+      });
+      
+      // Force comprehensive cache invalidation
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
+      queryClient.removeQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+      
+      // Force immediate refresh
+      setTimeout(() => {
+        refetchCustomers();
+      }, 100);
+    },
+    onError: (error: any, customerId, context) => {
+      console.error('❌ Delete customer error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        customerId,
+        availableCustomers: customers.map(c => ({ id: c.id, name: c.fullName }))
+      });
+      
+      // Roll back optimistic update on error
+      queryClient.setQueryData(['/api/merchant/scanned-customers'], context?.previousCustomers);
+      
+      let errorMessage = "Failed to delete customer";
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast({ 
+        title: "Delete Failed", 
+        description: errorMessage,
+        variant: "destructive"
+      });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure we have the latest data
+      queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+    }
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -411,6 +758,15 @@ export default function MerchantDashboard() {
     );
   }
 
+  // Country data with flags
+  const countryData = {
+    'BD': { name: 'Bangladesh', flag: '🇧🇩', currency: '৳' },
+    'IN': { name: 'India', flag: '🇮🇳', currency: '₹' },
+    'PK': { name: 'Pakistan', flag: '🇵🇰', currency: '₨' },
+    'US': { name: 'United States', flag: '🇺🇸', currency: '$' },
+    'GB': { name: 'United Kingdom', flag: '🇬🇧', currency: '£' }
+  };
+
   // Merchant data from API
   const merchantData = {
     loyaltyPoints: walletData?.rewardPointWallet?.availablePoints || 0,
@@ -422,6 +778,7 @@ export default function MerchantDashboard() {
     tier: "Star Merchant",
     joinedDate: "Aug 2025",
     referralLink: "komarce.com/ref/m001",
+    country: merchantProfile?.country || 'BD', // Default to Bangladesh
     // Wallet breakdown
     rewardPointBalance: walletData?.rewardPointWallet?.availablePoints || 0,
     totalPointsIssued: walletData?.totalPointsIssued || 0,
@@ -431,6 +788,8 @@ export default function MerchantDashboard() {
     totalDeposited: walletData?.totalDeposited || 0,
     totalWithdrawn: walletData?.totalWithdrawn || 0
   };
+
+  const currentCountry = countryData[merchantData.country as keyof typeof countryData] || countryData['BD'];
 
   const pointDistributionData = [
     { month: 'Jan', points: 0 },
@@ -520,7 +879,7 @@ export default function MerchantDashboard() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Cashback</p>
                 <div className="flex items-center space-x-2">
-                  <span className="text-orange-600">৳</span>
+                  <span className="text-orange-600">{currentCountry.currency}</span>
                   <p className="text-2xl font-bold text-gray-900">{merchantData.totalCashback}</p>
                 </div>
                 <p className="text-xs text-green-600 flex items-center mt-1">
@@ -541,7 +900,7 @@ export default function MerchantDashboard() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Balance</p>
                 <div className="flex items-center space-x-2">
-                  <span className="text-green-600">৳</span>
+                  <span className="text-green-600">{currentCountry.currency}</span>
                   <p className="text-2xl font-bold text-gray-900">{merchantData.balance}</p>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">After VAT & Service Charge</p>
@@ -638,6 +997,51 @@ export default function MerchantDashboard() {
         </Card>
       </div>
 
+      {/* Recent Point Transfers Summary */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Recent Point Transfers</CardTitle>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setActiveSection('loyalty-points')}
+            >
+              View All
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {pointTransfers && pointTransfers.length > 0 ? (
+            <div className="space-y-3">
+              {pointTransfers.slice(0, 3).map((transfer: any) => (
+                <div key={transfer.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <Send className="w-4 h-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{transfer.customerName}</p>
+                      <p className="text-xs text-gray-500">{transfer.customerAccountNumber}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-green-600">+{transfer.points} pts</p>
+                    <p className="text-xs text-gray-500">{new Date(transfer.createdAt).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <Send className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-500">No point transfers yet</p>
+              <p className="text-sm text-gray-400">Start sending points to customers</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Referral Program */}
       <Card>
         <CardHeader>
@@ -647,7 +1051,7 @@ export default function MerchantDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <p className="text-sm text-gray-600">Referred Merchants: 0</p>
-              <p className="text-sm text-gray-600">Commission Earned: ৳0</p>
+              <p className="text-sm text-gray-600">Commission Earned: {currentCountry.currency}0</p>
             </div>
             <div>
               <Button variant="outline" className="w-full">
@@ -701,7 +1105,7 @@ export default function MerchantDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Point Transactions</CardTitle>
+          <CardTitle>Recent Point Transfers</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -709,16 +1113,37 @@ export default function MerchantDashboard() {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Customer</TableHead>
-                <TableHead>Points</TableHead>
+                <TableHead>Account Number</TableHead>
+                <TableHead>Points Sent</TableHead>
+                <TableHead>Description</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow>
-                <TableCell colSpan={4} className="text-center text-gray-500">
-                  No recent transactions
-                </TableCell>
-              </TableRow>
+              {pointTransfers && pointTransfers.length > 0 ? pointTransfers.slice(0, 10).map((transfer: any) => (
+                <TableRow key={transfer.id}>
+                  <TableCell>{new Date(transfer.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell className="font-medium">{transfer.customerName}</TableCell>
+                  <TableCell>{transfer.customerAccountNumber}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-green-600">
+                      +{transfer.points} pts
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="max-w-xs truncate">{transfer.description}</TableCell>
+                  <TableCell>
+                    <Badge variant={transfer.status === 'completed' ? 'default' : 'secondary'}>
+                      {transfer.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              )) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-gray-500">
+                    No point transfers yet
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -741,7 +1166,7 @@ export default function MerchantDashboard() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-3xl font-bold text-green-600">৳{merchantData.incomeBalance}</p>
+              <p className="text-3xl font-bold text-green-600">{currentCountry.currency}{merchantData.incomeBalance}</p>
               <p className="text-sm text-gray-600">Total Income Balance</p>
             </div>
           </CardContent>
@@ -749,7 +1174,7 @@ export default function MerchantDashboard() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-3xl font-bold text-orange-600">৳{merchantData.cashbackIncome}</p>
+              <p className="text-3xl font-bold text-orange-600">{currentCountry.currency}{merchantData.cashbackIncome}</p>
               <p className="text-sm text-gray-600">15% Cashback Income</p>
             </div>
           </CardContent>
@@ -757,7 +1182,7 @@ export default function MerchantDashboard() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-3xl font-bold text-blue-600">৳{merchantData.referralIncome}</p>
+              <p className="text-3xl font-bold text-blue-600">{currentCountry.currency}{merchantData.referralIncome}</p>
               <p className="text-sm text-gray-600">2% Referral Income</p>
             </div>
           </CardContent>
@@ -765,7 +1190,7 @@ export default function MerchantDashboard() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-3xl font-bold text-purple-600">৳{merchantData.royaltyIncome}</p>
+              <p className="text-3xl font-bold text-purple-600">{currentCountry.currency}{merchantData.royaltyIncome}</p>
               <p className="text-sm text-gray-600">1% Royalty Income</p>
             </div>
           </CardContent>
@@ -846,7 +1271,7 @@ export default function MerchantDashboard() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-3xl font-bold text-green-600">৳{merchantData.balance}</p>
+              <p className="text-3xl font-bold text-green-600">{currentCountry.currency}{merchantData.balance}</p>
               <p className="text-sm text-gray-600">Available Balance</p>
             </div>
           </CardContent>
@@ -854,7 +1279,7 @@ export default function MerchantDashboard() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-3xl font-bold text-blue-600">৳{merchantData.totalDeposited}</p>
+              <p className="text-3xl font-bold text-blue-600">{currentCountry.currency}{merchantData.totalDeposited}</p>
               <p className="text-sm text-gray-600">Total Deposited</p>
             </div>
           </CardContent>
@@ -862,7 +1287,7 @@ export default function MerchantDashboard() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-3xl font-bold text-orange-600">৳{merchantData.totalWithdrawn}</p>
+              <p className="text-3xl font-bold text-orange-600">{currentCountry.currency}{merchantData.totalWithdrawn}</p>
               <p className="text-sm text-gray-600">Total Withdrawn</p>
             </div>
           </CardContent>
@@ -948,10 +1373,41 @@ export default function MerchantDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Customer Management</h2>
-        <Button onClick={() => setShowQRScanDialog(true)}>
-          <QrCode className="w-4 h-4 mr-2" />
-          Scan Customer QR
-        </Button>
+        <div className="flex space-x-2">
+          <Button 
+            variant="outline"
+            onClick={async () => {
+              // Debug: Check what customers exist on server
+              try {
+                const response = await fetch('/api/merchant/debug-customers', {
+                  headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                  }
+                });
+                const debugData = await response.json();
+                console.log('🔍 Server customers:', debugData);
+                toast({ 
+                  title: "Debug Info", 
+                  description: `Server has ${debugData.customerCount} customers. Check console for details.` 
+                });
+              } catch (error) {
+                console.error('Debug failed:', error);
+              }
+              
+              // Force complete refresh of customer data
+              queryClient.removeQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/merchant/scanned-customers'] });
+              refetchCustomers();
+            }}
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Debug & Refresh
+          </Button>
+          <Button onClick={() => setShowQRScanDialog(true)}>
+            <QrCode className="w-4 h-4 mr-2" />
+            Scan Customer QR
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1029,7 +1485,16 @@ export default function MerchantDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {customers.length > 0 ? customers.map((customer: any) => (
+              {customersLoading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <div className="flex flex-col items-center space-y-2">
+                      <RefreshCw className="w-8 h-8 text-gray-400 animate-spin" />
+                      <p>Loading customers...</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : customers.length > 0 ? customers.map((customer: any) => (
                 <TableRow key={customer.id}>
                   <TableCell className="font-medium">{customer.fullName}</TableCell>
                   <TableCell>{customer.accountNumber}</TableCell>
@@ -1045,21 +1510,48 @@ export default function MerchantDashboard() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        setShowSendPointsDialog(true);
-                        // Pre-select this customer in the form
-                        setTimeout(() => {
-                          const select = document.querySelector('select[name="customerId"]') as HTMLSelectElement;
-                          if (select) select.value = customer.id;
-                        }, 100);
-                      }}
-                    >
-                      <Send className="w-4 h-4 mr-1" />
-                      Send Points
-                    </Button>
+                    <div className="flex space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setShowSendPointsDialog(true);
+                          // Pre-select this customer in the form
+                          setTimeout(() => {
+                            const select = document.querySelector('select[name="customerId"]') as HTMLSelectElement;
+                            if (select) select.value = customer.id;
+                          }, 100);
+                        }}
+                      >
+                        <Send className="w-4 h-4 mr-1" />
+                        Send Points
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={async () => {
+                          if (confirm(`Are you sure you want to remove ${customer.fullName} (${customer.accountNumber}) from your customer list?\n\nThis action cannot be undone.`)) {
+                            try {
+                              // Show loading state
+                              toast({ 
+                                title: "Removing Customer", 
+                                description: `Removing ${customer.fullName} from your list...` 
+                              });
+                              
+                              // Call delete customer API
+                              await deleteCustomerMutation.mutateAsync(customer.id);
+                            } catch (error) {
+                              console.error('Delete customer error:', error);
+                            }
+                          }
+                        }}
+                        className="text-red-600 border-red-300 hover:bg-red-50"
+                        disabled={deleteCustomerMutation.isPending}
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        {deleteCustomerMutation.isPending ? 'Deleting...' : 'Delete'}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               )) : (
@@ -1180,61 +1672,61 @@ export default function MerchantDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
+        <Card className="bg-neutral-900 text-white">
           <CardContent className="p-6">
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <DollarSign className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <DollarSign className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900">Direct Cash Payment</h3>
-              <p className="text-sm text-gray-600 mt-2">Pay cash directly to the company</p>
+              <h3 className="font-semibold text-white">Direct Cash Payment</h3>
+              <p className="text-sm text-white/70 mt-2">Pay cash directly to the company</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-neutral-900 text-white">
           <CardContent className="p-6">
             <div className="text-center">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CreditCard className="w-6 h-6 text-green-600" />
+              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CreditCard className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900">Bank/Mobile Transfer</h3>
-              <p className="text-sm text-gray-600 mt-2">Transfer to company account and request points</p>
+              <h3 className="font-semibold text-white">Bank/Mobile Transfer</h3>
+              <p className="text-sm text-white/70 mt-2">Transfer to company account and request points</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-neutral-900 text-white">
           <CardContent className="p-6">
             <div className="text-center">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Zap className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Zap className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900">Automatic Payment Gateway</h3>
-              <p className="text-sm text-gray-600 mt-2">Instant recharge via payment gateway</p>
+              <h3 className="font-semibold text-white">Automatic Payment Gateway</h3>
+              <p className="text-sm text-white/70 mt-2">Instant recharge via payment gateway</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className="bg-neutral-900 text-white">
         <CardHeader>
-          <CardTitle>Recharge History</CardTitle>
+          <CardTitle className="text-white">Recharge History</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Points</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="text-white/80">Date</TableHead>
+                <TableHead className="text-white/80">Method</TableHead>
+                <TableHead className="text-white/80">Amount</TableHead>
+                <TableHead className="text-white/80">Points</TableHead>
+                <TableHead className="text-white/80">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-gray-500">
+                <TableCell colSpan={5} className="text-center text-white/60">
                   No recharge history found
                 </TableCell>
               </TableRow>
@@ -1418,58 +1910,137 @@ export default function MerchantDashboard() {
     </div>
   );
 
-  // Render Distribution Reports Section
-  const renderDistributionReports = () => (
+  // CSV Download Function
+  const downloadCSV = (data: any[], filename: string) => {
+    if (!data || data.length === 0) {
+      toast({ title: "No Data", description: "No data available to download" });
+      return;
+    }
+
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => `"${row[header] || ''}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Generate Report Data from Real Dashboard Data
+  const generateReportData = (reportType: string, period: string) => {
+    const now = new Date();
+    let startDate = new Date();
+    
+    switch (period) {
+      case 'today':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'weekly':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'monthly':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      default:
+        startDate = new Date(period);
+    }
+
+    // Filter data based on selected period
+    const filterByPeriod = (items: any[]) => {
+      return items.filter((item: any) => {
+        const itemDate = new Date(item.createdAt || item.date);
+        return itemDate >= startDate && itemDate <= now;
+      });
+    };
+
+    // Real data from merchant dashboard and transactions
+    const filteredPointTransfers = filterByPeriod(pointTransfers || []);
+    const filteredPointsReceived = filterByPeriod(pointsReceived || []);
+
+    // Calculate real totals from dashboard data
+    const totalPointsDistributed = filteredPointTransfers.reduce((sum: number, t: any) => sum + (t.points || 0), 0);
+    const totalPointsReceived = filteredPointsReceived.reduce((sum: number, t: any) => sum + (t.points || 0), 0);
+    const currentBalance = merchantData.loyaltyPoints || 0; // Real balance from dashboard
+
+    const realData = {
+      pointsReceived: filteredPointsReceived.map((item: any) => ({
+        date: new Date(item.createdAt || item.date).toLocaleDateString(),
+        time: new Date(item.createdAt || item.date).toLocaleTimeString(),
+        source: item.source || 'Local Admin',
+        points: item.points || 0,
+        description: item.description || 'Points allocation'
+      })),
+      pointsDistributed: filteredPointTransfers.map((transfer: any) => ({
+        date: new Date(transfer.createdAt).toLocaleDateString(),
+        time: new Date(transfer.createdAt).toLocaleTimeString(),
+        customer: transfer.customerName || 'Unknown Customer',
+        accountNumber: transfer.customerAccountNumber || 'N/A',
+        points: transfer.points || 0,
+        description: transfer.description || 'Point transfer',
+        status: transfer.status || 'completed'
+      })),
+      summary: {
+        totalReceived: totalPointsReceived,
+        totalDistributed: totalPointsDistributed,
+        balance: currentBalance, // Real current balance from dashboard
+        transactions: filteredPointTransfers.length + filteredPointsReceived.length
+      }
+    };
+
+    return realData;
+  };
+
+  // Render Create Customer Section
+  const renderCreateCustomer = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Point Distribution Reports</h2>
-        <Button onClick={() => setShowReportDialog(true)}>
-          <BarChart className="w-4 h-4 mr-2" />
-          Generate Report
+        <h2 className="text-2xl font-bold text-gray-900">Create Customer Profile</h2>
+        <Button onClick={() => setShowCreateCustomerDialog(true)}>
+          <UserPlus className="w-4 h-4 mr-2" />
+          Create New Customer
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Report Types</CardTitle>
+            <CardTitle>Quick Customer Creation</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Package className="w-4 h-4 text-blue-600" />
+                  <User className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
-                  <p className="font-medium">Product-wise Report</p>
-                  <p className="text-sm text-gray-600">Points distributed by product</p>
+                  <p className="font-medium">Name Required</p>
+                  <p className="text-sm text-gray-600">Customer's full name is mandatory</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <Building2 className="w-4 h-4 text-green-600" />
+                  <Smartphone className="w-4 h-4 text-green-600" />
                 </div>
                 <div>
-                  <p className="font-medium">Supplier-wise Report</p>
-                  <p className="text-sm text-gray-600">Points distributed by supplier company</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                  <Users className="w-4 h-4 text-purple-600" />
-                </div>
-                <div>
-                  <p className="font-medium">Customer-wise Report</p>
-                  <p className="text-sm text-gray-600">Points distributed to customers</p>
+                  <p className="font-medium">Phone Number Required</p>
+                  <p className="text-sm text-gray-600">Mobile number for login and communication</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                  <Calendar className="w-4 h-4 text-orange-600" />
+                  <Mail className="w-4 h-4 text-orange-600" />
                 </div>
                 <div>
-                  <p className="font-medium">Monthly Summary</p>
-                  <p className="text-sm text-gray-600">Monthly distribution summary</p>
+                  <p className="font-medium">Email Optional</p>
+                  <p className="text-sm text-gray-600">Email address is optional but recommended</p>
                 </div>
               </div>
             </div>
@@ -1478,63 +2049,300 @@ export default function MerchantDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Example Report</CardTitle>
+            <CardTitle>Customer Benefits</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                <span className="font-medium">RIBANA Cosmetics</span>
-                <div className="text-right">
-                  <p className="font-semibold">1,250 points</p>
-                  <p className="text-sm text-gray-600">৳12,500 sales</p>
-                </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm">Instant account creation</span>
               </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                <span className="font-medium">Electronics Hub</span>
-                <div className="text-right">
-                  <p className="font-semibold">850 points</p>
-                  <p className="text-sm text-gray-600">৳8,500 sales</p>
-                </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm">Login with phone number or email</span>
               </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                <span className="font-medium">Fashion Store</span>
-                <div className="text-right">
-                  <p className="font-semibold">650 points</p>
-                  <p className="text-sm text-gray-600">৳6,500 sales</p>
-                </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm">Automatic loyalty points system</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm">QR code generation</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm">Transaction history tracking</span>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Generated Reports</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Report Type</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Total Points</TableHead>
-                <TableHead>Generated</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-gray-500">
-                  No reports generated yet
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+
     </div>
   );
+
+  // Render Reports Section
+  const renderReports = () => {
+    const reportData = generateReportData('comprehensive', 'monthly');
+    
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-900">Merchant Reports</h2>
+          <Button onClick={() => setShowReportDialog(true)}>
+            <Download className="w-4 h-4 mr-2" />
+            Generate & Download Report
+          </Button>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <p className="text-3xl font-bold text-green-600">{reportData.summary.totalReceived}</p>
+                <p className="text-sm text-gray-600">Points Received</p>
+                <p className="text-xs text-gray-500">From Local Admin</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <p className="text-3xl font-bold text-blue-600">{reportData.summary.totalDistributed}</p>
+                <p className="text-sm text-gray-600">Points Distributed</p>
+                <p className="text-xs text-gray-500">To Customers</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <p className="text-3xl font-bold text-purple-600">{reportData.summary.balance}</p>
+                <p className="text-sm text-gray-600">Current Balance</p>
+                <p className="text-xs text-gray-500">Available Points</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <p className="text-3xl font-bold text-orange-600">{reportData.summary.transactions}</p>
+                <p className="text-sm text-gray-600">Total Transactions</p>
+                <p className="text-xs text-gray-500">This Month</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Points Received from Local Admin */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Points Received from Local Admin</CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => downloadCSV(reportData.pointsReceived, 'points_received')}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download CSV
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Points</TableHead>
+                  <TableHead>Description</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportData.pointsReceived.map((item: any, index: number) => (
+                  <TableRow key={index}>
+                    <TableCell>{item.date}</TableCell>
+                    <TableCell>{item.time}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="bg-green-100 text-green-800">
+                        {item.source}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-green-600">
+                        +{item.points} pts
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{item.description}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Points Distributed to Customers */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Points Distributed to Customers</CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => downloadCSV(reportData.pointsDistributed, 'points_distributed')}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download CSV
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Account Number</TableHead>
+                  <TableHead>Points</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportData.pointsDistributed.length > 0 ? reportData.pointsDistributed.map((item: any, index: number) => (
+                  <TableRow key={index}>
+                    <TableCell>{item.date}</TableCell>
+                    <TableCell>{item.time}</TableCell>
+                    <TableCell className="font-medium">{item.customer}</TableCell>
+                    <TableCell>{item.accountNumber}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-blue-600">
+                        -{item.points} pts
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">{item.description}</TableCell>
+                    <TableCell>
+                      <Badge variant={item.status === 'completed' ? 'default' : 'secondary'}>
+                        {item.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-gray-500">
+                      No points distributed yet
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Downloads</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => downloadCSV(reportData.pointsReceived, 'points_received_today')}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Today's Received Points
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => downloadCSV(reportData.pointsDistributed, 'points_distributed_today')}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Today's Distributed Points
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => downloadCSV([reportData.summary], 'monthly_summary')}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Monthly Summary
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Report Periods</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => setShowReportDialog(true)}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Today's Report
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => setShowReportDialog(true)}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Weekly Report
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => setShowReportDialog(true)}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Monthly Report
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Report Analytics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Distribution Rate</span>
+                  <span className="font-semibold">
+                    {reportData.summary.totalReceived > 0 
+                      ? Math.round((reportData.summary.totalDistributed / reportData.summary.totalReceived) * 100)
+                      : 0}%
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Avg. Points per Customer</span>
+                  <span className="font-semibold">
+                    {reportData.pointsDistributed.length > 0 
+                      ? Math.round(reportData.summary.totalDistributed / reportData.pointsDistributed.length)
+                      : 0}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Active Customers</span>
+                  <span className="font-semibold">{reportData.pointsDistributed.length}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <NotificationProvider 
@@ -1544,60 +2352,12 @@ export default function MerchantDashboard() {
         role: user.role
       } : undefined}
     >
-      <div className="min-h-screen bg-gray-50">
-      {/* Top Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden"
-              >
-                <Menu className="w-5 h-5" />
-              </Button>
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">K</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">KOMARCE Merchant Portal</h1>
-                <p className="text-sm text-gray-500">Welcome, {merchantData.merchantName}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <Badge variant="default" className="px-3 py-1 bg-yellow-100 text-yellow-800">
-                <Star className="w-4 h-4 mr-1" />
-                {merchantData.tier}
-              </Badge>
-              
-              {/* Notification Bell */}
-              <NotificationWrapper badgeProps={{ type: 'total', size: 'sm' }}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setActiveSection("chat")}
-                  className="relative"
-                >
-                  <Bell className="w-5 h-5 text-gray-600" />
-                </Button>
-              </NotificationWrapper>
-              
-              <div className="text-sm text-gray-600">
-                <span className="font-medium">75% to next rank</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      <div className="min-h-screen bg-gradient-to-br from-white via-red-50 to-white">
       <div className="flex">
         {/* Sidebar */}
-        <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
+        <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
           <div className="flex items-center justify-between h-16 px-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-900">Merchant Sidebar</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Menu</h2>
             <Button
               variant="ghost"
               size="sm"
@@ -1644,6 +2404,15 @@ export default function MerchantDashboard() {
               >
                 <Users className="w-4 h-4 mr-2" />
                 Customers
+              </Button>
+              
+              <Button
+                variant={activeSection === "create-customer" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveSection("create-customer")}
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Create Customer
               </Button>
               
               <Button
@@ -1710,12 +2479,12 @@ export default function MerchantDashboard() {
               </Button>
               
               <Button
-                variant={activeSection === "distribution-reports" ? "default" : "ghost"}
+                variant={activeSection === "reports" ? "default" : "ghost"}
                 className="w-full justify-start"
-                onClick={() => setActiveSection("distribution-reports")}
+                onClick={() => setActiveSection("reports")}
               >
                 <BarChart className="w-4 h-4 mr-2" />
-                Distribution Reports
+                Reports
               </Button>
               
               <NotificationWrapper badgeProps={{ type: 'messages' }}>
@@ -1749,18 +2518,31 @@ export default function MerchantDashboard() {
 
         {/* Main Content */}
         <div className="flex-1 lg:ml-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Mobile Menu Button */}
+          <div className="lg:hidden fixed top-4 left-4 z-50">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="bg-white shadow-md"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+          </div>
+          
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-32">
             {activeSection === 'dashboard' && renderDashboard()}
             {activeSection === 'loyalty-points' && renderLoyaltyPoints()}
             {activeSection === 'income-wallet' && renderIncomeWallet()}
             {activeSection === 'customers' && renderCustomers()}
+            {activeSection === 'create-customer' && renderCreateCustomer()}
             {activeSection === 'leaderboard' && renderLeaderboard()}
             {activeSection === 'profile' && renderProfile()}
             {activeSection === 'wallets' && renderCommerceWallet()}
             {activeSection === 'point-recharge' && renderPointRecharge()}
             {activeSection === 'product-sales' && renderProductSales()}
             {activeSection === 'activity-tracking' && renderActivityTracking()}
-            {activeSection === 'distribution-reports' && renderDistributionReports()}
+            {activeSection === 'reports' && renderReports()}
             {activeSection === 'chat' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -1928,6 +2710,129 @@ export default function MerchantDashboard() {
         </DialogContent>
       </Dialog>
 
+      {/* Create Customer Dialog */}
+      <Dialog open={showCreateCustomerDialog} onOpenChange={setShowCreateCustomerDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Customer</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target as HTMLFormElement);
+            const fullName = formData.get('fullName') as string;
+            const mobileNumber = formData.get('mobileNumber') as string;
+            const email = formData.get('email') as string;
+            
+            if (!fullName.trim()) {
+              toast({ 
+                title: "Error", 
+                description: "Customer name is required",
+                variant: "destructive"
+              });
+              return;
+            }
+            
+            if (!mobileNumber.trim()) {
+              toast({ 
+                title: "Error", 
+                description: "Mobile number is required",
+                variant: "destructive"
+              });
+              return;
+            }
+            
+            // Validate phone number format (more flexible)
+            const phoneRegex = /^(\+88)?01[3-9]\d{8}$/;
+            const cleanedNumber = mobileNumber.replace(/\s/g, '');
+            if (!phoneRegex.test(cleanedNumber)) {
+              toast({ 
+                title: "Invalid Phone Number", 
+                description: "Please enter a valid Bangladeshi mobile number (e.g., 01712345678 or +8801712345678)",
+                variant: "destructive"
+              });
+              return;
+            }
+
+            // Validate email format if provided
+            if (email && email.trim()) {
+              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+              if (!emailRegex.test(email.trim())) {
+                toast({ 
+                  title: "Invalid Email", 
+                  description: "Please enter a valid email address",
+                  variant: "destructive"
+                });
+                return;
+              }
+            }
+            
+            createCustomerMutation.mutate({
+              fullName: fullName.trim(),
+              mobileNumber: mobileNumber.trim(),
+              email: email.trim() || undefined
+            });
+          }} className="space-y-4">
+            <div>
+              <Label htmlFor="fullName">Full Name *</Label>
+              <Input 
+                name="fullName" 
+                required 
+                placeholder="Enter customer's full name"
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="mobileNumber">Mobile Number *</Label>
+              <Input 
+                name="mobileNumber" 
+                required 
+                placeholder="01XXXXXXXXX or +8801XXXXXXXXX"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Customer can use this number to login
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="email">Email Address (Optional)</Label>
+              <Input 
+                name="email" 
+                type="email"
+                placeholder="customer@example.com"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                If provided, customer can also login with email
+              </p>
+            </div>
+            
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> The customer will be able to login to the customer portal using either their phone number or email address (if provided). If you previously deleted a customer, you can re-add them by entering the same phone number.
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setShowCreateCustomerDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={createCustomerMutation.isPending}
+              >
+                {createCustomerMutation.isPending ? 'Creating...' : 'Create Customer'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* QR Code Scan Dialog */}
       <Dialog open={showQRScanDialog} onOpenChange={setShowQRScanDialog}>
         <DialogContent className="max-w-md">
@@ -1974,7 +2879,7 @@ export default function MerchantDashboard() {
             });
           }} className="space-y-4">
             <div>
-              <Label htmlFor="amount">Amount (৳)</Label>
+              <Label htmlFor="amount">Amount ({currentCountry.currency})</Label>
               <Input name="amount" type="number" required min="100" />
             </div>
             <div>
@@ -2214,42 +3119,107 @@ export default function MerchantDashboard() {
 
       {/* Generate Report Dialog */}
       <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Generate Distribution Report</DialogTitle>
+            <DialogTitle>Generate & Download Report</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => {
             e.preventDefault();
             const formData = new FormData(e.target as HTMLFormElement);
             const reportType = formData.get('reportType') as string;
             const period = formData.get('period') as string;
+            const customDate = formData.get('customDate') as string;
             
-            // Here you would call the API to generate the report
+            let selectedPeriod = period;
+            if (period === 'custom' && customDate) {
+              selectedPeriod = customDate;
+            }
+            
+            // Generate report data
+            const reportData = generateReportData(reportType, selectedPeriod);
+            
+            // Download based on report type
+            switch (reportType) {
+              case 'points_received':
+                downloadCSV(reportData.pointsReceived, `points_received_${selectedPeriod}`);
+                break;
+              case 'points_distributed':
+                downloadCSV(reportData.pointsDistributed, `points_distributed_${selectedPeriod}`);
+                break;
+              case 'comprehensive':
+                // Download all data as separate sheets (combined CSV)
+                const combinedData = [
+                  ...reportData.pointsReceived.map((item: any) => ({ ...item, type: 'Received' })),
+                  ...reportData.pointsDistributed.map((item: any) => ({ ...item, type: 'Distributed' }))
+                ];
+                downloadCSV(combinedData, `comprehensive_report_${selectedPeriod}`);
+                break;
+              case 'summary':
+                downloadCSV([reportData.summary], `summary_report_${selectedPeriod}`);
+                break;
+            }
+            
             toast({ 
-              title: "Report Generated", 
-              description: `${reportType} report generated for ${period}` 
+              title: "Report Downloaded", 
+              description: `${reportType.replace('_', ' ')} report downloaded successfully!` 
             });
             setShowReportDialog(false);
           }} className="space-y-4">
             <div>
               <Label htmlFor="reportType">Report Type</Label>
               <Select name="reportType" required>
-                <option value="product_wise">Product-wise Report</option>
-                <option value="supplier_wise">Supplier-wise Report</option>
-                <option value="customer_wise">Customer-wise Report</option>
-                <option value="monthly_summary">Monthly Summary</option>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select report type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="comprehensive">Comprehensive Report</SelectItem>
+                  <SelectItem value="points_received">Points Received from Admin</SelectItem>
+                  <SelectItem value="points_distributed">Points Distributed to Customers</SelectItem>
+                  <SelectItem value="summary">Summary Report</SelectItem>
+                </SelectContent>
               </Select>
             </div>
+            
             <div>
               <Label htmlFor="period">Period</Label>
-              <Input name="period" type="month" required />
+              <Select name="period" required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="weekly">This Week</SelectItem>
+                  <SelectItem value="monthly">This Month</SelectItem>
+                  <SelectItem value="custom">Custom Date</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            
+            <div>
+              <Label htmlFor="customDate">Custom Date (if selected)</Label>
+              <Input name="customDate" type="date" />
+              <p className="text-xs text-gray-500 mt-1">Only used if "Custom Date" is selected above</p>
+            </div>
+            
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Report will include:</strong>
+              </p>
+              <ul className="text-xs text-blue-600 mt-1 space-y-1">
+                <li>• Points received from local admin with date/time</li>
+                <li>• Points distributed to customers with details</li>
+                <li>• Customer account numbers and transaction status</li>
+                <li>• Complete transaction history with descriptions</li>
+              </ul>
+            </div>
+            
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={() => setShowReportDialog(false)}>
                 Cancel
               </Button>
               <Button type="submit">
-                Generate Report
+                <Download className="w-4 h-4 mr-2" />
+                Generate & Download CSV
               </Button>
             </div>
           </form>

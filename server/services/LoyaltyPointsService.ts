@@ -527,58 +527,80 @@ export class LoyaltyPointsService implements ILoyaltyPointsService {
     });
   }
 
-  // Infinity reward system - Generate 4 new reward numbers from 32200 points
+  // Infinity reward system - Deduct 6,000 points twice (merchant distribution + 4 global numbers)
   async processInfinityReward(userId: string): Promise<void> {
-    const infinityAmount = 32200;
-    const voucherReserve = 6000;
-    const redeemableAmount = infinityAmount - voucherReserve; // 26200
+    const deductionAmount = 6000; // 6,000 points to be deducted twice
     
-    // Award infinity reward to user's income wallet
-    await this.updateWalletBalance(userId, 'income', infinityAmount);
+    // First deduction: Distribute to merchants based on ratio where customer earned points
+    await this.distributeToMerchants(userId, deductionAmount);
     
-    // Create 4 new reward numbers as per Bengali document
-    for (let i = 0; i < 4; i++) {
-      const globalRewardNumber = await this.storage.getNextGlobalRewardNumber();
-      const serialNumber = await this.storage.generateSerialNumber();
-      
-      await this.storage.createStepUpRewardNumber({
-        userId,
-        rewardNumber: globalRewardNumber,
-        serialNumber: serialNumber,
-        type: 'global',
-        tier1Status: 'active',
-        tier1Amount: 800,
-        tier2Status: 'locked',
-        tier2Amount: 1500,
-        tier3Status: 'locked',
-        tier3Amount: 3500,
-        tier4Status: 'locked',
-        tier4Amount: 32200,
-        tier4VoucherReserve: 6000,
-        tier4RedeemableAmount: 20200,
-        currentPoints: 0,
-        totalPointsRequired: 38000,
-        isCompleted: false,
-        country: 'BD'
-      });
-    }
+    // Second deduction: Generate 4 new global numbers (4 × 1,500 = 6,000 points)
+    await this.generateFourGlobalNumbers(userId);
     
     // Create transaction record
     await this.storage.createPointTransaction({
       userId,
-      points: infinityAmount,
+      points: -deductionAmount * 2, // Total 12,000 points deducted
       transactionType: 'infinity_reward',
-      description: `Infinity reward: 4 new reward numbers generated`,
-      balanceBefore: await this.getWalletBalance(userId, 'income') - infinityAmount,
+      description: `Infinity reward: 6,000 points distributed to merchants, 6,000 points used for 4 new global numbers`,
+      balanceBefore: await this.getWalletBalance(userId, 'income') + (deductionAmount * 2),
       balanceAfter: await this.getWalletBalance(userId, 'income'),
       status: 'completed',
       metadata: {
         rewardType: 'infinity',
-        newRewardNumbers: 4,
-        voucherReserve,
-        redeemableAmount
+        merchantDistribution: deductionAmount,
+        newGlobalNumbers: 4,
+        totalDeducted: deductionAmount * 2
       }
     });
+  }
+
+  // Distribute points to merchants based on ratio where customer earned points
+  private async distributeToMerchants(userId: string, amount: number): Promise<void> {
+    // Get customer's transaction history to determine merchant ratios
+    const transactions = await this.storage.getCustomerTransactions(userId);
+    const merchantRatios = this.calculateMerchantRatios(transactions);
+    
+    // Distribute points to merchants based on ratios
+    for (const [merchantId, ratio] of Object.entries(merchantRatios)) {
+      const merchantAmount = amount * ratio;
+      await this.storage.addMerchantPoints(merchantId, merchantAmount);
+    }
+  }
+
+  // Calculate merchant ratios based on where customer earned points
+  private calculateMerchantRatios(transactions: any[]): Record<string, number> {
+    const merchantTotals: Record<string, number> = {};
+    let totalPoints = 0;
+    
+    // Calculate total points earned from each merchant
+    for (const transaction of transactions) {
+      if (transaction.merchantId && transaction.points > 0) {
+        merchantTotals[transaction.merchantId] = (merchantTotals[transaction.merchantId] || 0) + transaction.points;
+        totalPoints += transaction.points;
+      }
+    }
+    
+    // Calculate ratios
+    const ratios: Record<string, number> = {};
+    for (const [merchantId, points] of Object.entries(merchantTotals)) {
+      ratios[merchantId] = points / totalPoints;
+    }
+    
+    return ratios;
+  }
+
+  // Generate 4 new global numbers for customer
+  private async generateFourGlobalNumbers(userId: string): Promise<void> {
+    for (let i = 0; i < 4; i++) {
+      // Create new global number (1,500 points = 1 global number)
+      await this.storage.createGlobalRewardNumber({
+        userId,
+        globalNumber: await this.storage.getNextGlobalNumber(),
+        points: 1500,
+        status: 'active'
+      });
+    }
   }
 
   // Merchant shopping wallet system - 26200 Taka for designated merchants

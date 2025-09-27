@@ -636,9 +636,9 @@ export default function GlobalAdminPortal() {
         role: currentUser.role
       } : undefined}
     >
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-white via-red-50 to-white">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="komarce-nav">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
@@ -683,9 +683,9 @@ export default function GlobalAdminPortal() {
               
               <Button 
                 onClick={handleLogout} 
-                variant="outline" 
+                variant="default" 
                 size="sm" 
-                className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 flex items-center"
+                className="bg-red-600 hover:bg-red-700 text-white flex items-center"
                 data-testid="button-global-admin-logout"
               >
                 <LogOut className="w-4 h-4 mr-2" />
@@ -712,10 +712,10 @@ export default function GlobalAdminPortal() {
           </div>
           
           <ScrollArea className="h-[calc(100vh-4rem)]">
-            <nav className="p-4 space-y-2">
+            <nav className="p-4 space-y-2 text-gray-700">
               <Button
-                variant={activeTab === "dashboard" ? "default" : "ghost"}
-                className="w-full justify-start"
+                variant={activeTab === "dashboard" ? "default" : "outline"}
+                className={`w-full justify-start ${activeTab !== "dashboard" ? "bg-white" : ""}`}
                 onClick={() => setActiveTab("dashboard")}
               >
               <BarChart3 className="w-4 h-4 mr-2" />
@@ -723,8 +723,8 @@ export default function GlobalAdminPortal() {
               </Button>
               
               <Button
-                variant={activeTab === "merchants" ? "default" : "ghost"}
-                className="w-full justify-start"
+                variant={activeTab === "merchants" ? "default" : "outline"}
+                className={`w-full justify-start ${activeTab !== "merchants" ? "bg-white" : ""}`}
                 onClick={() => setActiveTab("merchants")}
               >
                 <Building2 className="w-4 h-4 mr-2" />
@@ -732,8 +732,8 @@ export default function GlobalAdminPortal() {
               </Button>
               
               <Button
-                variant={activeTab === "customers" ? "default" : "ghost"}
-                className="w-full justify-start"
+                variant={activeTab === "customers" ? "default" : "outline"}
+                className={`w-full justify-start ${activeTab !== "customers" ? "bg-white" : ""}`}
                 onClick={() => setActiveTab("customers")}
               >
                 <Users className="w-4 h-4 mr-2" />
@@ -918,6 +918,7 @@ export default function GlobalAdminPortal() {
                 <Button
                   variant={timeFilter === "daily" ? "default" : "outline"}
                   size="sm"
+                  className={`${timeFilter === "daily" ? 'rounded-full px-4' : 'rounded-full px-4 text-gray-700'} `}
                   onClick={() => setTimeFilter("daily")}
                 >
                   Daily
@@ -925,6 +926,7 @@ export default function GlobalAdminPortal() {
                 <Button
                   variant={timeFilter === "weekly" ? "default" : "outline"}
                   size="sm"
+                  className={`${timeFilter === "weekly" ? 'rounded-full px-4' : 'rounded-full px-4 text-gray-700'}`}
                   onClick={() => setTimeFilter("weekly")}
                 >
                   Weekly
@@ -932,6 +934,7 @@ export default function GlobalAdminPortal() {
                 <Button
                   variant={timeFilter === "monthly" ? "default" : "outline"}
                   size="sm"
+                  className={`${timeFilter === "monthly" ? 'rounded-full px-4' : 'rounded-full px-4 text-gray-700'}`}
                   onClick={() => setTimeFilter("monthly")}
                 >
                   Monthly
@@ -939,6 +942,7 @@ export default function GlobalAdminPortal() {
                 <Button
                   variant={timeFilter === "yearly" ? "default" : "outline"}
                   size="sm"
+                  className={`${timeFilter === "yearly" ? 'rounded-full px-4' : 'rounded-full px-4 text-gray-700'}`}
                   onClick={() => setTimeFilter("yearly")}
                 >
                   Yearly
@@ -947,6 +951,7 @@ export default function GlobalAdminPortal() {
               <Button
                 variant="outline"
                 size="sm"
+                className="rounded-full px-4 text-gray-700 hover:text-red-600"
                 onClick={() => queryClient.invalidateQueries()}
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -1325,7 +1330,7 @@ export default function GlobalAdminPortal() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Top 10 Customers by Serial Number</CardTitle>
+                    <CardTitle>Top 10 Customers by Global Number</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Table>
@@ -1333,7 +1338,7 @@ export default function GlobalAdminPortal() {
                         <TableRow>
                           <TableHead>Rank</TableHead>
                           <TableHead>Customer</TableHead>
-                          <TableHead>Serial Number</TableHead>
+                          <TableHead>Global Number</TableHead>
                           <TableHead>Country</TableHead>
                           <TableHead>Points</TableHead>
                         </TableRow>
@@ -1910,7 +1915,7 @@ export default function GlobalAdminPortal() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Customer</TableHead>
-                          <TableHead>Serial Number</TableHead>
+                          <TableHead>Global Number</TableHead>
                           <TableHead>Country</TableHead>
                           <TableHead>Points</TableHead>
                           <TableHead>Referrals</TableHead>

@@ -18,9 +18,9 @@ export default function Home() {
   });
 
   return (
-    <div className="pt-20 min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-50">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-white via-red-50 to-white">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white overflow-hidden">
+      <section className="relative komarce-gradient text-white overflow-hidden">
         {/* Floating Elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-20 left-10 w-72 h-72 bg-white/10 rounded-full blur-3xl"></div>
@@ -37,7 +37,7 @@ export default function Home() {
                 <h1 className="text-6xl lg:text-7xl font-black leading-tight mb-8">
                   Shop Smart,
                   <br />
-                  <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
+                  <span className="bg-gradient-to-r from-red-400 to-red-300 bg-clip-text text-transparent">
                     Earn More
                   </span>
                 </h1>
@@ -50,7 +50,7 @@ export default function Home() {
                 <Button 
                   asChild 
                   size="lg" 
-                  className="bg-white text-blue-700 hover:bg-gray-100 text-xl font-bold py-8 px-12 rounded-2xl shadow-2xl transform hover:scale-105 transition-all duration-300"
+                  className="komarce-button bg-white text-red-600 hover:bg-gray-100 text-xl font-bold py-8 px-12 rounded-2xl shadow-2xl transform hover:scale-105 transition-all duration-300"
                 >
                   <Link href="/marketplace">
                     <ShoppingBag className="w-6 h-6 mr-3" />
@@ -61,7 +61,7 @@ export default function Home() {
                   asChild 
                   variant="outline" 
                   size="lg" 
-                  className="border-2 border-white bg-white/10 text-white hover:bg-white hover:text-blue-700 text-xl font-bold py-8 px-12 rounded-2xl backdrop-blur-sm transform hover:scale-105 transition-all duration-300"
+                  className="komarce-button-secondary border-2 border-white bg-white/10 text-white hover:bg-white hover:text-red-600 text-xl font-bold py-8 px-12 rounded-2xl backdrop-blur-sm transform hover:scale-105 transition-all duration-300"
                 >
                   <Link href="/register?role=merchant">
                     <Store className="w-6 h-6 mr-3" />
@@ -115,45 +115,45 @@ export default function Home() {
       <CategoryGrid />
 
       {/* Main Advertising Area */}
-      <section className="py-8 bg-gray-50">
+      <section className="py-8 bg-white">
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl overflow-hidden text-white"
+            <div className="md:col-span-2 bg-gradient-to-r from-red-700 via-red-600 to-red-800 rounded-2xl overflow-hidden text-white"
                  style={{
-                   backgroundImage: "linear-gradient(rgba(37, 99, 235, 0.8), rgba(29, 78, 216, 0.8)), url('https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400')",
+                  backgroundImage: "linear-gradient(rgba(220, 38, 38, 0.85), rgba(153, 27, 27, 0.85)), url('https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400')",
                    backgroundSize: 'cover',
                    backgroundPosition: 'center'
                  }}>
               <div className="p-8">
                 <h3 className="text-2xl font-bold mb-4">Mega Sale Event</h3>
-                <p className="text-blue-100 mb-6">Earn double points on all purchases this weekend!</p>
-                <Button asChild className="bg-white text-blue-600 hover:bg-blue-50">
+                <p className="text-red-100 mb-6">Earn double points on all purchases this weekend!</p>
+                <Button asChild className="bg-white text-red-600 hover:bg-red-50">
                   <Link href="/marketplace">Shop Now</Link>
                 </Button>
               </div>
             </div>
             <div className="space-y-4">
-              <div className="bg-accent rounded-xl p-6 text-white"
+              <div className="rounded-xl p-6 text-white bg-gradient-to-r from-red-700 to-amber-600"
                    style={{
-                     backgroundImage: "linear-gradient(rgba(245, 158, 11, 0.9), rgba(217, 119, 6, 0.9)), url('https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=200')",
+                    backgroundImage: "linear-gradient(rgba(185, 28, 28, 0.85), rgba(217, 119, 6, 0.75)), url('https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=200')",
                      backgroundSize: 'cover',
                      backgroundPosition: 'center'
                    }}>
                 <h4 className="font-bold mb-2">Flash Sale</h4>
                 <p className="text-sm mb-4">Up to 70% off</p>
-                <Button asChild size="sm" className="bg-white text-accent hover:bg-gray-100">
+                <Button asChild size="sm" className="bg-white text-red-600 hover:bg-red-50">
                   <Link href="/marketplace">View Deals</Link>
                 </Button>
               </div>
-              <div className="bg-primary rounded-xl p-6 text-white"
+              <div className="rounded-xl p-6 text-white bg-gradient-to-r from-red-800 to-rose-700"
                    style={{
-                     backgroundImage: "linear-gradient(rgba(16, 185, 129, 0.9), rgba(5, 150, 105, 0.9)), url('https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=200')",
+                    backgroundImage: "linear-gradient(rgba(127, 29, 29, 0.85), rgba(190, 18, 60, 0.80)), url('https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=200')",
                      backgroundSize: 'cover',
                      backgroundPosition: 'center'
                    }}>
                 <h4 className="font-bold mb-2">New Member</h4>
                 <p className="text-sm mb-4">Get 1000 bonus points</p>
-                <Button asChild size="sm" className="bg-white text-primary hover:bg-gray-100">
+                <Button asChild size="sm" className="bg-white text-red-600 hover:bg-red-50">
                   <Link href="/register">Join Now</Link>
                 </Button>
               </div>
@@ -165,15 +165,15 @@ export default function Home() {
       {/* Top Selling Brands */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Top Selling Brands</h2>
+          <h2 className="text-3xl font-bold text-center mb-12 text-neutral-900">Top Selling Brands</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
             {Array.isArray(brands) && brands.slice(0, 6).map((brand: any) => (
               <Link
                 key={brand.id}
                 href={`/marketplace?brand=${brand.slug}`}
-                className="group bg-white rounded-2xl p-6 text-center hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50 transition-all duration-300 border-2 border-gray-100 hover:border-blue-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-2 hover:scale-105 cursor-pointer"
+                className="group bg-white rounded-2xl p-6 text-center transition-all duration-300 border-2 border-gray-100 hover:border-red-400 shadow hover:shadow-xl transform hover:-translate-y-2 hover:scale-105 cursor-pointer"
               >
-                <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl flex items-center justify-center border-2 border-blue-200 shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:rotate-6">
+                <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-red-800 to-red-600 rounded-2xl flex items-center justify-center border-2 border-red-500/40 shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:rotate-6">
                   <img 
                     src={`https://logo.clearbit.com/${brand.name.toLowerCase().replace(/\s+/g, '')}.com`}
                     alt={brand.name}
@@ -185,7 +185,7 @@ export default function Home() {
                       if (fallback) fallback.style.display = 'block';
                     }}
                   />
-                  <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent hidden">
+                  <span className="text-2xl font-bold bg-gradient-to-r from-red-500 to-red-300 bg-clip-text text-transparent hidden">
                     {brand.name.charAt(0)}
                   </span>
                 </div>
@@ -249,7 +249,7 @@ export default function Home() {
             <Card className="bg-gray-50">
               <CardContent className="p-6">
                 <div className="flex items-center mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg mr-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-700 via-red-600 to-red-800 flex items-center justify-center text-white font-bold text-lg mr-4">
                     SJ
                   </div>
                   <div>

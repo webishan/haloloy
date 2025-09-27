@@ -115,8 +115,8 @@ export default function CustomerAuth() {
         });
         
         // Store token and redirect
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        localStorage.setItem('customerToken', response.token);
+        localStorage.setItem('customerUser', JSON.stringify(response.user));
         setLocation('/customer-dashboard');
       }
     } catch (error: any) {

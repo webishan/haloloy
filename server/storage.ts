@@ -31,7 +31,8 @@ import {
   type CustomerWalletTransaction, type InsertCustomerWalletTransaction, type CustomerWalletTransfer, type InsertCustomerWalletTransfer,
   type CustomerReferralCommission, type InsertCustomerReferralCommission, type CompanyReferrer, type InsertCompanyReferrer,
   type WasteManagementReward, type InsertWasteManagementReward, type MedicalFacilityBenefit, type InsertMedicalFacilityBenefit,
-  type MerchantCustomer, type InsertMerchantCustomer
+  type MerchantCustomer, type InsertMerchantCustomer,
+  type BlockedCustomer, type InsertBlockedCustomer
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
@@ -48,8 +49,10 @@ export interface IStorage {
   // Customer management
   getCustomer(userId: string): Promise<Customer | undefined>;
   getCustomerByUserId(userId: string): Promise<Customer | undefined>;
+  getCustomerByMobile(mobileNumber: string): Promise<CustomerProfile | undefined>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   updateCustomer(userId: string, customer: Partial<Customer>): Promise<Customer>;
+  deleteUser(userId: string): Promise<void>;
   getCustomers(country?: string): Promise<Customer[]>;
   
   // Merchant management  
@@ -302,12 +305,29 @@ export interface IStorage {
   getCustomerProfileByAccountNumber(accountNumber: string): Promise<CustomerProfile | undefined>;
   getAllCustomerProfiles(): Promise<CustomerProfile[]>;
   updateCustomerProfile(userId: string, profile: Partial<CustomerProfile>): Promise<CustomerProfile>;
+  deleteCustomerProfile(customerId: string): Promise<void>;
   generateUniqueAccountNumber(): Promise<string>;
+  
+  // Global Reward Number management
+  getGlobalRewardNumberById(id: string): Promise<any | undefined>;
+  getGlobalRewardNumbersByCustomer(customerId: string): Promise<any[]>;
+  getAllGlobalRewardNumbers(): Promise<any[]>;
+  saveGlobalRewardNumber(globalRewardNumber: any): Promise<void>;
+  updateGlobalRewardNumber(globalRewardNumber: any): Promise<void>;
+  deleteGlobalRewardNumber(id: string): Promise<void>;
+  
+  // Shopping Voucher management
+  saveShoppingVoucher(voucher: any): Promise<void>;
+  getShoppingVouchersByCustomer(customerId: string): Promise<any[]>;
+  updateShoppingVoucher(voucher: any): Promise<void>;
+  deleteShoppingVoucher(id: string): Promise<void>;
 
   // Customer Wallets
   createCustomerWallet(wallet: InsertCustomerWallet): Promise<CustomerWallet>;
   getCustomerWallet(customerId: string): Promise<CustomerWallet | undefined>;
   updateCustomerWallet(customerId: string, wallet: Partial<CustomerWallet>): Promise<CustomerWallet>;
+  deleteCustomerWallet(customerId: string): Promise<void>;
+  deleteCustomerTransactions(customerId: string): Promise<void>;
 
   // Customer Point Transactions
   createCustomerPointTransaction(transaction: InsertCustomerPointTransaction): Promise<CustomerPointTransaction>;
@@ -353,6 +373,18 @@ export interface IStorage {
   getMerchantCustomer(merchantId: string, customerId: string): Promise<MerchantCustomer | undefined>;
   getMerchantCustomers(merchantId: string): Promise<MerchantCustomer[]>;
   updateMerchantCustomer(merchantId: string, customerId: string, customer: Partial<MerchantCustomer>): Promise<MerchantCustomer>;
+  deleteMerchantCustomer(merchantId: string, customerId: string): Promise<void>;
+  
+  // Blocked customers management
+  createBlockedCustomer(blockedCustomer: InsertBlockedCustomer): Promise<BlockedCustomer>;
+  getBlockedCustomer(merchantId: string, customerId: string): Promise<BlockedCustomer | undefined>;
+  getBlockedCustomers(merchantId: string): Promise<BlockedCustomer[]>;
+  removeBlockedCustomer(merchantId: string, customerId: string): Promise<void>;
+  
+  // Merchant Reports and Transactions
+  getMerchantPointTransfers(merchantId: string): Promise<any[]>;
+  getMerchantPointsReceived(merchantId: string): Promise<any[]>;
+  getMerchantTransactions(merchantId: string): Promise<any[]>;
 
   // Advanced Customer Reward System
   // Customer Rewards
@@ -484,6 +516,7 @@ export class MemStorage implements IStorage {
   private pointDistributions: Map<string, PointDistribution> = new Map();
   private conversations: Map<string, Conversation> = new Map();
   private merchantCustomers: Map<string, MerchantCustomer> = new Map();
+  private blockedCustomers: Map<string, BlockedCustomer> = new Map();
   private chatMessages: Map<string, ChatMessage> = new Map();
   private chatRooms: Map<string, ChatRoom> = new Map();
   private pointGenerationRequests: Map<string, PointGenerationRequest> = new Map();
@@ -607,6 +640,13 @@ export class MemStorage implements IStorage {
     return updatedUser;
   }
 
+  async deleteUser(id: string): Promise<void> {
+    if (!this.users.has(id)) {
+      throw new Error("User not found");
+    }
+    this.users.delete(id);
+  }
+
   // Customer methods
   async getCustomer(userId: string): Promise<Customer | undefined> {
     return Array.from(this.customers.values()).find(customer => customer.userId === userId);
@@ -614,6 +654,11 @@ export class MemStorage implements IStorage {
 
   async getCustomerByUserId(userId: string): Promise<Customer | undefined> {
     return Array.from(this.customers.values()).find(customer => customer.userId === userId);
+  }
+
+  async getCustomerByMobile(mobileNumber: string): Promise<CustomerProfile | undefined> {
+    return Array.from(this.customerProfiles.values())
+      .find(p => p.mobileNumber === mobileNumber);
   }
 
   async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
@@ -1028,6 +1073,13 @@ export class MemStorage implements IStorage {
 
       // Reset accumulated points to 0 after creating reward number
       updates.accumulatedPoints = 0;
+      updates.currentPointsBalance = 0;
+      updates.purchasePoints = 0;
+      updates.wasteManagementPoints = 0;
+      updates.dailyLoginPoints = 0;
+      updates.referralPoints = 0;
+      updates.birthdayPoints = 0;
+      updates.otherActivityPoints = 0;
       updates.globalRewardNumbers = (customer.globalRewardNumbers || 0) + 1;
     } else {
       // Keep accumulated points under 1500
@@ -2880,6 +2932,7 @@ export class MemStorage implements IStorage {
   private customerSerialNumbers: Map<string, CustomerSerialNumber> = new Map();
   private customerOTPs: Map<string, CustomerOTP> = new Map();
   private globalRewardNumbers: Map<string, any> = new Map();
+  private shoppingVouchers: Map<string, any> = new Map();
   private customerPointTransactions: Map<string, any> = new Map();
   private customerPointTransfers: Map<string, CustomerPointTransfer> = new Map();
   private customerPurchases: Map<string, CustomerPurchase> = new Map();
@@ -2899,12 +2952,26 @@ export class MemStorage implements IStorage {
   }
 
   async getCustomerProfile(userId: string): Promise<CustomerProfile | undefined> {
-    return Array.from(this.customerProfiles.values())
+    const profile = Array.from(this.customerProfiles.values())
       .find(p => p.userId === userId);
+    
+    // Ensure accumulatedPoints field exists (for backward compatibility)
+    if (profile && profile.accumulatedPoints === undefined) {
+      profile.accumulatedPoints = 0;
+    }
+    
+    return profile;
   }
 
   async getCustomerProfileById(customerId: string): Promise<CustomerProfile | undefined> {
-    return this.customerProfiles.get(customerId);
+    const profile = this.customerProfiles.get(customerId);
+    
+    // Ensure accumulatedPoints field exists (for backward compatibility)
+    if (profile && profile.accumulatedPoints === undefined) {
+      profile.accumulatedPoints = 0;
+    }
+    
+    return profile;
   }
 
   async getCustomerProfileByMobile(mobileNumber: string): Promise<CustomerProfile | undefined> {
@@ -2929,6 +2996,13 @@ export class MemStorage implements IStorage {
     const updated = { ...existing, ...profile, updatedAt: new Date() };
     this.customerProfiles.set(existing.id, updated);
     return updated;
+  }
+
+  async deleteCustomerProfile(customerId: string): Promise<void> {
+    if (!this.customerProfiles.has(customerId)) {
+      throw new Error("Customer profile not found");
+    }
+    this.customerProfiles.delete(customerId);
   }
 
   async generateUniqueAccountNumber(): Promise<string> {
@@ -2973,6 +3047,32 @@ export class MemStorage implements IStorage {
       createdAt: new Date()
     };
     this.customerPointTransactions.set(id, newTransaction);
+
+    // Process Global Number eligibility if points are being added
+    if (transaction.points > 0 && transaction.transactionType === 'earned') {
+      const isRewardPoints = transaction.transactionType === 'reward' || transaction.description?.includes('reward');
+      
+      try {
+        const result = await this.processGlobalNumberEligibility(
+          transaction.customerId,
+          transaction.points,
+          isRewardPoints
+        );
+
+        if (result.globalNumberAwarded) {
+          console.log(`🎉 Global Number ${result.globalNumber} awarded to customer ${transaction.customerId}`);
+          
+          // Log StepUp rewards
+          for (const reward of result.stepUpRewards) {
+            console.log(`💰 StepUp reward: ${reward.rewardPoints} points awarded to Global Number ${reward.globalNumber}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error processing Global Number eligibility:', error);
+        // Don't fail the transaction if Global Number processing fails
+      }
+    }
+
     return newTransaction;
   }
 
@@ -3006,8 +3106,16 @@ export class MemStorage implements IStorage {
   }
 
   async getNextGlobalSerialNumber(): Promise<number> {
-    this.globalSerialCounter++;
-    return this.globalSerialCounter;
+    // Get the highest existing global serial number and increment by 1
+    // This ensures sequential assignment starting from 1
+    const existingSerials = Array.from(this.customerSerialNumbers.values());
+    const maxGlobalNumber = existingSerials.length > 0 
+      ? Math.max(...existingSerials.map(s => s.globalSerialNumber))
+      : 0;
+    
+    const nextGlobalNumber = maxGlobalNumber + 1;
+    console.log(`🎯 Next Global Number to assign: ${nextGlobalNumber}`);
+    return nextGlobalNumber;
   }
 
   async assignSerialNumberToCustomer(customerId: string): Promise<CustomerSerialNumber> {
@@ -3025,11 +3133,27 @@ export class MemStorage implements IStorage {
     });
 
     // Update customer profile with serial numbers
-    const profile = await this.getCustomerProfile(customerId);
+    const profile = await this.getCustomerProfileById(customerId);
     if (profile) {
+      // Update total points earned to include the 1500 points that triggered the global number
+      const currentTotalEarned = profile.totalPointsEarned || 0;
+      const newTotalEarned = currentTotalEarned + 1500;
+      console.log(`🔍 Storage: Updating totalPointsEarned: ${currentTotalEarned} + 1500 = ${newTotalEarned}`);
+      
       await this.updateCustomerProfile(profile.userId, {
         globalSerialNumber,
-        localSerialNumber: totalSerialCount
+        localSerialNumber: totalSerialCount,
+        // Update total points earned to include the 1500 points
+        totalPointsEarned: newTotalEarned,
+        // Reset accumulated points to 0 when Global Number is assigned
+        accumulatedPoints: 0,
+        currentPointsBalance: 0,
+        purchasePoints: 0,
+        wasteManagementPoints: 0,
+        dailyLoginPoints: 0,
+        referralPoints: 0,
+        birthdayPoints: 0,
+        otherActivityPoints: 0
       });
       
       console.log(`🎯 Customer ${profile.userId} assigned global serial #${globalSerialNumber} (achievement order)`);
@@ -3153,9 +3277,11 @@ export class MemStorage implements IStorage {
       throw new Error('Customer profile not found');
     }
     
-    // Create a simpler QR code format that's more scannable
+    // Create a more scannable QR code format
     // Format: KOMARCE:CUSTOMER:customerId:accountNumber
     const qrData = `KOMARCE:CUSTOMER:${profile.id}:${profile.uniqueAccountNumber}`;
+    
+    console.log(`🔍 Generated QR code for customer ${profile.id}: ${qrData}`);
     
     // Update profile with QR code
     await this.updateCustomerProfile(profile.userId, { qrCode: qrData });
@@ -3207,6 +3333,300 @@ export class MemStorage implements IStorage {
   private companyReferrers: Map<string, CompanyReferrer> = new Map();
   private wasteManagementRewards: Map<string, WasteManagementReward> = new Map();
   private medicalFacilityBenefits: Map<string, MedicalFacilityBenefit> = new Map();
+
+  // Global Number System Implementation
+  private globalNumbers: Map<string, GlobalNumber> = new Map();
+  private stepUpConfigs: Map<string, StepUpConfig> = new Map();
+  private stepUpRewards: Map<string, StepUpReward> = new Map();
+  private globalNumberConfigs: Map<string, GlobalNumberConfig> = new Map();
+  private globalNumberCounter = 0;
+
+  // Initialize default StepUp configuration
+  async initializeStepUpConfig(): Promise<void> {
+    const defaultConfigs = [
+      { multiplier: 5, rewardPoints: 500 },
+      { multiplier: 25, rewardPoints: 1500 },
+      { multiplier: 125, rewardPoints: 3000 },
+      { multiplier: 500, rewardPoints: 30000 },
+      { multiplier: 2500, rewardPoints: 160000 }
+    ];
+
+    for (const config of defaultConfigs) {
+      const existing = Array.from(this.stepUpConfigs.values())
+        .find(c => c.multiplier === config.multiplier);
+      
+      if (!existing) {
+        await this.createStepUpConfig(config);
+      }
+    }
+
+    // Initialize global number config if not exists
+    const globalConfig = Array.from(this.globalNumberConfigs.values())[0];
+    if (!globalConfig) {
+      await this.createGlobalNumberConfig({
+        pointsThreshold: 1500,
+        rewardPointsCountTowardThreshold: false,
+        isActive: true
+      });
+    }
+  }
+
+  // Global Number Management
+  async createGlobalNumber(globalNumber: InsertGlobalNumber): Promise<GlobalNumber> {
+    const id = randomUUID();
+    const newGlobalNumber: GlobalNumber = {
+      id,
+      ...globalNumber,
+      createdAt: new Date()
+    };
+    this.globalNumbers.set(id, newGlobalNumber);
+    return newGlobalNumber;
+  }
+
+  async getGlobalNumber(globalNumberValue: number): Promise<GlobalNumber | undefined> {
+    return Array.from(this.globalNumbers.values())
+      .find(gn => gn.globalNumber === globalNumberValue);
+  }
+
+  async getCustomerGlobalNumbers(customerId: string): Promise<GlobalNumber[]> {
+    return Array.from(this.globalNumbers.values())
+      .filter(gn => gn.customerId === customerId)
+      .sort((a, b) => a.globalNumber - b.globalNumber);
+  }
+
+  async getNextGlobalNumber(): Promise<number> {
+    const existingNumbers = Array.from(this.globalNumbers.values())
+      .map(gn => gn.globalNumber)
+      .sort((a, b) => b - a);
+    
+    return existingNumbers.length > 0 ? existingNumbers[0] + 1 : 1;
+  }
+
+  // StepUp Configuration Management
+  async createStepUpConfig(config: InsertStepUpConfig): Promise<StepUpConfig> {
+    const id = randomUUID();
+    const newConfig: StepUpConfig = {
+      id,
+      ...config,
+      createdAt: new Date()
+    };
+    this.stepUpConfigs.set(id, newConfig);
+    return newConfig;
+  }
+
+  async getStepUpConfigs(): Promise<StepUpConfig[]> {
+    return Array.from(this.stepUpConfigs.values())
+      .filter(c => c.isActive)
+      .sort((a, b) => a.multiplier - b.multiplier);
+  }
+
+  // StepUp Rewards Management
+  async createStepUpReward(reward: InsertStepUpReward): Promise<StepUpReward> {
+    const id = randomUUID();
+    const newReward: StepUpReward = {
+      id,
+      ...reward,
+      createdAt: new Date()
+    };
+    this.stepUpRewards.set(id, newReward);
+    return newReward;
+  }
+
+  async getStepUpReward(recipientGlobalNumber: number, triggerGlobalNumber: number, multiplier: number): Promise<StepUpReward | undefined> {
+    return Array.from(this.stepUpRewards.values())
+      .find(r => 
+        r.recipientGlobalNumber === recipientGlobalNumber && 
+        r.triggerGlobalNumber === triggerGlobalNumber && 
+        r.multiplier === multiplier
+      );
+  }
+
+  async markStepUpRewardAsAwarded(rewardId: string): Promise<StepUpReward> {
+    const reward = this.stepUpRewards.get(rewardId);
+    if (!reward) {
+      throw new Error('StepUp reward not found');
+    }
+    const updated = { ...reward, isAwarded: true, awardedAt: new Date() };
+    this.stepUpRewards.set(rewardId, updated);
+    return updated;
+  }
+
+  // Global Number Configuration
+  async createGlobalNumberConfig(config: InsertGlobalNumberConfig): Promise<GlobalNumberConfig> {
+    const id = randomUUID();
+    const newConfig: GlobalNumberConfig = {
+      id,
+      ...config,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.globalNumberConfigs.set(id, newConfig);
+    return newConfig;
+  }
+
+  async getGlobalNumberConfig(): Promise<GlobalNumberConfig | undefined> {
+    return Array.from(this.globalNumberConfigs.values())
+      .find(c => c.isActive);
+  }
+
+  // Core Global Number System Logic
+  async processGlobalNumberEligibility(customerId: string, pointsToAdd: number, isRewardPoints: boolean = false): Promise<{
+    globalNumberAwarded: boolean;
+    globalNumber?: number;
+    stepUpRewards: Array<{ recipientCustomerId: string; rewardPoints: number; globalNumber: number }>;
+  }> {
+    console.log(`🔍 Processing Global Number eligibility for customer ${customerId}, adding ${pointsToAdd} points`);
+    
+    const config = await this.getGlobalNumberConfig();
+    console.log(`🔍 Global Number config:`, config);
+    if (!config) {
+      throw new Error('Global Number configuration not found');
+    }
+
+    const customer = await this.getCustomerProfileById(customerId);
+    console.log(`🔍 Customer profile:`, {
+      id: customer?.id,
+      userId: customer?.userId,
+      accumulatedPoints: customer?.accumulatedPoints,
+      globalSerialNumber: customer?.globalSerialNumber,
+      currentPointsBalance: customer?.currentPointsBalance
+    });
+    if (!customer) {
+      throw new Error('Customer not found');
+    }
+
+    // Check policy: do reward points count toward threshold?
+    if (isRewardPoints && !config.rewardPointsCountTowardThreshold) {
+      // Reward points don't count toward Global Number threshold
+      // Just add to balance without triggering Global Number
+      await this.updateCustomerProfile(customer.userId, {
+        currentPointsBalance: customer.currentPointsBalance + pointsToAdd
+      });
+      return { globalNumberAwarded: false, stepUpRewards: [] };
+    }
+
+    // Calculate new accumulated points
+    const currentAccumulated = customer.accumulatedPoints || 0;
+    const newAccumulatedPoints = currentAccumulated + pointsToAdd;
+    console.log(`🔍 Points calculation: ${currentAccumulated} + ${pointsToAdd} = ${newAccumulatedPoints}, threshold: ${config.pointsThreshold}`);
+    
+    if (newAccumulatedPoints >= config.pointsThreshold) {
+      // Customer qualifies for a Global Number!
+      const nextGlobalNumber = await this.getNextGlobalNumber();
+      
+      // Create the Global Number
+      await this.createGlobalNumber({
+        globalNumber: nextGlobalNumber,
+        customerId: customerId,
+        pointsAccumulated: newAccumulatedPoints,
+        isActive: true
+      });
+
+      // Reset accumulated points and loyalty points to 0 after Global Number
+      await this.updateCustomerProfile(customer.userId, {
+        accumulatedPoints: 0, // Reset to 0 after Global Number
+        currentPointsBalance: 0, // Reset loyalty points to 0 as per requirement
+        globalSerialNumber: nextGlobalNumber,
+        totalPointsEarned: (customer.totalPointsEarned || 0) + pointsToAdd
+      });
+
+      console.log(`🎉 Global Number ${nextGlobalNumber} awarded to customer ${customerId}!`);
+
+      // Update customer wallet to reflect the reset
+      const wallet = await this.getCustomerWallet(customerId);
+      if (wallet) {
+        await this.updateCustomerWallet(customerId, {
+          pointsBalance: 0, // Reset to 0 as per requirement
+          totalPointsEarned: wallet.totalPointsEarned + pointsToAdd,
+          lastTransactionAt: new Date()
+        });
+      }
+
+      // Process StepUp rewards for existing Global Number holders
+      const stepUpRewards = await this.processStepUpRewards(nextGlobalNumber);
+
+      return {
+        globalNumberAwarded: true,
+        globalNumber: nextGlobalNumber,
+        stepUpRewards
+      };
+    } else {
+      // Not enough points yet, just accumulate
+      await this.updateCustomerProfile(customer.userId, {
+        accumulatedPoints: newAccumulatedPoints,
+        currentPointsBalance: (customer.currentPointsBalance || 0) + pointsToAdd,
+        totalPointsEarned: (customer.totalPointsEarned || 0) + pointsToAdd
+      });
+
+      // Update customer wallet
+      const wallet = await this.getCustomerWallet(customerId);
+      if (wallet) {
+        await this.updateCustomerWallet(customerId, {
+          pointsBalance: wallet.pointsBalance + pointsToAdd,
+          totalPointsEarned: wallet.totalPointsEarned + pointsToAdd,
+          lastTransactionAt: new Date()
+        });
+      }
+
+      console.log(`📈 Customer ${customerId} accumulated ${newAccumulatedPoints}/${config.pointsThreshold} points`);
+      return { globalNumberAwarded: false, stepUpRewards: [] };
+    }
+  }
+
+  // Process StepUp rewards when a new Global Number is created
+  async processStepUpRewards(newGlobalNumber: number): Promise<Array<{ recipientCustomerId: string; rewardPoints: number; globalNumber: number }>> {
+    const stepUpConfigs = await this.getStepUpConfigs();
+    const rewards: Array<{ recipientCustomerId: string; rewardPoints: number; globalNumber: number }> = [];
+
+    for (const config of stepUpConfigs) {
+      // Check if newGlobalNumber is divisible by any existing Global Number × multiplier
+      // G × multiplier = N, so G = N / multiplier
+      if (newGlobalNumber % config.multiplier === 0) {
+        const recipientGlobalNumber = newGlobalNumber / config.multiplier;
+        
+        // Find the customer with this Global Number
+        const recipientGlobalNumberRecord = await this.getGlobalNumber(recipientGlobalNumber);
+        if (recipientGlobalNumberRecord) {
+          // Check if reward already awarded (idempotent)
+          const existingReward = await this.getStepUpReward(
+            recipientGlobalNumber,
+            newGlobalNumber,
+            config.multiplier
+          );
+
+          if (!existingReward) {
+            // Create and award the reward
+            const reward = await this.createStepUpReward({
+              recipientCustomerId: recipientGlobalNumberRecord.customerId,
+              recipientGlobalNumber: recipientGlobalNumber,
+              triggerGlobalNumber: newGlobalNumber,
+              multiplier: config.multiplier,
+              rewardPoints: config.rewardPoints,
+              isAwarded: false
+            });
+
+            // Award the points to the recipient (as reward points)
+            await this.processGlobalNumberEligibility(
+              recipientGlobalNumberRecord.customerId,
+              config.rewardPoints,
+              true // These are reward points
+            );
+
+            // Mark as awarded
+            await this.markStepUpRewardAsAwarded(reward.id);
+
+            rewards.push({
+              recipientCustomerId: recipientGlobalNumberRecord.customerId,
+              rewardPoints: config.rewardPoints,
+              globalNumber: recipientGlobalNumber
+            });
+          }
+        }
+      }
+    }
+
+    return rewards;
+  }
 
   // Customer Rewards
   async createCustomerReward(reward: InsertCustomerReward): Promise<CustomerReward> {
@@ -3777,6 +4197,23 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  async deleteCustomerWallet(customerId: string): Promise<void> {
+    const wallet = Array.from(this.customerWallets.values()).find(w => w.customerId === customerId);
+    if (wallet) {
+      this.customerWallets.delete(wallet.id);
+    }
+  }
+
+  async deleteCustomerTransactions(customerId: string): Promise<void> {
+    // Delete all transactions related to this customer
+    const transactionsToDelete = Array.from(this.customerPointTransactions.values())
+      .filter(t => t.customerId === customerId);
+    
+    for (const transaction of transactionsToDelete) {
+      this.customerPointTransactions.delete(transaction.id);
+    }
+  }
+
   // Wallet Transactions
   async createCustomerWalletTransaction(transaction: InsertCustomerWalletTransaction): Promise<CustomerWalletTransaction> {
     const id = randomUUID();
@@ -4306,6 +4743,141 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  async deleteMerchantCustomer(merchantId: string, customerId: string): Promise<void> {
+    console.log(`🔍 Looking for merchant customer: merchantId=${merchantId}, customerId=${customerId}`);
+    
+    const existing = await this.getMerchantCustomer(merchantId, customerId);
+    if (!existing) {
+      console.log('❌ Merchant customer relationship not found');
+      throw new Error('Customer not found in merchant list');
+    }
+    
+    console.log(`✅ Found merchant customer: ${existing.customerName}, deleting and blocking...`);
+    
+    // Add customer to blocked list before deleting
+    await this.createBlockedCustomer({
+      merchantId,
+      customerId,
+      customerName: existing.customerName,
+      customerEmail: existing.customerEmail,
+      customerMobile: existing.customerMobile,
+      accountNumber: existing.accountNumber,
+      reason: "Deleted by merchant"
+    });
+    
+    const deleted = this.merchantCustomers.delete(existing.id);
+    
+    if (deleted) {
+      console.log('✅ Merchant customer relationship deleted and blocked successfully');
+    } else {
+      console.log('❌ Failed to delete merchant customer relationship');
+      throw new Error('Failed to delete customer from merchant list');
+    }
+  }
+
+  // ==================== BLOCKED CUSTOMERS MANAGEMENT ====================
+
+  async createBlockedCustomer(blockedCustomer: InsertBlockedCustomer): Promise<BlockedCustomer> {
+    const id = randomUUID();
+    const newBlockedCustomer: BlockedCustomer = {
+      id,
+      merchantId: blockedCustomer.merchantId,
+      customerId: blockedCustomer.customerId,
+      customerName: blockedCustomer.customerName,
+      customerEmail: blockedCustomer.customerEmail || null,
+      customerMobile: blockedCustomer.customerMobile,
+      accountNumber: blockedCustomer.accountNumber,
+      reason: blockedCustomer.reason || "Deleted by merchant",
+      blockedAt: new Date(),
+      createdAt: new Date()
+    };
+    
+    this.blockedCustomers.set(id, newBlockedCustomer);
+    console.log(`🚫 Customer ${blockedCustomer.customerName} blocked for merchant ${blockedCustomer.merchantId}`);
+    return newBlockedCustomer;
+  }
+
+  async getBlockedCustomer(merchantId: string, customerId: string): Promise<BlockedCustomer | undefined> {
+    return Array.from(this.blockedCustomers.values())
+      .find(bc => bc.merchantId === merchantId && bc.customerId === customerId);
+  }
+
+  async getBlockedCustomers(merchantId: string): Promise<BlockedCustomer[]> {
+    return Array.from(this.blockedCustomers.values())
+      .filter(bc => bc.merchantId === merchantId)
+      .sort((a, b) => {
+        const aTime = a.blockedAt ? new Date(a.blockedAt).getTime() : 0;
+        const bTime = b.blockedAt ? new Date(b.blockedAt).getTime() : 0;
+        return bTime - aTime;
+      });
+  }
+
+  async removeBlockedCustomer(merchantId: string, customerId: string): Promise<void> {
+    const blocked = await this.getBlockedCustomer(merchantId, customerId);
+    if (blocked) {
+      this.blockedCustomers.delete(blocked.id);
+      console.log(`✅ Customer ${customerId} unblocked for merchant ${merchantId}`);
+    }
+  }
+
+  // ==================== MERCHANT REPORTS AND TRANSACTIONS ====================
+
+  async getMerchantPointTransfers(merchantId: string): Promise<any[]> {
+    // Get all point transfers made by this merchant to customers
+    const transfers = Array.from(this.customerPointTransactions.values())
+      .filter(t => t.merchantId === merchantId && t.transactionType === 'earned')
+      .map(t => ({
+        id: t.id,
+        createdAt: t.createdAt,
+        customerName: t.customerName || 'Unknown Customer',
+        customerAccountNumber: t.customerAccountNumber || 'N/A',
+        points: t.points,
+        description: t.description,
+        status: 'completed'
+      }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return transfers;
+  }
+
+  async getMerchantPointsReceived(merchantId: string): Promise<any[]> {
+    // Get all points received by this merchant from local admin
+    const merchant = await this.getMerchantByUserId(merchantId);
+    if (!merchant) return [];
+
+    // For now, create sample data based on merchant's current points
+    // In a real system, this would come from actual transaction records
+    const pointsReceived = [];
+    
+    // If merchant has points, assume they received them from local admin
+    if (merchant.loyaltyPointsBalance > 0) {
+      pointsReceived.push({
+        id: randomUUID(),
+        date: new Date().toISOString(),
+        createdAt: new Date(),
+        source: 'Local Admin',
+        points: merchant.loyaltyPointsBalance,
+        description: 'Points allocation from local admin'
+      });
+    }
+
+    return pointsReceived.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getMerchantTransactions(merchantId: string): Promise<any[]> {
+    // Get all transactions for this merchant (both received and distributed)
+    const pointTransfers = await this.getMerchantPointTransfers(merchantId);
+    const pointsReceived = await this.getMerchantPointsReceived(merchantId);
+
+    // Combine and sort all transactions
+    const allTransactions = [
+      ...pointTransfers.map(t => ({ ...t, type: 'distributed' })),
+      ...pointsReceived.map(t => ({ ...t, type: 'received' }))
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return allTransactions;
+  }
+
   // Global Reward System Implementation
   async createGlobalRewardNumber(rewardNumber: any): Promise<any> {
     this.globalRewardNumbers.set(rewardNumber.id, rewardNumber);
@@ -4349,6 +4921,50 @@ export class MemStorage implements IStorage {
 
   async getAllCustomerProfiles(): Promise<CustomerProfile[]> {
     return Array.from(this.customerProfiles.values());
+  }
+
+  // Global Reward Number methods
+  async getGlobalRewardNumberById(id: string): Promise<any | undefined> {
+    return this.globalRewardNumbers.get(id);
+  }
+
+  async getGlobalRewardNumbersByCustomer(customerId: string): Promise<any[]> {
+    return Array.from(this.globalRewardNumbers.values())
+      .filter(grn => grn.customerId === customerId);
+  }
+
+  async getAllGlobalRewardNumbers(): Promise<any[]> {
+    return Array.from(this.globalRewardNumbers.values());
+  }
+
+  async saveGlobalRewardNumber(globalRewardNumber: any): Promise<void> {
+    this.globalRewardNumbers.set(globalRewardNumber.id, globalRewardNumber);
+  }
+
+  async updateGlobalRewardNumber(globalRewardNumber: any): Promise<void> {
+    this.globalRewardNumbers.set(globalRewardNumber.id, globalRewardNumber);
+  }
+
+  async deleteGlobalRewardNumber(id: string): Promise<void> {
+    this.globalRewardNumbers.delete(id);
+  }
+
+  // Shopping Voucher methods
+  async saveShoppingVoucher(voucher: any): Promise<void> {
+    this.shoppingVouchers.set(voucher.id, voucher);
+  }
+
+  async getShoppingVouchersByCustomer(customerId: string): Promise<any[]> {
+    return Array.from(this.shoppingVouchers.values())
+      .filter(voucher => voucher.customerId === customerId);
+  }
+
+  async updateShoppingVoucher(voucher: any): Promise<void> {
+    this.shoppingVouchers.set(voucher.id, voucher);
+  }
+
+  async deleteShoppingVoucher(id: string): Promise<void> {
+    this.shoppingVouchers.delete(id);
   }
 }
 
