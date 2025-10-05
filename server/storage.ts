@@ -2862,54 +2862,6 @@ export class MemStorage implements IStorage {
     return newTransaction;
   }
 
-  // StepUp reward numbers
-  async getActiveRewardNumbers(userId: string): Promise<StepUpRewardNumber[]> {
-    return Array.from(this.stepUpRewardNumbers.values())
-      .filter(rn => rn.userId === userId && !rn.isCompleted);
-  }
-
-  async createStepUpRewardNumber(rewardNumber: InsertStepUpRewardNumber): Promise<StepUpRewardNumber> {
-    const id = randomUUID();
-    const newRewardNumber: StepUpRewardNumber = {
-      id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      tier1Status: 'active',
-      tier1Amount: 800,
-      tier1CompletedAt: null,
-      tier2Status: 'locked',
-      tier2Amount: 1500,
-      tier2CompletedAt: null,
-      tier3Status: 'locked',
-      tier3Amount: 3500,
-      tier3CompletedAt: null,
-      tier4Status: 'locked',
-      tier4Amount: 32200,
-      tier4VoucherReserve: 6000,
-      tier4RedeemableAmount: 20200,
-      tier4CompletedAt: null,
-      currentPoints: 0,
-      totalPointsRequired: 37000,
-      isCompleted: false,
-      completedAt: null,
-      ...rewardNumber
-    };
-    this.stepUpRewardNumbers.set(id, newRewardNumber);
-    return newRewardNumber;
-  }
-
-  async updateStepUpRewardNumber(id: string, rewardNumber: Partial<StepUpRewardNumber>): Promise<StepUpRewardNumber> {
-    const existing = this.stepUpRewardNumbers.get(id);
-    if (!existing) throw new Error("Reward number not found");
-    
-    const updated: StepUpRewardNumber = {
-      ...existing,
-      ...rewardNumber,
-      updatedAt: new Date()
-    };
-    this.stepUpRewardNumbers.set(id, updated);
-    return updated;
-  }
 
   // Referral system
   async getReferralByReferee(refereeId: string): Promise<Referral | undefined> {
@@ -3081,16 +3033,6 @@ export class MemStorage implements IStorage {
     return newLeaderboard;
   }
 
-  async createChatRoom(room: InsertChatRoom): Promise<ChatRoom> {
-    const id = crypto.randomUUID();
-    const newRoom: ChatRoom = {
-      id,
-      createdAt: new Date(),
-      ...room
-    };
-    this.chatRooms.set(id, newRoom);
-    return newRoom;
-  }
 
   // Merchant Wallet System Implementation
   private merchantWallets: Map<string, MerchantWallet> = new Map();
