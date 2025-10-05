@@ -1,0 +1,130 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # API Gateway
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Auth Service
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:3001']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # User Service
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:3002']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Product Service
+  - job_name: 'product-service'
+    static_configs:
+      - targets: ['product-service:3003']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Order Service
+  - job_name: 'order-service'
+    static_configs:
+      - targets: ['order-service:3004']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Payment Service
+  - job_name: 'payment-service'
+    static_configs:
+      - targets: ['payment-service:3005']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Loyalty Service
+  - job_name: 'loyalty-service'
+    static_configs:
+      - targets: ['loyalty-service:3006']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Notification Service
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:3007']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Analytics Service
+  - job_name: 'analytics-service'
+    static_configs:
+      - targets: ['analytics-service:3008']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Nginx
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/nginx_status'
+    scrape_interval: 10s
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 10s
+
+  # PostgreSQL databases
+  - job_name: 'postgres-auth'
+    static_configs:
+      - targets: ['postgres-auth:5432']
+    scrape_interval: 30s
+
+  - job_name: 'postgres-user'
+    static_configs:
+      - targets: ['postgres-user:5432']
+    scrape_interval: 30s
+
+  - job_name: 'postgres-product'
+    static_configs:
+      - targets: ['postgres-product:5432']
+    scrape_interval: 30s
+
+  - job_name: 'postgres-order'
+    static_configs:
+      - targets: ['postgres-order:5432']
+    scrape_interval: 30s
+
+  - job_name: 'postgres-payment'
+    static_configs:
+      - targets: ['postgres-payment:5432']
+    scrape_interval: 30s
+
+  - job_name: 'postgres-loyalty'
+    static_configs:
+      - targets: ['postgres-loyalty:5432']
+    scrape_interval: 30s
+
+  - job_name: 'postgres-notification'
+    static_configs:
+      - targets: ['postgres-notification:5432']
+    scrape_interval: 30s
+
+  - job_name: 'postgres-analytics'
+    static_configs:
+      - targets: ['postgres-analytics:5432']
+    scrape_interval: 30s

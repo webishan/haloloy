@@ -1,0 +1,232 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* KOMARCE Minimalistic Red & White Theme */
+  --background: hsl(0, 0%, 100%);        /* Pure white background */
+  --foreground: hsl(0, 0%, 15%);         /* Dark gray text */
+  --muted: hsl(0, 0%, 96%);              /* Light gray */
+  --muted-foreground: hsl(0, 0%, 45%);   /* Medium gray */
+  --popover: hsl(0, 0%, 100%);           /* White popover */
+  --popover-foreground: hsl(0, 0%, 15%); /* Dark text */
+  --card: hsl(0, 0%, 100%);              /* White cards */
+  --card-foreground: hsl(0, 0%, 15%);    /* Dark text */
+  --border: hsl(0, 0%, 90%);            /* Light gray border */
+  --input: hsl(0, 0%, 100%);            /* White input */
+  
+  /* Primary: KOMARCE Red */
+  --primary: hsl(0, 84%, 60%);           /* Red-500 */
+  --primary-foreground: hsl(0, 0%, 100%); /* White text */
+  
+  /* Secondary: Light Red */
+  --secondary: hsl(0, 100%, 97%);        /* Red-50 */
+  --secondary-foreground: hsl(0, 84%, 60%); /* Red text */
+  
+  /* Accent: Medium Red */
+  --accent: hsl(0, 72%, 51%);            /* Red-600 */
+  --accent-foreground: hsl(0, 0%, 100%); /* White text */
+  
+  --destructive: hsl(0, 84%, 60%);       /* Red-500 */
+  --destructive-foreground: hsl(0, 0%, 100%); /* White text */
+  --ring: hsl(0, 84%, 60%);              /* Red-500 */
+  --radius: 0.75rem;
+  
+  /* KOMARCE Brand Variables */
+  --komarce-red: hsl(0, 84%, 60%);       /* Primary red */
+  --komarce-red-dark: hsl(0, 72%, 51%);  /* Dark red */
+  --komarce-red-light: hsl(0, 93%, 94%); /* Light red */
+  --komarce-white: hsl(0, 0%, 100%);     /* Pure white */
+  --komarce-gray: hsl(0, 0%, 50%);       /* Medium gray */
+  --komarce-gray-light: hsl(0, 0%, 95%); /* Light gray */
+  
+  /* Brand Gradients */
+  --gradient-primary: linear-gradient(135deg, hsl(0, 84%, 60%) 0%, hsl(0, 72%, 51%) 100%);
+  --gradient-secondary: linear-gradient(135deg, hsl(0, 100%, 97%) 0%, hsl(0, 0%, 100%) 100%);
+  --gradient-accent: linear-gradient(135deg, hsl(0, 84%, 60%) 0%, hsl(0, 93%, 94%) 100%);
+}
+
+.dark {
+  --background: hsl(230, 25%, 8%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 20%, 15%);
+  --muted-foreground: hsl(240, 10%, 65%);
+  --popover: hsl(230, 25%, 8%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(230, 25%, 10%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 20%, 18%);
+  --input: hsl(240, 20%, 18%);
+  --primary: hsl(235, 85%, 65%);
+  --primary-foreground: hsl(0, 0%, 98%);
+  --secondary: hsl(270, 75%, 60%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(260, 80%, 70%);
+  --accent-foreground: hsl(230, 25%, 8%);
+  --destructive: hsl(0, 63%, 31%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(235, 85%, 65%);
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    background: linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(0, 100%, 99%) 50%, hsl(0, 0%, 100%) 100%);
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  /* KOMARCE Modern Component Classes */
+  .komarce-gradient {
+    background: var(--gradient-primary);
+  }
+  
+  .komarce-gradient-text {
+    @apply bg-gradient-to-r from-red-500 via-red-600 to-red-700 bg-clip-text text-transparent;
+  }
+  
+  .komarce-card {
+    @apply bg-white border border-gray-100 shadow-sm hover:shadow-md rounded-xl transition-all duration-300;
+  }
+  
+  .komarce-button {
+    @apply bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 px-5 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md;
+  }
+  
+  .komarce-button-secondary {
+    @apply bg-white hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 font-medium py-2.5 px-5 rounded-lg transition-all duration-200;
+  }
+  
+  .komarce-input {
+    @apply border border-gray-200 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-lg px-3 py-2.5 transition-all duration-200 bg-white text-foreground placeholder:text-gray-400;
+  }
+  
+  .komarce-nav {
+    @apply bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm;
+  }
+  
+  /* Glass Effect */
+  .glass-effect {
+    @apply bg-white/10 backdrop-blur-md border border-white/20 shadow-xl;
+  }
+  
+  .glass-card {
+    @apply bg-white/20 backdrop-blur-lg border border-white/30 shadow-2xl rounded-2xl;
+  }
+  
+  /* Modern Blue-Purple Shadows */
+  .shadow-komarce {
+    box-shadow: 0 25px 50px -12px rgba(239, 68, 68, 0.25);
+  }
+  
+  .shadow-komarce-lg {
+    box-shadow: 0 35px 60px -12px rgba(220, 38, 38, 0.4);
+  }
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.5); }
+  50% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.8); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.5s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.5s ease-out;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-gradient {
+  background-size: 400% 400%;
+  animation: gradientShift 8s ease infinite;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, hsl(var(--komarce-blue)), hsl(var(--komarce-purple)));
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, hsl(var(--komarce-purple)), hsl(var(--komarce-light-purple)));
+}
+
+/* Selection styling */
+::selection {
+  background: hsl(var(--komarce-blue) / 0.3);
+  color: hsl(var(--foreground));
+}
+
+/* Focus styles */
+.focus-komarce:focus {
+  outline: 2px solid hsl(var(--komarce-blue));
+  outline-offset: 2px;
+}

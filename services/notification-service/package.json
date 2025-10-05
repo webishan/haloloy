@@ -1,0 +1,29 @@
+{
+  "name": "notification-service",
+  "version": "1.0.0",
+  "description": "Notification and messaging microservice",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "dotenv": "^16.3.1",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "drizzle-orm": "^0.39.1",
+    "postgres": "^3.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^20.16.11",
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.1"
+  }
+}

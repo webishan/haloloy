@@ -1,0 +1,24 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install serve globally
+RUN npm install -g serve
+
+# Copy client files
+COPY client/ ./client/
+COPY vite.config.ts ./
+COPY tailwind.config.ts ./
+COPY postcss.config.js ./
+COPY tsconfig.json ./
+COPY components.json ./
+COPY package*.json ./
+
+# Install dependencies and build
+WORKDIR /app/client
+RUN npm install
+RUN npm run build
+
+# Serve the built files
+EXPOSE 3000
+CMD ["serve", "-s", "dist", "-l", "3000"]
