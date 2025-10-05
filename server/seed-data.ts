@@ -143,8 +143,8 @@ export async function seedTestData() {
       tier: "merchant",
       referralId: `REF_${merchantUser.id.substring(0, 8).toUpperCase()}`,
       merchantReferralCode: merchantReferralCode,
-      loyaltyPointsBalance: 10000, // Give some initial points
-      availablePoints: 10000,
+      loyaltyPointsBalance: 0, // Start with 0 points
+      availablePoints: 0,
       komarceBalance: "500.00"
     });
 
@@ -152,7 +152,7 @@ export async function seedTestData() {
     await storage.createUserWallet({
       userId: merchantUser.id,
       walletType: 'reward_points',
-      balance: '10000'
+      balance: '0'
     });
     
     await storage.createUserWallet({
@@ -170,7 +170,7 @@ export async function seedTestData() {
     // Create merchant wallet for the MerchantRewardSystem
     await storage.createMerchantWallet({
       merchantId: merchant.id,
-      rewardPointBalance: 10000,
+      rewardPointBalance: 0,
       totalPointsIssued: 0,
       incomeWalletBalance: "0.00",
       cashbackIncome: "0.00",

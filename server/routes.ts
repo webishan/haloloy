@@ -145,7 +145,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           tier: 'bronze',
           merchantReferralCode,
           referredByMerchant,
-          isActive: true
+          isActive: true,
+          // Ensure referred merchants start with 0 loyalty points
+          loyaltyPointsBalance: 0,
+          availablePoints: 0
+        });
+        
+        // Log merchant creation details
+        console.log(`🏪 MERCHANT CREATED:`, {
+          businessName: merchant.businessName,
+          userId: merchant.userId,
+          referredByMerchant: merchant.referredByMerchant || 'None (direct signup)',
+          loyaltyPointsBalance: merchant.loyaltyPointsBalance,
+          availablePoints: merchant.availablePoints,
+          isReferred: !!merchant.referredByMerchant
         });
 
         // Ensure referral code is properly set (fix for existing merchants)
@@ -161,7 +174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`🔧 Creating merchant wallet for new merchant ${merchant.businessName}`);
         await storage.createMerchantWallet({
           merchantId: merchant.id,
-          rewardPointBalance: 1000, // Give some initial points
+          rewardPointBalance: 0, // Start with 0 points
           totalPointsIssued: 0,
           incomeWalletBalance: "0.00",
           cashbackIncome: "0.00",
@@ -853,10 +866,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Update merchant points
+      console.log(`💰 DEDUCTING POINTS FROM MERCHANT (rewards/send):`, {
+        merchantId: req.user.userId,
+        businessName: merchant.businessName,
+        referredByMerchant: merchant.referredByMerchant || 'None (direct signup)',
+        isReferred: !!merchant.referredByMerchant,
+        currentLoyaltyPoints: merchant.loyaltyPointsBalance,
+        currentAvailablePoints: merchant.availablePoints,
+        pointsToDeduct: points,
+        newLoyaltyPoints: (merchant.loyaltyPointsBalance || 0) - points,
+        newAvailablePoints: merchant.availablePoints - points
+      });
+      
       await storage.updateMerchant(req.user.userId, {
         loyaltyPointsBalance: (merchant.loyaltyPointsBalance || 0) - points,
         availablePoints: merchant.availablePoints - points,
         totalPointsDistributed: (merchant.totalPointsDistributed || 0) + points
+      });
+      
+      // Verify the update worked
+      const updatedMerchant = await storage.getMerchantByUserId(req.user.userId);
+      console.log(`✅ MERCHANT POINTS UPDATED (rewards/send):`, {
+        businessName: updatedMerchant?.businessName,
+        newLoyaltyPoints: updatedMerchant?.loyaltyPointsBalance,
+        newAvailablePoints: updatedMerchant?.availablePoints
       });
 
       // Process affiliate commission if this merchant was referred

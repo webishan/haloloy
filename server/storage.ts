@@ -1085,7 +1085,7 @@ export class MemStorage implements IStorage {
       totalSales: insertMerchant.totalSales || '0.00',
       totalOrders: insertMerchant.totalOrders || 0,
       productCount: insertMerchant.productCount || 0,
-      availablePoints: insertMerchant.availablePoints || 1000,
+      availablePoints: insertMerchant.availablePoints || 0,
       totalPointsPurchased: insertMerchant.totalPointsPurchased || 0,
       totalPointsDistributed: insertMerchant.totalPointsDistributed || 0,
       instantCashback: insertMerchant.instantCashback || '0.00',
@@ -1119,11 +1119,16 @@ export class MemStorage implements IStorage {
     const merchant = await this.getMerchant(userId);
     if (!merchant) throw new Error("Merchant not found");
     
-    await db.update(merchants)
-      .set(merchantUpdate)
-      .where(eq(merchants.userId, userId));
-    
+    // Update in-memory storage
     const updatedMerchant = { ...merchant, ...merchantUpdate };
+    this.merchants.set(merchant.id, updatedMerchant);
+    
+    console.log(`✅ Updated merchant ${merchant.businessName}:`, {
+      loyaltyPointsBalance: updatedMerchant.loyaltyPointsBalance,
+      availablePoints: updatedMerchant.availablePoints,
+      totalPointsDistributed: updatedMerchant.totalPointsDistributed
+    });
+    
     return updatedMerchant;
   }
 

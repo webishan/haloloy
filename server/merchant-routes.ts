@@ -432,10 +432,30 @@ export function setupMerchantRoutes(app: Express) {
       }
 
       // Update merchant available points - keep both fields in sync
+      console.log(`💰 DEDUCTING POINTS FROM MERCHANT:`, {
+        merchantId,
+        businessName: merchant.businessName,
+        referredByMerchant: merchant.referredByMerchant || 'None (direct signup)',
+        isReferred: !!merchant.referredByMerchant,
+        currentLoyaltyPoints: merchant.loyaltyPointsBalance,
+        currentAvailablePoints: merchant.availablePoints,
+        pointsToDeduct: pointsAmount,
+        newLoyaltyPoints: (merchant.loyaltyPointsBalance || 0) - pointsAmount,
+        newAvailablePoints: merchant.availablePoints - pointsAmount
+      });
+      
       await storage.updateMerchant(merchantId, {
         loyaltyPointsBalance: (merchant.loyaltyPointsBalance || 0) - pointsAmount,
         availablePoints: merchant.availablePoints - pointsAmount,
         totalPointsDistributed: merchant.totalPointsDistributed + pointsAmount
+      });
+      
+      // Verify the update worked
+      const updatedMerchant = await storage.getMerchantByUserId(merchantId);
+      console.log(`✅ MERCHANT POINTS UPDATED:`, {
+        businessName: updatedMerchant?.businessName,
+        newLoyaltyPoints: updatedMerchant?.loyaltyPointsBalance,
+        newAvailablePoints: updatedMerchant?.availablePoints
       });
 
       // Process affiliate commission if this merchant was referred
@@ -738,7 +758,7 @@ export function setupMerchantRoutes(app: Express) {
         totalSales: "0.00",
         totalOrders: 0,
         productCount: 0,
-        availablePoints: 1000, // Give merchant some initial points
+        availablePoints: 0, // Start with 0 points
         totalPointsPurchased: 0,
         totalPointsDistributed: 0,
         instantCashback: "0.00",
@@ -759,6 +779,119 @@ export function setupMerchantRoutes(app: Express) {
     } catch (error) {
       console.error('Create merchant profile error:', error);
       res.status(500).json({ error: 'Failed to create merchant profile' });
+    }
+  });
+
+  // Fix existing merchants loyalty points
+  app.post('/api/merchant/fix-points', authenticateToken, authorizeRole(['merchant']), async (req, res) => {
+    try {
+      const merchantId = req.user.userId;
+      const merchant = await storage.getMerchantByUserId(merchantId);
+      
+      if (!merchant) {
+        return res.status(404).json({ message: 'Merchant not found' });
+      }
+      
+      console.log(`🔧 FIXING MERCHANT POINTS:`, {
+        businessName: merchant.businessName,
+        currentLoyaltyPoints: merchant.loyaltyPointsBalance,
+        currentAvailablePoints: merchant.availablePoints,
+        referredByMerchant: merchant.referredByMerchant || 'None'
+      });
+      
+      // Reset loyalty points to 0 if they're not already 0
+      if (merchant.loyaltyPointsBalance > 0 || merchant.availablePoints > 0) {
+        await storage.updateMerchant(merchantId, {
+          loyaltyPointsBalance: 0,
+          availablePoints: 0
+        });
+        
+        // Also update merchant wallet if it exists
+        try {
+          const merchantWallet = await storage.getMerchantWallet(merchant.id);
+          if (merchantWallet && merchantWallet.rewardPointBalance > 0) {
+            await storage.updateMerchantWallet(merchant.id, {
+              rewardPointBalance: 0
+            });
+            console.log(`✅ Updated merchant wallet rewardPointBalance to 0`);
+          }
+        } catch (error) {
+          console.log('No merchant wallet found or error updating wallet:', error);
+        }
+        
+        const updatedMerchant = await storage.getMerchantByUserId(merchantId);
+        console.log(`✅ MERCHANT POINTS FIXED:`, {
+          businessName: updatedMerchant.businessName,
+          newLoyaltyPoints: updatedMerchant.loyaltyPointsBalance,
+          newAvailablePoints: updatedMerchant.availablePoints
+        });
+        
+        res.json({
+          success: true,
+          message: 'Merchant loyalty points reset to 0',
+          merchant: updatedMerchant
+        });
+      } else {
+        res.json({
+          success: true,
+          message: 'Merchant loyalty points are already 0',
+          merchant: merchant
+        });
+      }
+      
+    } catch (error) {
+      console.error('Fix merchant points error:', error);
+      res.status(500).json({ error: 'Failed to fix merchant points' });
+    }
+  });
+
+  // Admin endpoint to fix ALL existing merchants
+  app.post('/api/admin/fix-all-merchants', authenticateToken, authorizeRole(['admin', 'global_admin']), async (req, res) => {
+    try {
+      console.log('🔧 FIXING ALL EXISTING MERCHANTS...');
+      
+      const allMerchants = await storage.getMerchants();
+      let fixedCount = 0;
+      
+      for (const merchant of allMerchants) {
+        if (merchant.loyaltyPointsBalance > 0 || merchant.availablePoints > 0) {
+          console.log(`🔍 Fixing merchant: ${merchant.businessName} (${merchant.userId})`);
+          
+          // Reset to 0
+          await storage.updateMerchant(merchant.userId, {
+            loyaltyPointsBalance: 0,
+            availablePoints: 0
+          });
+          
+          // Also update merchant wallet if it exists
+          try {
+            const merchantWallet = await storage.getMerchantWallet(merchant.id);
+            if (merchantWallet && merchantWallet.rewardPointBalance > 0) {
+              await storage.updateMerchantWallet(merchant.id, {
+                rewardPointBalance: 0
+              });
+            }
+          } catch (error) {
+            console.log(`No merchant wallet found for ${merchant.businessName}`);
+          }
+          
+          fixedCount++;
+          console.log(`✅ Fixed merchant: ${merchant.businessName}`);
+        }
+      }
+      
+      console.log(`🎉 Fixed ${fixedCount} merchants out of ${allMerchants.length} total merchants`);
+      
+      res.json({
+        success: true,
+        message: `Fixed ${fixedCount} merchants`,
+        totalMerchants: allMerchants.length,
+        fixedMerchants: fixedCount
+      });
+      
+    } catch (error) {
+      console.error('Fix all merchants error:', error);
+      res.status(500).json({ error: 'Failed to fix all merchants' });
     }
   });
 
