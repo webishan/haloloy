@@ -97,7 +97,7 @@ interface GlobalAnalytics {
 interface TransactionHistory {
   transactions: Array<{
     id: string;
-    type: 'credit' | 'debit';
+    type: 'Generated' | 'Received' | 'Distributed';
     amount: number;
     description: string;
     createdAt: string;
@@ -2240,14 +2240,14 @@ export default function GlobalAdminPortal() {
                         {transactionHistory.transactions.slice(0, 5).map((transaction: any) => (
                           <div key={transaction.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                             <div className="flex items-center">
-                              {transaction.type === 'credit' ? (
+                              {(transaction.type === 'Generated' || transaction.type === 'Received') ? (
                                 <Plus className="w-4 h-4 text-green-600 mr-2" />
                               ) : (
                                 <Send className="w-4 h-4 text-blue-600 mr-2" />
                               )}
                               <div>
                                 <p className="font-medium text-gray-900">
-                                  {transaction.type === 'credit' ? 'Points Generated' : 'Points Distributed'}
+                                  {transaction.type === 'Generated' ? 'Points Generated' : transaction.type === 'Received' ? 'Points Received' : 'Points Distributed'}
                                 </p>
                                 <p className="text-sm text-gray-500">
                                   {new Date(transaction.createdAt).toLocaleString()}
@@ -2255,8 +2255,8 @@ export default function GlobalAdminPortal() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className={`font-bold ${transaction.type === 'credit' ? 'text-green-600' : 'text-blue-600'}`}>
-                                {transaction.type === 'credit' ? '+' : '-'}{transaction.amount?.toLocaleString() || '0'} Points
+                              <p className={`font-bold ${(transaction.type === 'Generated' || transaction.type === 'Received') ? 'text-green-600' : 'text-blue-600'}`}>
+                                {(transaction.type === 'Generated' || transaction.type === 'Received') ? '+' : '-'}{transaction.amount?.toLocaleString() || '0'} Points
                               </p>
                               <p className="text-sm text-gray-500">
                                 Balance: {transaction.balanceAfter?.toLocaleString() || '0'}
@@ -2717,17 +2717,17 @@ export default function GlobalAdminPortal() {
                                 </TableCell>
                                 <TableCell>
                                   <Badge 
-                                    variant={transaction.type === 'credit' ? 'default' : 'secondary'}
-                                    className={transaction.type === 'credit' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}
+                                    variant={transaction.type === 'Generated' || transaction.type === 'Received' ? 'default' : 'secondary'}
+                                    className={transaction.type === 'Generated' || transaction.type === 'Received' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}
                                   >
-                                    {transaction.type === 'credit' ? 'Generated' : 'Distributed'}
+                                    {transaction.type}
                                   </Badge>
                                 </TableCell>
                                 <TableCell>{transaction.description || 'No description'}</TableCell>
                                 <TableCell className={`font-semibold ${
-                                  transaction.type === 'credit' ? 'text-green-600' : 'text-blue-600'
+                                  transaction.type === 'Generated' || transaction.type === 'Received' ? 'text-green-600' : 'text-blue-600'
                                 }`}>
-                                  {transaction.type === 'credit' ? '+' : '-'}{transaction.amount?.toLocaleString() || '0'} Points
+                                  {transaction.type === 'Generated' || transaction.type === 'Received' ? '+' : '-'}{transaction.amount?.toLocaleString() || '0'} Points
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="bg-green-50 text-green-700">

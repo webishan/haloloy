@@ -1274,14 +1274,20 @@ export function setupAdminRoutes(app: Express) {
       // Include all distributions that are relevant to this admin:
       // 1. Credits TO this admin (when this admin is the receiver)
       // 2. Debits FROM this admin (when this admin is the sender)
-      // 3. Point generation transactions (self-transactions for point generation)
+      // 3. Point generation transactions (system to admin)
       // Exclude: system transactions that don't involve this admin
       const distributions = await db.select().from(pointDistributions).where(
         sql`(
-          (${pointDistributions.toUserId} = ${userId} AND ${pointDistributions.fromUserId} != 'system') OR
-          (${pointDistributions.fromUserId} = ${userId} AND ${pointDistributions.toUserId} != 'system')
+          (${pointDistributions.toUserId} = ${userId} AND ${pointDistributions.fromUserId} != ${userId}) OR
+          (${pointDistributions.fromUserId} = ${userId} AND ${pointDistributions.toUserId} != ${userId})
         )`
       );
+      
+      console.log(`🔍 Transaction history for user ${userId}:`, {
+        totalDistributions: distributions.length,
+        pointGenerationTransactions: distributions.filter(d => d.distributionType === 'point_generation').length,
+        allTypes: distributions.map(d => d.distributionType)
+      });
       
       // Convert distributions to transaction format with proper sequential balance calculation
       const sortedDistributions = distributions.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -1339,6 +1345,14 @@ export function setupAdminRoutes(app: Express) {
       const calculatedTotalDebits = transactionHistory
         .filter(t => t.type === 'Distributed')
         .reduce((sum, t) => sum + t.amount, 0);
+      
+      console.log(`📊 Final transaction history for user ${userId}:`, {
+        totalTransactions: transactionHistory.length,
+        generatedTransactions: transactionHistory.filter(t => t.type === 'Generated').length,
+        receivedTransactions: transactionHistory.filter(t => t.type === 'Received').length,
+        distributedTransactions: transactionHistory.filter(t => t.type === 'Distributed').length,
+        transactionTypes: transactionHistory.map(t => t.type)
+      });
       
       res.json({
         transactions: transactionHistory,
@@ -1790,6 +1804,147 @@ export function setupAdminRoutes(app: Express) {
         message: 'Failed to fetch shopping vouchers',
         error: error.message 
       });
+    }
+  });
+
+  // ========== MISSING ANALYTICS ENDPOINTS ==========
+  
+  // Get merchant stats for global admin
+  app.get('/api/admin/merchant-stats', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const merchantsData = await db.select().from(merchants);
+      
+      res.json({
+        totalMerchants: merchantsData.length,
+        regularMerchants: merchantsData.filter(m => !m.isEMerchant).length,
+        eMerchants: merchantsData.filter(m => m.isEMerchant).length,
+        starMerchants: merchantsData.filter(m => m.rank === 'star').length,
+        doubleStarMerchants: merchantsData.filter(m => m.rank === 'double_star').length,
+        tripleStarMerchants: merchantsData.filter(m => m.rank === 'triple_star').length,
+        executiveMerchants: merchantsData.filter(m => m.rank === 'executive').length
+      });
+    } catch (error) {
+      console.error('Get merchant stats error:', error);
+      res.status(500).json({ message: 'Failed to fetch merchant stats' });
+    }
+  });
+
+  // Get customer stats for global admin
+  app.get('/api/admin/customer-stats', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const customersData = await db.select().from(users).where(eq(users.role, 'customer'));
+      
+      res.json({
+        totalCustomers: customersData.length,
+        activeCustomers: customersData.filter(c => c.isActive).length
+      });
+    } catch (error) {
+      console.error('Get customer stats error:', error);
+      res.status(500).json({ message: 'Failed to fetch customer stats' });
+    }
+  });
+
+  // Get reward stats for global admin
+  app.get('/api/admin/reward-stats', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const merchantsData = await db.select().from(merchants);
+      const customersData = await db.select().from(users).where(eq(users.role, 'customer'));
+      const ordersData = await db.select().from(orders);
+
+      const totalSales = ordersData.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+      const distributedPoints = merchantsData.reduce((sum, m) => sum + (m.loyaltyPointsBalance || 0), 0);
+      const totalPoints = customersData.reduce((sum, c) => sum + (c.totalPoints || 0), 0);
+      
+      res.json({
+        totalSales: totalSales.toFixed(2),
+        distributedPoints,
+        totalPoints
+      });
+    } catch (error) {
+      console.error('Get reward stats error:', error);
+      res.status(500).json({ message: 'Failed to fetch reward stats' });
+    }
+  });
+
+  // Get withdrawal stats for global admin
+  app.get('/api/admin/withdrawal-stats', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      // This would need withdrawal data from database - for now return basic stats
+      res.json({
+        totalWithdrawals: 0,
+        merchantWithdrawals: 0,
+        customerWithdrawals: 0,
+        withdrawableNotWithdrawn: 0
+      });
+    } catch (error) {
+      console.error('Get withdrawal stats error:', error);
+      res.status(500).json({ message: 'Failed to fetch withdrawal stats' });
+    }
+  });
+
+  // Get top customers for global admin
+  app.get('/api/admin/top-customers', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const customersData = await db.select().from(users).where(eq(users.role, 'customer'));
+      
+      const topCustomers = customersData
+        .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
+        .slice(0, 10)
+        .map(customer => ({
+          id: customer.id,
+          name: `${customer.firstName} ${customer.lastName}`,
+          email: customer.email,
+          points: customer.totalPoints || 0,
+          tier: customer.currentTier || 'Bronze'
+        }));
+      
+      res.json(topCustomers);
+    } catch (error) {
+      console.error('Get top customers error:', error);
+      res.status(500).json({ message: 'Failed to fetch top customers' });
+    }
+  });
+
+  // Get global merchants for global admin
+  app.get('/api/admin/global-merchants', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const merchantsData = await db.select().from(merchants);
+      
+      const globalMerchants = merchantsData.map(merchant => ({
+        id: merchant.id,
+        businessName: merchant.businessName,
+        country: merchant.country,
+        tier: merchant.tier || 'Star',
+        points: merchant.loyaltyPointsBalance || 0,
+        isActive: merchant.isActive
+      }));
+      
+      res.json(globalMerchants);
+    } catch (error) {
+      console.error('Get global merchants error:', error);
+      res.status(500).json({ message: 'Failed to fetch global merchants' });
+    }
+  });
+
+  // Get global customers for global admin
+  app.get('/api/admin/global-customers', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const customersData = await db.select().from(users).where(eq(users.role, 'customer'));
+      
+      const globalCustomers = customersData.map(customer => ({
+        id: customer.id,
+        name: `${customer.firstName} ${customer.lastName}`,
+        email: customer.email,
+        country: customer.country,
+        points: customer.totalPoints || 0,
+        tier: customer.currentTier || 'Bronze',
+        isActive: customer.isActive
+      }));
+      
+      res.json(globalCustomers);
+    } catch (error) {
+      console.error('Get global customers error:', error);
+      res.status(500).json({ message: 'Failed to fetch global customers' });
     }
   });
 }
