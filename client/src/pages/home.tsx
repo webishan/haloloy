@@ -17,28 +17,21 @@ export default function Home() {
     queryKey: ['/api/brands']
   });
 
-  // Define the slideshow images
+  // Define the slideshow images using the new banner images
   const slideshowImages = [
-    '/images/1.jpg',
-    '/images/2.jpg',
-    '/images/3.jpg',
-    '/images/4.jpg',
-    '/images/5.jpg',
-    '/images/6.jpg'
+    '/images/Web-banner-2.jpg',
+    '/images/Web-banner-3.jpg',
+    '/images/Web-banner-4.jpg'
   ];
 
   return (
-    <div className="pt-20 min-h-screen bg-gradient-to-br from-white via-red-50 to-white">
+    <div className="pt-20 min-h-screen bg-gradient-to-br from-white via-gray-50 to-white">
       {/* Hero Section with Slideshow */}
-      <section className="relative komarce-gradient text-white overflow-hidden">
-        <div className="container mx-auto px-4 py-8">
-          <HeroSlideshow 
-            images={slideshowImages}
-            autoPlay={true}
-            autoPlayInterval={5000}
-          />
-        </div>
-      </section>
+      <HeroSlideshow 
+        images={slideshowImages}
+        autoPlay={true}
+        autoPlayInterval={5000}
+      />
 
       <CategoryGrid />
 

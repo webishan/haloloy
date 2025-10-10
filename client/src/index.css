@@ -69,14 +69,166 @@
 }
 
 @layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
   body {
     @apply font-sans antialiased bg-background text-foreground;
     background: linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(0, 100%, 99%) 50%, hsl(0, 0%, 100%) 100%);
     min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    width: 100%;
+  }
+  
+  html {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    width: 100%;
   }
 }
 
 @layer components {
+  /* Full Width Breakout */
+  .full-width-breakout {
+    position: relative !important;
+    width: 100vw !important;
+    left: 50% !important;
+    right: 50% !important;
+    margin-left: -50vw !important;
+    margin-right: -50vw !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    max-width: none !important;
+  }
+  
+  /* Full Width Fixed */
+  .full-width-fixed {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 80px !important;
+    width: 100vw !important;
+    height: 80vh !important;
+    min-height: 600px !important;
+    z-index: 10 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    max-width: none !important;
+  }
+  
+  /* Ensure no gaps anywhere */
+  .slideshow-container {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  
+  .slideshow-container * {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Ensure no gaps during transitions */
+  .slideshow-container .absolute {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    outline: none !important;
+  }
+  
+  .slideshow-container img {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    outline: none !important;
+    display: block !important;
+  }
+  
+  /* Modern slideshow enhancements */
+  .modern-slideshow {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+    box-shadow: inset 0 0 100px rgba(59, 130, 246, 0.1);
+  }
+  
+  /* Glassmorphism effects */
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Smooth transitions for modern UI */
+  .modern-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Ultra-aggressive full-width enforcement for slideshow */
+  .hero-slideshow-container,
+  .hero-slideshow-container * {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Ensure absolutely no gaps on any side */
+  .hero-slideshow-container {
+    position: relative !important;
+    width: 100vw !important;
+    left: 50% !important;
+    right: 50% !important;
+    margin-left: -50vw !important;
+    margin-right: -50vw !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    max-width: none !important;
+    overflow: hidden !important;
+  }
+  
+  /* Remove any potential spacing from all elements */
+  .hero-slideshow-container div,
+  .hero-slideshow-container img,
+  .hero-slideshow-container button {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    display: block !important;
+  }
+  
+  /* Prevent any scale or transform from causing overflow */
+  .slideshow-container div:not(button),
+  .slideshow-container img {
+    transform: scale(1) !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+  }
+  
+  /* Ensure overflow is always hidden during transitions */
+  .hero-slideshow-container,
+  .slideshow-container {
+    overflow: hidden !important;
+  }
+  
   /* KOMARCE Modern Component Classes */
   .komarce-gradient {
     background: var(--gradient-primary);
