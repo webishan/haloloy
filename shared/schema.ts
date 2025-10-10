@@ -974,6 +974,8 @@ export const customerPointTransactions = pgTable("customer_point_transactions", 
   balanceBefore: integer("balance_before").notNull(),
   balanceAfter: integer("balance_after").notNull(),
   description: text("description").notNull(),
+  customerName: text("customer_name"), // Customer's full name for display
+  customerAccountNumber: text("customer_account_number"), // Customer's account number for display
   referenceId: varchar("reference_id"), // Reference to purchase, transfer, etc.
   metadata: jsonb("metadata"), // Additional transaction data
   createdAt: timestamp("created_at").defaultNow(),

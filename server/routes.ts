@@ -871,6 +871,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "completed"
       });
 
+      // DUPLICATE PREVENTION: Check if a similar transaction was created recently (within last 30 seconds)
+      const recentTransactions = await storage.getCustomerPointTransactionsByMerchant(customer.id, merchant.id);
+      const now = new Date();
+      const recentThreshold = new Date(now.getTime() - 30000); // 30 seconds ago
+      
+      const recentSimilarTransaction = recentTransactions.find(t => 
+        t.points === parseInt(points) &&
+        t.description === (description || `Points transfer from ${merchant.businessName}`) &&
+        new Date(t.createdAt) > recentThreshold
+      );
+      
+      if (recentSimilarTransaction) {
+        console.log(`⚠️ Duplicate transaction prevented for customer ${customer.fullName}:`, recentSimilarTransaction);
+        return res.status(409).json({ 
+          message: "Duplicate transaction detected. Please wait a moment before trying again." 
+        });
+      }
+
       // CRITICAL FIX: Create customer point transaction record for merchant analytics
       const customerPointTransaction = await storage.createCustomerPointTransaction({
         customerId: customer.id,

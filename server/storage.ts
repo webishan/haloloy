@@ -6132,20 +6132,29 @@ export class MemStorage implements IStorage {
 
   // ==================== MERCHANT REPORTS AND TRANSACTIONS ====================
 
-  async getMerchantPointTransfers(merchantId: string): Promise<any[]> {
+  async getMerchantPointTransfers(merchantUserId: string): Promise<any[]> {
     // Get all point transfers made by this merchant to customers from DATABASE
-    console.log(`🔍 Getting merchant point transfers for merchantId: ${merchantId}`);
+    console.log(`🔍 Getting merchant point transfers for merchantUserId: ${merchantUserId}`);
     
     try {
+      // First get the merchant's database ID from the user ID
+      const merchant = await this.getMerchantByUserId(merchantUserId);
+      if (!merchant) {
+        console.log(`❌ No merchant found for userId: ${merchantUserId}`);
+        return [];
+      }
+      
+      console.log(`🔍 Found merchant database ID: ${merchant.id} for userId: ${merchantUserId}`);
+      
       const transfers = await db.select()
         .from(customerPointTransactions)
         .where(and(
-          eq(customerPointTransactions.merchantId, merchantId),
+          eq(customerPointTransactions.merchantId, merchant.id), // Use merchant's database ID, not user ID
           eq(customerPointTransactions.transactionType, 'earned')
         ))
         .orderBy(desc(customerPointTransactions.createdAt));
 
-      console.log(`📊 Found ${transfers.length} point transfers in database for merchant ${merchantId}`);
+      console.log(`📊 Found ${transfers.length} point transfers in database for merchant ${merchantUserId} (DB ID: ${merchant.id})`);
 
       return transfers.map(t => ({
         id: t.id,
