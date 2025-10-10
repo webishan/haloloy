@@ -3588,13 +3588,47 @@ export class MemStorage implements IStorage {
 
   // Customer Point Transactions
   async createCustomerPointTransaction(transaction: InsertCustomerPointTransaction): Promise<CustomerPointTransaction> {
-    const id = randomUUID();
-    const newTransaction: CustomerPointTransaction = {
-      id,
-      ...transaction,
-      createdAt: new Date()
-    };
-    this.customerPointTransactions.set(id, newTransaction);
+    console.log(`💾 Creating customer point transaction in DATABASE:`, {
+      customerId: transaction.customerId,
+      merchantId: transaction.merchantId,
+      transactionType: transaction.transactionType,
+      points: transaction.points,
+      description: transaction.description
+    });
+
+    // Get current customer balance before transaction
+    const customer = await this.getCustomer(transaction.customerId);
+    const currentBalance = customer?.loyaltyPoints || 0;
+    const newBalance = currentBalance + transaction.points;
+
+    // CRITICAL FIX: Store in database instead of in-memory with required balance fields
+    const dbTransaction = await db.insert(customerPointTransactions)
+      .values({
+        ...transaction,
+        balanceBefore: currentBalance,
+        balanceAfter: newBalance,
+        createdAt: new Date()
+      })
+      .returning();
+
+    const newTransaction = dbTransaction[0];
+
+    // Update customer's loyalty points balance
+    if (customer) {
+      await this.updateCustomer(transaction.customerId, {
+        loyaltyPoints: newBalance
+      });
+      console.log(`✅ Updated customer ${customer.firstName} ${customer.lastName} balance: ${currentBalance} → ${newBalance}`);
+    }
+
+    console.log(`✅ Customer point transaction created in database:`, {
+      transactionId: newTransaction.id,
+      customerId: newTransaction.customerId,
+      merchantId: newTransaction.merchantId,
+      points: newTransaction.points,
+      balanceBefore: currentBalance,
+      balanceAfter: newBalance
+    });
 
     // Process Global Number eligibility if points are being added
     if (transaction.points > 0 && transaction.transactionType === 'earned') {
@@ -3626,15 +3660,26 @@ export class MemStorage implements IStorage {
   }
 
   async getCustomerPointTransactions(customerId: string): Promise<CustomerPointTransaction[]> {
-    return Array.from(this.customerPointTransactions.values())
-      .filter(t => t.customerId === customerId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    // FIXED: Use database instead of in-memory storage
+    const transactions = await db.select()
+      .from(customerPointTransactions)
+      .where(eq(customerPointTransactions.customerId, customerId))
+      .orderBy(desc(customerPointTransactions.createdAt));
+    
+    return transactions;
   }
 
   async getCustomerPointTransactionsByMerchant(customerId: string, merchantId: string): Promise<CustomerPointTransaction[]> {
-    return Array.from(this.customerPointTransactions.values())
-      .filter(t => t.customerId === customerId && t.merchantId === merchantId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    // FIXED: Use database instead of in-memory storage
+    const transactions = await db.select()
+      .from(customerPointTransactions)
+      .where(and(
+        eq(customerPointTransactions.customerId, customerId),
+        eq(customerPointTransactions.merchantId, merchantId)
+      ))
+      .orderBy(desc(customerPointTransactions.createdAt));
+    
+    return transactions;
   }
 
   // Customer Serial Numbers
@@ -6220,16 +6265,7 @@ export class MemStorage implements IStorage {
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
-  async createCustomerPointTransaction(transaction: any): Promise<any> {
-    const id = randomUUID();
-    const newTransaction = {
-      id,
-      ...transaction,
-      createdAt: new Date()
-    };
-    this.customerPointTransactions.set(id, newTransaction);
-    return newTransaction;
-  }
+  // Removed duplicate createCustomerPointTransaction method - using the proper one above
 
   async getAllCustomerSerialNumbers(): Promise<any[]> {
     return Array.from(this.customerSerialNumbers.values());

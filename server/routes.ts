@@ -871,6 +871,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "completed"
       });
 
+      // CRITICAL FIX: Create customer point transaction record for merchant analytics
+      const customerPointTransaction = await storage.createCustomerPointTransaction({
+        customerId: customer.id,
+        merchantId: merchant.id,
+        transactionType: 'earned',
+        points: parseInt(points),
+        balanceAfter: customer.currentPointsBalance + parseInt(points),
+        description: description || `Points transfer from ${merchant.businessName}`,
+        customerName: customer.fullName,
+        customerAccountNumber: customer.uniqueAccountNumber
+      });
+
+      console.log(`💾 Customer point transaction created (rewards/send):`, {
+        transactionId: customerPointTransaction.id,
+        customerId: customer.id,
+        merchantId: merchant.id,
+        points: points,
+        description: description
+      });
+
       // Update merchant points
       console.log(`💰 DEDUCTING POINTS FROM MERCHANT (rewards/send):`, {
         merchantId: req.user.userId,
