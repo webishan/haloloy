@@ -207,6 +207,18 @@ export default function LocalAdminPortal() {
     }
   });
 
+  const { data: localOverview, isLoading: isOverviewLoading } = useQuery({
+    queryKey: ['/api/local-admin/overview'],
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const res = await fetch('/api/local-admin/overview', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch overview data');
+      return res.json();
+    }
+  });
+
   const { data: localAcquisition } = useQuery({
     queryKey: ['/api/local-admin/acquisition'],
     enabled: isAuthenticated,
@@ -874,7 +886,7 @@ export default function LocalAdminPortal() {
                   <div className="text-center p-4 bg-green-50 rounded-lg">
                     <p className="text-lg font-bold text-green-700">Market Share</p>
                     <p className="text-2xl font-bold text-green-600">
-                      {Math.floor(Math.random() * 30) + 15}%
+                      {isOverviewLoading ? "..." : `${localOverview?.marketShare || 0}%`}
                     </p>
                     <p className="text-sm text-green-600">Regional market coverage</p>
                   </div>
@@ -882,7 +894,7 @@ export default function LocalAdminPortal() {
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <p className="text-lg font-bold text-blue-700">Growth Rate</p>
                     <p className="text-2xl font-bold text-blue-600">
-                      +{Math.floor(Math.random() * 20) + 10}%
+                      {isOverviewLoading ? "..." : `+${localOverview?.growthRate || 0}%`}
                     </p>
                     <p className="text-sm text-blue-600">Month-over-month growth</p>
                   </div>
@@ -890,7 +902,7 @@ export default function LocalAdminPortal() {
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
                     <p className="text-lg font-bold text-purple-700">Active Rate</p>
                     <p className="text-2xl font-bold text-purple-600">
-                      {Math.floor(Math.random() * 25) + 70}%
+                      {isOverviewLoading ? "..." : `${localOverview?.activeRate || 0}%`}
                     </p>
                     <p className="text-sm text-purple-600">User engagement rate</p>
                   </div>

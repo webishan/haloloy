@@ -4,7 +4,7 @@ import { insertPointDistributionSchema, insertChatMessageSchema, insertPointGene
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql, and, or } from "drizzle-orm";
 
 const JWT_SECRET = process.env.JWT_SECRET || "komarce-secret-key";
 
@@ -1426,11 +1426,11 @@ export function setupAdminRoutes(app: Express) {
         return res.status(400).json({ message: 'Admin country not found' });
       }
 
-      const merchants = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
       
       // Enhance with user details and point information
       const enhancedMerchants = [];
-      for (const merchant of merchants) {
+      for (const merchant of merchantsData) {
         const user = await db.select().from(users).where(eq(users.id, merchant.userId)).limit(1);
         if (user[0]) {
           enhancedMerchants.push({
@@ -1489,20 +1489,21 @@ export function setupAdminRoutes(app: Express) {
   // Get cofounder and staff list for local admin
   app.get('/api/local-admin/cofounder-staff', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
     try {
-      const currentUser = await storage.getUser(req.user.userId);
-      if (!currentUser?.country) {
+      const currentUser = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      if (!currentUser[0]?.country) {
         return res.status(400).json({ message: 'Admin country not found' });
       }
 
       // Get all users from the same country with admin or staff roles
-      const allUsers = await storage.getUsers();
-      const countryUsers = allUsers.filter(user => 
-        user.country === currentUser.country && 
-        (user.role === 'local_admin' || user.role === 'staff')
+      const allUsers = await db.select().from(users).where(
+        and(
+          eq(users.country, currentUser[0].country),
+          or(eq(users.role, 'local_admin'), eq(users.role, 'staff'))
+        )
       );
 
-      const cofounders = countryUsers.filter(user => user.role === 'local_admin');
-      const staff = countryUsers.filter(user => user.role === 'staff');
+      const cofounders = allUsers.filter(user => user.role === 'local_admin');
+      const staff = allUsers.filter(user => user.role === 'staff');
 
       res.json({
         cofounders: cofounders.map(user => ({
@@ -1534,14 +1535,14 @@ export function setupAdminRoutes(app: Express) {
         return res.status(400).json({ message: 'Admin country not found' });
       }
 
-      const merchants = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
-      const customers = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
-      const orders = await db.select().from(orders);
+      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const customersData = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
+      const ordersData = await db.select().from(orders);
       
       // Filter orders by country (assuming orders have merchant info)
       const countryOrders = [];
-      for (const order of orders) {
-        const merchant = merchants.find(m => m.id === order.merchantId);
+      for (const order of ordersData) {
+        const merchant = merchantsData.find(m => m.id === order.merchantId);
         if (merchant) {
           countryOrders.push(order);
         }
@@ -1549,15 +1550,15 @@ export function setupAdminRoutes(app: Express) {
 
       // Calculate analytics
       const totalSales = countryOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-      const activeMerchants = merchants.filter(m => m.isActive).length;
-      const activeCustomers = customers.filter(c => c.isActive).length;
+      const activeMerchants = merchantsData.filter(m => m.isActive).length;
+      const activeCustomers = customersData.filter(c => c.isActive).length;
       
-      const salesPerformance = merchants.length > 0 ? Math.round((activeMerchants / merchants.length) * 100) : 0;
+      const salesPerformance = merchantsData.length > 0 ? Math.round((activeMerchants / merchantsData.length) * 100) : 0;
       
       res.json({
         salesPerformance,
         popularBrands: ['Electronics', 'Fashion', 'Home & Living'], // Could be calculated from actual data
-        customerBehavior: activeCustomers > customers.length * 0.7 ? 'Very Active' : 'Active',
+        customerBehavior: activeCustomers > customersData.length * 0.7 ? 'Very Active' : 'Active',
         inventoryStatus: 'Good',
         totalSales: totalSales.toFixed(2),
         activeMerchants,
@@ -1612,16 +1613,16 @@ export function setupAdminRoutes(app: Express) {
         return res.status(400).json({ message: 'Admin country not found' });
       }
 
-      const merchants = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
       
       res.json({
-        totalMerchants: merchants.length,
-        regularMerchants: merchants.filter(m => !m.isEMerchant).length,
-        eMerchants: merchants.filter(m => m.isEMerchant).length,
-        starMerchants: merchants.filter(m => m.rank === 'star').length,
-        doubleStarMerchants: merchants.filter(m => m.rank === 'double_star').length,
-        tripleStarMerchants: merchants.filter(m => m.rank === 'triple_star').length,
-        executiveMerchants: merchants.filter(m => m.rank === 'executive').length
+        totalMerchants: merchantsData.length,
+        regularMerchants: merchantsData.filter(m => !m.isEMerchant).length,
+        eMerchants: merchantsData.filter(m => m.isEMerchant).length,
+        starMerchants: merchantsData.filter(m => m.rank === 'star').length,
+        doubleStarMerchants: merchantsData.filter(m => m.rank === 'double_star').length,
+        tripleStarMerchants: merchantsData.filter(m => m.rank === 'triple_star').length,
+        executiveMerchants: merchantsData.filter(m => m.rank === 'executive').length
       });
     } catch (error) {
       console.error('Get local admin merchant stats error:', error);
@@ -1657,22 +1658,22 @@ export function setupAdminRoutes(app: Express) {
         return res.status(400).json({ message: 'Admin country not found' });
       }
 
-      const merchants = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
-      const customers = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
-      const orders = await db.select().from(orders);
+      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const customersData = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
+      const ordersData = await db.select().from(orders);
       
       // Filter orders by country
       const countryOrders = [];
-      for (const order of orders) {
-        const merchant = merchants.find(m => m.id === order.merchantId);
+      for (const order of ordersData) {
+        const merchant = merchantsData.find(m => m.id === order.merchantId);
         if (merchant) {
           countryOrders.push(order);
         }
       }
 
       const totalSales = countryOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-      const distributedPoints = merchants.reduce((sum, m) => sum + (m.loyaltyPointsBalance || 0), 0);
-      const totalPoints = customers.reduce((sum, c) => sum + (c.totalPoints || 0), 0);
+      const distributedPoints = merchantsData.reduce((sum, m) => sum + (m.loyaltyPointsBalance || 0), 0);
+      const totalPoints = customersData.reduce((sum, c) => sum + (c.totalPoints || 0), 0);
       
       res.json({
         totalSales: totalSales.toFixed(2),
@@ -1703,6 +1704,73 @@ export function setupAdminRoutes(app: Express) {
     } catch (error) {
       console.error('Get local admin withdrawal stats error:', error);
       res.status(500).json({ message: 'Failed to fetch withdrawal stats' });
+    }
+  });
+
+  // Get overview data for local admin (Market Share, Growth Rate, Active Rate)
+  app.get('/api/local-admin/overview', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      if (!currentUser[0]?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      const country = currentUser[0].country;
+      
+      // Get merchants and customers for this country
+      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, country));
+      const customersData = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, country)));
+      
+      // Get all merchants globally for market share calculation
+      const allMerchants = await db.select().from(merchants);
+      const allCustomers = await db.select().from(users).where(eq(users.role, 'customer'));
+      
+      // Calculate Market Share (percentage of merchants in this country vs global)
+      const marketShare = allMerchants.length > 0 ? Math.round((merchantsData.length / allMerchants.length) * 100) : 0;
+      
+      // Calculate Active Rate (percentage of active customers)
+      const activeCustomers = customersData.filter(c => c.isActive).length;
+      const activeRate = customersData.length > 0 ? Math.round((activeCustomers / customersData.length) * 100) : 0;
+      
+      // Calculate Growth Rate (mock calculation based on recent registrations)
+      // In a real scenario, this would compare current month vs previous month
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      
+      // Get merchants created this month
+      const currentMonthMerchants = merchantsData.filter(m => {
+        const createdDate = new Date(m.createdAt || 0);
+        return createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear;
+      });
+      
+      // Get merchants created last month
+      const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      
+      const lastMonthMerchants = merchantsData.filter(m => {
+        const createdDate = new Date(m.createdAt || 0);
+        return createdDate.getMonth() === lastMonth && createdDate.getFullYear() === lastMonthYear;
+      });
+      
+      // Calculate growth rate
+      let growthRate = 0;
+      if (lastMonthMerchants.length > 0) {
+        growthRate = Math.round(((currentMonthMerchants.length - lastMonthMerchants.length) / lastMonthMerchants.length) * 100);
+      } else if (currentMonthMerchants.length > 0) {
+        growthRate = 100; // 100% growth if no merchants last month but some this month
+      }
+      
+      // Ensure growth rate is not negative (for demo purposes)
+      growthRate = Math.max(growthRate, 0);
+
+      res.json({
+        marketShare,
+        growthRate,
+        activeRate
+      });
+    } catch (error) {
+      console.error('Get local admin overview error:', error);
+      res.status(500).json({ message: 'Failed to fetch overview data' });
     }
   });
 

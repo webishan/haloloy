@@ -424,6 +424,21 @@ export default function LocalAdminPortal() {
     }
   });
 
+  const { data: localOverview, isLoading: isOverviewLoading, refetch: refetchOverview } = useQuery({
+    queryKey: ['/api/local-admin/overview'],
+    enabled: isAuthenticated,
+    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchOnWindowFocus: true,
+    staleTime: 10000, // Consider data stale after 10 seconds
+    queryFn: async () => {
+      const res = await fetch('/api/local-admin/overview', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch overview data');
+      return res.json();
+    }
+  });
+
   const { data: localAcquisition } = useQuery({
     queryKey: ['/api/local-admin/acquisition'],
     enabled: isAuthenticated,
@@ -1447,7 +1462,7 @@ export default function LocalAdminPortal() {
                   <div className="text-center p-4 bg-green-50 rounded-lg">
                     <p className="text-lg font-bold text-green-700">Market Share</p>
                     <p className="text-2xl font-bold text-green-600">
-                      {Math.floor(Math.random() * 30) + 15}%
+                      {isOverviewLoading ? "..." : `${localOverview?.marketShare || 0}%`}
                     </p>
                     <p className="text-sm text-green-600">Regional market coverage</p>
                   </div>
@@ -1455,7 +1470,7 @@ export default function LocalAdminPortal() {
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <p className="text-lg font-bold text-blue-700">Growth Rate</p>
                     <p className="text-2xl font-bold text-blue-600">
-                      +{Math.floor(Math.random() * 20) + 10}%
+                      {isOverviewLoading ? "..." : `+${localOverview?.growthRate || 0}%`}
                     </p>
                     <p className="text-sm text-blue-600">Month-over-month growth</p>
                   </div>
@@ -1463,7 +1478,7 @@ export default function LocalAdminPortal() {
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
                     <p className="text-lg font-bold text-purple-700">Active Rate</p>
                     <p className="text-2xl font-bold text-purple-600">
-                      {Math.floor(Math.random() * 25) + 70}%
+                      {isOverviewLoading ? "..." : `${localOverview?.activeRate || 0}%`}
                     </p>
                     <p className="text-sm text-purple-600">User engagement rate</p>
                   </div>
@@ -1540,17 +1555,17 @@ export default function LocalAdminPortal() {
                                 </TableCell>
                                 <TableCell>
                                   <Badge 
-                                    variant={transaction.type === 'credit' ? 'default' : 'destructive'}
-                                    className={transaction.type === 'credit' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}
+                                    variant={transaction.type === 'Generated' || transaction.type === 'Received' ? 'default' : 'secondary'}
+                                    className={transaction.type === 'Generated' || transaction.type === 'Received' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}
                                   >
-                                    {transaction.type === 'credit' ? 'Credit' : 'Debit'}
+                                    {transaction.type === 'Generated' ? 'Credit' : transaction.type === 'Received' ? 'Credit' : 'Debit'}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="max-w-xs truncate">
-                                  {transaction.description || (transaction.type === 'credit' ? 'Points credited' : 'Points debited')}
+                                  {transaction.description || (transaction.type === 'Generated' || transaction.type === 'Received' ? 'Points credited' : 'Points debited')}
                                 </TableCell>
-                                <TableCell className={`font-medium ${transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                                  {transaction.type === 'credit' ? '+' : '-'}{Number(transaction.amount || 0).toLocaleString()}
+                                <TableCell className={`font-medium ${transaction.type === 'Generated' || transaction.type === 'Received' ? 'text-green-600' : 'text-red-600'}`}>
+                                  {transaction.type === 'Generated' || transaction.type === 'Received' ? '+' : '-'}{Number(transaction.amount || 0).toLocaleString()}
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="bg-blue-50 text-blue-700">
