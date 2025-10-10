@@ -855,8 +855,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Customer profile found, proceed with point transfer
 
-      // Check if merchant has enough points
-      if (merchant.availablePoints < points) {
+      // Check if merchant has enough points - use loyaltyPointsBalance for consistency with dashboard
+      const merchantBalance = merchant.loyaltyPointsBalance || merchant.availablePoints || 0;
+      if (merchantBalance < points) {
+        console.log(`❌ Insufficient balance (rewards/send): ${merchantBalance} < ${points}`);
         return res.status(400).json({ message: "Insufficient points balance" });
       }
 
@@ -887,6 +889,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         availablePoints: merchant.availablePoints - points,
         totalPointsDistributed: (merchant.totalPointsDistributed || 0) + points
       });
+      
+      // CRITICAL FIX: Also update merchant wallet rewardPointBalance
+      const wallet = await storage.getMerchantWallet(merchant.id);
+      if (wallet) {
+        const newWalletBalance = wallet.rewardPointBalance - points;
+        await storage.updateMerchantWallet(merchant.id, {
+          rewardPointBalance: newWalletBalance
+        });
+        console.log(`✅ Updated merchant wallet (rewards/send): ${wallet.rewardPointBalance} → ${newWalletBalance}`);
+      } else {
+        console.log(`⚠️ Warning: Merchant wallet not found for ${merchant.id}`);
+      }
       
       // Verify the update worked
       const updatedMerchant = await storage.getMerchantByUserId(req.user.userId);

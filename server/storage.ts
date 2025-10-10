@@ -1,5 +1,5 @@
 import { 
-  users, merchants, admins, pointGenerationRequests, type User, type InsertUser, type Customer, type InsertCustomer,
+  users, merchants, admins, pointGenerationRequests, pointDistributions, customerPointTransactions, type User, type InsertUser, type Customer, type InsertCustomer,
   type Merchant, type InsertMerchant, type Product, type InsertProduct,
   type Category, type InsertCategory, type Brand, type InsertBrand,
   type Order, type InsertOrder, type RewardTransaction, type InsertRewardTransaction,
@@ -6088,10 +6088,21 @@ export class MemStorage implements IStorage {
   // ==================== MERCHANT REPORTS AND TRANSACTIONS ====================
 
   async getMerchantPointTransfers(merchantId: string): Promise<any[]> {
-    // Get all point transfers made by this merchant to customers
-    const transfers = Array.from(this.customerPointTransactions.values())
-      .filter(t => t.merchantId === merchantId && t.transactionType === 'earned')
-      .map(t => ({
+    // Get all point transfers made by this merchant to customers from DATABASE
+    console.log(`🔍 Getting merchant point transfers for merchantId: ${merchantId}`);
+    
+    try {
+      const transfers = await db.select()
+        .from(customerPointTransactions)
+        .where(and(
+          eq(customerPointTransactions.merchantId, merchantId),
+          eq(customerPointTransactions.transactionType, 'earned')
+        ))
+        .orderBy(desc(customerPointTransactions.createdAt));
+
+      console.log(`📊 Found ${transfers.length} point transfers in database for merchant ${merchantId}`);
+
+      return transfers.map(t => ({
         id: t.id,
         createdAt: t.createdAt,
         customerName: t.customerName || 'Unknown Customer',
@@ -6099,34 +6110,74 @@ export class MemStorage implements IStorage {
         points: t.points,
         description: t.description,
         status: 'completed'
-      }))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }));
+    } catch (error) {
+      console.error(`❌ Error getting merchant point transfers from database:`, error);
+      // Fallback to in-memory storage if database fails
+      const transfers = Array.from(this.customerPointTransactions.values())
+        .filter(t => t.merchantId === merchantId && t.transactionType === 'earned')
+        .map(t => ({
+          id: t.id,
+          createdAt: t.createdAt,
+          customerName: t.customerName || 'Unknown Customer',
+          customerAccountNumber: t.customerAccountNumber || 'N/A',
+          points: t.points,
+          description: t.description,
+          status: 'completed'
+        }))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return transfers;
+      return transfers;
+    }
   }
 
   async getMerchantPointsReceived(merchantId: string): Promise<any[]> {
-    // Get all points received by this merchant from local admin
-    const merchant = await this.getMerchantByUserId(merchantId);
-    if (!merchant) return [];
-
-    // For now, create sample data based on merchant's current points
-    // In a real system, this would come from actual transaction records
-    const pointsReceived = [];
+    // Get all points received by this merchant from local admin from DATABASE
+    console.log(`🔍 Getting merchant points received for merchantId: ${merchantId}`);
     
-    // If merchant has points, assume they received them from local admin
-    if (merchant.loyaltyPointsBalance > 0) {
-      pointsReceived.push({
-        id: randomUUID(),
-        date: new Date().toISOString(),
-        createdAt: new Date(),
-        source: 'Local Admin',
-        points: merchant.loyaltyPointsBalance,
-        description: 'Points allocation from local admin'
-      });
-    }
+    try {
+      // Get the merchant's user ID first
+      const merchant = await this.getMerchantByUserId(merchantId);
+      if (!merchant) return [];
 
-    return pointsReceived.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      // Get point distributions where this merchant was the recipient
+      const pointsReceived = await db.select()
+        .from(pointDistributions)
+        .where(eq(pointDistributions.toUserId, merchantId))
+        .orderBy(desc(pointDistributions.createdAt));
+
+      console.log(`📊 Found ${pointsReceived.length} points received in database for merchant ${merchantId}`);
+
+      return pointsReceived.map(pr => ({
+        id: pr.id,
+        date: pr.createdAt.toISOString(),
+        createdAt: pr.createdAt,
+        source: 'Local Admin',
+        points: pr.points,
+        description: pr.description || 'Points allocation from local admin'
+      }));
+    } catch (error) {
+      console.error(`❌ Error getting merchant points received from database:`, error);
+      // Fallback: create sample data based on merchant's current points
+      const merchant = await this.getMerchantByUserId(merchantId);
+      if (!merchant) return [];
+
+      const pointsReceived = [];
+      
+      // If merchant has points, assume they received them from local admin
+      if (merchant.loyaltyPointsBalance > 0) {
+        pointsReceived.push({
+          id: randomUUID(),
+          date: new Date().toISOString(),
+          createdAt: new Date(),
+          source: 'Local Admin',
+          points: merchant.loyaltyPointsBalance,
+          description: 'Points allocation from local admin'
+        });
+      }
+
+      return pointsReceived.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
   }
 
   async getMerchantAllTransactions(merchantId: string): Promise<any[]> {

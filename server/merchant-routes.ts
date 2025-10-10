@@ -294,8 +294,10 @@ export function setupMerchantRoutes(app: Express) {
         return res.status(404).json({ message: 'Merchant not found' });
       }
 
-      // Check if merchant has enough points
-      if (merchant.availablePoints < pointsAmount) {
+      // Check if merchant has enough points - use loyaltyPointsBalance for consistency with dashboard
+      const merchantBalance = merchant.loyaltyPointsBalance || merchant.availablePoints || 0;
+      if (merchantBalance < pointsAmount) {
+        console.log(`❌ Insufficient balance: ${merchantBalance} < ${pointsAmount}`);
         return res.status(400).json({ message: 'Insufficient points balance' });
       }
 
@@ -449,6 +451,18 @@ export function setupMerchantRoutes(app: Express) {
         availablePoints: merchant.availablePoints - pointsAmount,
         totalPointsDistributed: merchant.totalPointsDistributed + pointsAmount
       });
+      
+      // CRITICAL FIX: Also update merchant wallet rewardPointBalance
+      const wallet = await storage.getMerchantWallet(merchant.id);
+      if (wallet) {
+        const newWalletBalance = wallet.rewardPointBalance - pointsAmount;
+        await storage.updateMerchantWallet(merchant.id, {
+          rewardPointBalance: newWalletBalance
+        });
+        console.log(`✅ Updated merchant wallet: ${wallet.rewardPointBalance} → ${newWalletBalance}`);
+      } else {
+        console.log(`⚠️ Warning: Merchant wallet not found for ${merchant.id}`);
+      }
       
       // Verify the update worked
       const updatedMerchant = await storage.getMerchantByUserId(merchantId);
