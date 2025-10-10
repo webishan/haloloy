@@ -145,6 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: user.id,
           businessName: req.body.businessName || `${user.firstName}'s Store`,
           businessType: req.body.businessType || 'retail',
+          accountType: req.body.merchantType || 'merchant',
           tier: 'bronze',
           merchantReferralCode,
           referredByMerchant,
@@ -1270,6 +1271,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Expires': '0'
       });
 
+      // Debug: Log merchant accountType
+      console.log(`🔍 Merchant Profile Debug - Business: ${merchant.businessName}, AccountType: ${merchant.accountType || 'NOT SET'}`);
+      
       res.json({
         user: { ...user, password: undefined },
         merchant,

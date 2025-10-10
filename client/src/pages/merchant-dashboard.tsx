@@ -813,11 +813,11 @@ export default function MerchantDashboard() {
     balance: walletData?.commerceWalletBalance || 0,
     incomeBalance: walletData?.incomeWalletBalance || 0,
     registeredCustomers: customers?.length || 0,
-    merchantName: merchantProfile?.user?.businessName || "Tech Store",
+    merchantName: merchantProfile?.merchant?.businessName || "Tech Store",
     tier: "Star Merchant",
     joinedDate: "Aug 2025",
     referralLink: "komarce.com/ref/m001",
-    country: merchantProfile?.country || 'BD', // Default to Bangladesh
+    country: merchantProfile?.user?.country || 'BD', // Default to Bangladesh
     // Wallet breakdown
     rewardPointBalance: walletData?.rewardPointBalance || 0,
     totalPointsIssued: walletData?.totalPointsIssued || 0,
@@ -870,7 +870,16 @@ export default function MerchantDashboard() {
       {/* Welcome Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+              merchantProfile?.merchant?.accountType === 'e_merchant' 
+                ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                : 'bg-green-100 text-green-800 border border-green-200'
+            }`}>
+              {merchantProfile?.merchant?.accountType === 'e_merchant' ? 'E-Merchant' : 'Merchant'}
+            </span>
+          </div>
           <p className="text-gray-600">Here's what's happening with your business today</p>
         </div>
         <div className="flex items-center gap-4">
@@ -2786,6 +2795,49 @@ export default function MerchantDashboard() {
       } : undefined}
     >
       <div className="min-h-screen bg-gradient-to-br from-white via-red-50 to-white">
+        {/* Merchant Portal Header */}
+        <div className="bg-white border-b border-gray-200 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-md border border-gray-200">
+                  <img 
+                    src="/images/holyloy-logo.png" 
+                    alt="HOLYLOY Logo" 
+                    className="w-6 h-6 object-contain"
+                  />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">Merchant Portal</h1>
+                  <p className="text-sm text-gray-500">
+                    {merchantProfile?.merchant?.businessName || "Business Dashboard"}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-500">Account Type:</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    merchantProfile?.merchant?.accountType === 'e_merchant' 
+                      ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                      : 'bg-green-100 text-green-800 border border-green-200'
+                  }`}>
+                    {merchantProfile?.merchant?.accountType === 'e_merchant' ? 'E-Merchant' : 'Merchant'}
+                  </span>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-500">Tier:</span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                    {merchantProfile?.merchant?.tier || 'Bronze'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
       <div className="flex">
         {/* Sidebar */}
         <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
@@ -2988,8 +3040,9 @@ export default function MerchantDashboard() {
               <Menu className="w-5 h-5" />
             </Button>
           </div>
+
           
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-32">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {activeSection === 'dashboard' && renderDashboard()}
             {activeSection === 'loyalty-points' && renderLoyaltyPoints()}
             {activeSection === 'income-wallet' && renderIncomeWallet()}

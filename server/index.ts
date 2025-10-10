@@ -99,6 +99,34 @@ app.use((req, res, next) => {
     console.log("❌ Error initializing Global Number System:", error);
   }
 
+  // Migrate existing merchants to have accountType field
+  try {
+    console.log("🔄 Migrating existing merchants to include accountType...");
+    const { storage } = await import("./storage");
+    const allMerchants = await storage.getMerchants();
+    console.log(`📊 Found ${allMerchants.length} merchants to check for accountType migration`);
+    
+    let updatedCount = 0;
+    for (const merchant of allMerchants) {
+      // Check if merchant doesn't have accountType set
+      if (!merchant.accountType) {
+        await storage.updateMerchant(merchant.userId, {
+          accountType: 'merchant' // Default to 'merchant' for existing merchants
+        });
+        updatedCount++;
+        console.log(`✅ Updated merchant ${merchant.businessName} with accountType: merchant`);
+      }
+    }
+    
+    if (updatedCount > 0) {
+      console.log(`✅ Migration completed: Updated ${updatedCount} merchants with accountType field`);
+    } else {
+      console.log("✅ All merchants already have accountType field set");
+    }
+  } catch (error) {
+    console.log("⚠️  Error migrating merchants accountType:", error);
+  }
+
   // Fix missing referral codes for existing merchants
   try {
     const { storage } = await import("./storage");

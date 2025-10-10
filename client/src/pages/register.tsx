@@ -20,10 +20,11 @@ export default function Register() {
     password: '',
     confirmPassword: '',
     phone: '',
-    country: 'BD',
+    country: 'AE',
     role: 'customer',
     businessName: '',
-    referralCode: ''
+    referralCode: '',
+    merchantType: 'merchant'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -103,7 +104,8 @@ export default function Register() {
         country: formData.country,
         role: formData.role,
         businessName: formData.businessName || undefined,
-        referralCode: formData.referralCode || undefined
+        referralCode: formData.referralCode || undefined,
+        merchantType: formData.merchantType || undefined
       };
 
       await register(registrationData);
@@ -214,17 +216,32 @@ export default function Register() {
                 </div>
 
                 {formData.role === 'merchant' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="businessName" className="text-sm font-medium text-gray-700">Business Name</Label>
-                    <Input
-                      id="businessName"
-                      value={formData.businessName}
-                      onChange={(e) => handleChange('businessName', e.target.value)}
-                      placeholder="Your business name"
-                      className="h-11 w-full"
-                      disabled={loading}
-                    />
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="businessName" className="text-sm font-medium text-gray-700">Business Name</Label>
+                      <Input
+                        id="businessName"
+                        value={formData.businessName}
+                        onChange={(e) => handleChange('businessName', e.target.value)}
+                        placeholder="Your business name"
+                        className="h-11 w-full"
+                        disabled={loading}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="merchantType" className="text-sm font-medium text-gray-700">Merchant Type</Label>
+                      <Select value={formData.merchantType} onValueChange={(value) => handleChange('merchantType', value)}>
+                        <SelectTrigger className="h-11 w-full [&>svg]:text-red-500">
+                          <SelectValue placeholder="Select merchant type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="merchant">Merchant</SelectItem>
+                          <SelectItem value="e_merchant">E-Merchant</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
                 )}
 
                 <div className="space-y-2">
@@ -247,10 +264,23 @@ export default function Register() {
                       <SelectValue placeholder="Select your country" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="BD">🇧🇩 Bangladesh</SelectItem>
-                      <SelectItem value="MY">🇲🇾 Malaysia</SelectItem>
                       <SelectItem value="AE">🇦🇪 UAE</SelectItem>
+                      <SelectItem value="BD">🇧🇩 Bangladesh</SelectItem>
+                      <SelectItem value="BH">🇧🇭 Bahrain</SelectItem>
+                      <SelectItem value="ID">🇮🇩 Indonesia</SelectItem>
+                      <SelectItem value="IN">🇮🇳 India</SelectItem>
+                      <SelectItem value="KE">🇰🇪 Kenya</SelectItem>
+                      <SelectItem value="LK">🇱🇰 Sri Lanka</SelectItem>
+                      <SelectItem value="MU">🇲🇺 Mauritius</SelectItem>
+                      <SelectItem value="MY">🇲🇾 Malaysia</SelectItem>
+                      <SelectItem value="PK">🇵🇰 Pakistan</SelectItem>
                       <SelectItem value="PH">🇵🇭 Philippines</SelectItem>
+                      <SelectItem value="QA">🇶🇦 Qatar</SelectItem>
+                      <SelectItem value="RW">🇷🇼 Rwanda</SelectItem>
+                      <SelectItem value="SG">🇸🇬 Singapore</SelectItem>
+                      <SelectItem value="TH">🇹🇭 Thailand</SelectItem>
+                      <SelectItem value="TR">🇹🇷 Turkey</SelectItem>
+                      <SelectItem value="UG">🇺🇬 Uganda</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
