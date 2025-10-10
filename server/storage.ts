@@ -1063,7 +1063,15 @@ export class MemStorage implements IStorage {
   }
 
   async getMerchantByUserId(userId: string): Promise<Merchant | undefined> {
+    console.log(`🔍 getMerchantByUserId called for userId: ${userId}`);
     const result = await db.select().from(merchants).where(eq(merchants.userId, userId)).limit(1);
+    console.log(`🔍 getMerchantByUserId result:`, result[0] ? {
+      id: result[0].id,
+      userId: result[0].userId,
+      businessName: result[0].businessName,
+      loyaltyPointsBalance: result[0].loyaltyPointsBalance,
+      availablePoints: result[0].availablePoints
+    } : 'No merchant found');
     return result[0];
   }
 
@@ -1125,11 +1133,29 @@ export class MemStorage implements IStorage {
     const updatedMerchant = { ...merchant, ...merchantUpdate };
     this.merchants.set(merchant.id, updatedMerchant);
     
-    console.log(`✅ Updated merchant ${merchant.businessName}:`, {
-      loyaltyPointsBalance: updatedMerchant.loyaltyPointsBalance,
-      availablePoints: updatedMerchant.availablePoints,
-      totalPointsDistributed: updatedMerchant.totalPointsDistributed
-    });
+    // CRITICAL FIX: Also update the database
+    try {
+      console.log(`🔄 Attempting to update merchant ${merchant.businessName} in database:`, {
+        userId,
+        merchantUpdate,
+        merchantId: merchant.id
+      });
+      
+      const updateResult = await db.update(merchants)
+        .set(merchantUpdate)
+        .where(eq(merchants.userId, userId))
+        .returning();
+        
+      console.log(`✅ Database update result:`, updateResult);
+      console.log(`✅ Updated merchant ${merchant.businessName} in database:`, {
+        loyaltyPointsBalance: updatedMerchant.loyaltyPointsBalance,
+        availablePoints: updatedMerchant.availablePoints,
+        totalPointsDistributed: updatedMerchant.totalPointsDistributed
+      });
+    } catch (error) {
+      console.error(`❌ Error updating merchant ${merchant.businessName} in database:`, error);
+      // Continue with in-memory update even if database update fails
+    }
     
     return updatedMerchant;
   }

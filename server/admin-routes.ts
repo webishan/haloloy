@@ -1328,7 +1328,7 @@ export function setupAdminRoutes(app: Express) {
       const startingBalance = (admin?.pointsBalance || 0) - totalCredits + totalDebits;
       
       let runningBalance = startingBalance;
-      const transactionHistory = sortedDistributions.map((dist) => {
+      const transactionHistory = await Promise.all(sortedDistributions.map(async (dist) => {
         const isCredit = dist.toUserId === userId;
         const isDebit = dist.fromUserId === userId;
         
@@ -1349,6 +1349,22 @@ export function setupAdminRoutes(app: Express) {
           displayType = 'Distributed';
         }
         
+        // Get merchant information for distributed transactions
+        let recipientName = null;
+        if (isDebit && dist.toUserId) {
+          // Check if recipient is a merchant
+          const merchantData = await db.select().from(merchants).where(eq(merchants.userId, dist.toUserId)).limit(1);
+          if (merchantData.length > 0) {
+            recipientName = merchantData[0].businessName;
+          } else {
+            // Check if recipient is an admin
+            const adminData = await db.select().from(admins).where(eq(admins.userId, dist.toUserId)).limit(1);
+            if (adminData.length > 0) {
+              recipientName = adminData[0].username || 'Admin';
+            }
+          }
+        }
+        
         return {
           id: dist.id,
           type: displayType,
@@ -1356,9 +1372,13 @@ export function setupAdminRoutes(app: Express) {
           description: dist.description,
           createdAt: dist.createdAt,
           status: dist.status,
-          distributionType: dist.distributionType
+          distributionType: dist.distributionType,
+          recipientName: recipientName
         };
-      }).reverse(); // Reverse to show most recent first
+      }));
+      
+      // Reverse to show most recent first
+      transactionHistory.reverse();
       
       // Calculate totals correctly
       const calculatedTotalCredits = transactionHistory
@@ -1570,7 +1590,7 @@ export function setupAdminRoutes(app: Express) {
       // Filter orders by country (assuming orders have merchant info)
       const countryOrders = [];
       for (const order of ordersData) {
-        const merchant = merchantsData.find(m => m.id === order.merchantId);
+        const merchant = merchantsData.find(m => m.merchants.id === order.merchantId);
         if (merchant) {
           countryOrders.push(order);
         }
@@ -1578,7 +1598,7 @@ export function setupAdminRoutes(app: Express) {
 
       // Calculate analytics
       const totalSales = countryOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-      const activeMerchants = merchantsData.filter(m => m.isActive).length;
+      const activeMerchants = merchantsData.filter(m => m.merchants.isActive).length;
       const activeCustomers = customersData.filter(c => c.isActive).length;
       
       const salesPerformance = merchantsData.length > 0 ? Math.round((activeMerchants / merchantsData.length) * 100) : 0;
@@ -1699,14 +1719,14 @@ export function setupAdminRoutes(app: Express) {
       // Filter orders by country
       const countryOrders = [];
       for (const order of ordersData) {
-        const merchant = merchantsData.find(m => m.id === order.merchantId);
+        const merchant = merchantsData.find(m => m.merchants.id === order.merchantId);
         if (merchant) {
           countryOrders.push(order);
         }
       }
 
       const totalSales = countryOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-      const distributedPoints = merchantsData.reduce((sum, m) => sum + (m.loyaltyPointsBalance || 0), 0);
+      const distributedPoints = merchantsData.reduce((sum, m) => sum + (m.merchants.loyaltyPointsBalance || 0), 0);
       const totalPoints = customersData.reduce((sum, c) => sum + (c.totalPoints || 0), 0);
       
       res.json({

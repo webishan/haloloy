@@ -1616,6 +1616,7 @@ export default function LocalAdminPortal() {
                               <TableHead>Type</TableHead>
                               <TableHead>Description</TableHead>
                               <TableHead>Amount</TableHead>
+                              <TableHead>Merchant</TableHead>
                               <TableHead>Status</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -1638,6 +1639,12 @@ export default function LocalAdminPortal() {
                                 </TableCell>
                                 <TableCell className={`font-medium ${transaction.type === 'Generated' || transaction.type === 'Received' ? 'text-green-600' : 'text-red-600'}`}>
                                   {transaction.type === 'Generated' || transaction.type === 'Received' ? '+' : '-'}{Number(transaction.amount || 0).toLocaleString()}
+                                </TableCell>
+                                <TableCell className="text-sm text-gray-600">
+                                  {transaction.type === 'Distributed' && transaction.recipientName ? 
+                                    transaction.recipientName : 
+                                    (transaction.type === 'Distributed' ? 'Unknown Merchant' : '-')
+                                  }
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="bg-blue-50 text-blue-700">
@@ -2013,7 +2020,7 @@ export default function LocalAdminPortal() {
                               <SelectItem 
                                 key={merchant.id || merchant.userId} 
                                 value={merchant.userId || merchant.id}
-                                className="text-gray-900 hover:bg-gray-100 focus:bg-gray-100 cursor-pointer"
+                                className="text-gray-900 hover:bg-blue-50 hover:text-blue-900 focus:bg-blue-50 focus:text-blue-900 data-[highlighted]:bg-blue-50 data-[highlighted]:text-blue-900 data-[state=checked]:bg-blue-100 data-[state=checked]:text-blue-900 cursor-pointer"
                               >
                                 {merchant.businessName || `Merchant ${merchant.id?.slice(0, 8)}`} - {merchant.tier || 'Bronze'} Tier
                               </SelectItem>
