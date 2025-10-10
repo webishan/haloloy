@@ -65,24 +65,41 @@ export async function seedTestData() {
     console.log("🔄 Force refreshing data - clearing existing merchants and customers...");
 
     // Create Global Admin
-    const hashedGlobalPassword = await bcrypt.hash("global123", 10);
+    const hashedGlobalPassword = await bcrypt.hash("holyloy123", 10);
     const globalAdmin = await storage.createUser({
       username: "global_admin",
-      email: "global@holyloy.com",
+      email: "tkhanishan@gmail.com",
       password: hashedGlobalPassword,
       firstName: "Global",
       lastName: "Administrator",
       role: "global_admin",
-      country: "US"
+      country: "BD",
+      phone: "+8801871648461"
     });
 
     // Create Local Admins for different countries
     const localAdmins = [];
     const countries = [
-      { code: "AE", name: "UAE", email: "ae@holyloy.com" },
+      // Africa
+      { code: "KE", name: "Kenya", email: "ke@holyloy.com" },
+      { code: "MU", name: "Mauritius", email: "mu@holyloy.com" },
+      { code: "RW", name: "Rwanda", email: "rw@holyloy.com" },
+      { code: "UG", name: "Uganda", email: "ug@holyloy.com" },
+      
+      // Asia & Middle East
+      { code: "BH", name: "Bahrain", email: "bh@holyloy.com" },
       { code: "BD", name: "Bangladesh", email: "bd@holyloy.com" },
+      { code: "IN", name: "India", email: "in@holyloy.com" },
+      { code: "ID", name: "Indonesia", email: "id@holyloy.com" },
       { code: "MY", name: "Malaysia", email: "my@holyloy.com" },
-      { code: "PH", name: "Philippines", email: "ph@holyloy.com" }
+      { code: "PK", name: "Pakistan", email: "pk@holyloy.com" },
+      { code: "PH", name: "Philippines", email: "ph@holyloy.com" },
+      { code: "QA", name: "Qatar", email: "qa@holyloy.com" },
+      { code: "SG", name: "Singapore", email: "sg@holyloy.com" },
+      { code: "LK", name: "Sri Lanka", email: "lk@holyloy.com" },
+      { code: "TH", name: "Thailand", email: "th@holyloy.com" },
+      { code: "TR", name: "Turkey", email: "tr@holyloy.com" },
+      { code: "AE", name: "UAE", email: "ae@holyloy.com" }
     ];
 
     const hashedLocalPassword = await bcrypt.hash("local123", 10);
@@ -121,8 +138,8 @@ export async function seedTestData() {
     console.log("🏪 Creating persistent merchant account...");
     const hashedMerchantPassword = await bcrypt.hash("ishan007", 10);
     const merchantUser = await storage.createUser({
-      username: "tkhanishan",
-      email: "tkhanishan@gmail.com",
+      username: "tkhanishan_merchant",
+      email: "merchant@holyloy.com",
       password: hashedMerchantPassword,
       firstName: "Ishan",
       lastName: "Merchant",

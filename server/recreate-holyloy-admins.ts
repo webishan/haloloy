@@ -42,45 +42,39 @@ async function recreateHolyloyAdmins() {
       country: 'BD'
     };
     
-    // Create 4 local admins
-    const localAdmins = [
-      {
-        username: 'local_admin_1',
-        email: 'local1@holyloy.com',
-        password: localPassword,
-        firstName: 'Local',
-        lastName: 'Admin 1',
-        role: 'local_admin',
-        country: 'BD'
-      },
-      {
-        username: 'local_admin_2',
-        email: 'local2@holyloy.com',
-        password: localPassword,
-        firstName: 'Local',
-        lastName: 'Admin 2',
-        role: 'local_admin',
-        country: 'BD'
-      },
-      {
-        username: 'local_admin_3',
-        email: 'local3@holyloy.com',
-        password: localPassword,
-        firstName: 'Local',
-        lastName: 'Admin 3',
-        role: 'local_admin',
-        country: 'BD'
-      },
-      {
-        username: 'local_admin_4',
-        email: 'local4@holyloy.com',
-        password: localPassword,
-        firstName: 'Local',
-        lastName: 'Admin 4',
-        role: 'local_admin',
-        country: 'BD'
-      }
+    // Create 17 local admins for different countries
+    const countries = [
+      // Africa
+      { code: "KE", name: "Kenya", email: "ke@holyloy.com" },
+      { code: "MU", name: "Mauritius", email: "mu@holyloy.com" },
+      { code: "RW", name: "Rwanda", email: "rw@holyloy.com" },
+      { code: "UG", name: "Uganda", email: "ug@holyloy.com" },
+      
+      // Asia & Middle East
+      { code: "BH", name: "Bahrain", email: "bh@holyloy.com" },
+      { code: "BD", name: "Bangladesh", email: "bd@holyloy.com" },
+      { code: "IN", name: "India", email: "in@holyloy.com" },
+      { code: "ID", name: "Indonesia", email: "id@holyloy.com" },
+      { code: "MY", name: "Malaysia", email: "my@holyloy.com" },
+      { code: "PK", name: "Pakistan", email: "pk@holyloy.com" },
+      { code: "PH", name: "Philippines", email: "ph@holyloy.com" },
+      { code: "QA", name: "Qatar", email: "qa@holyloy.com" },
+      { code: "SG", name: "Singapore", email: "sg@holyloy.com" },
+      { code: "LK", name: "Sri Lanka", email: "lk@holyloy.com" },
+      { code: "TH", name: "Thailand", email: "th@holyloy.com" },
+      { code: "TR", name: "Turkey", email: "tr@holyloy.com" },
+      { code: "AE", name: "UAE", email: "ae@holyloy.com" }
     ];
+
+    const localAdmins = countries.map(country => ({
+      username: `local_admin_${country.code.toLowerCase()}`,
+      email: country.email,
+      password: localPassword,
+      firstName: country.name,
+      lastName: 'Admin',
+      role: 'local_admin',
+      country: country.code
+    }));
     
     // Insert all users
     const allUsers = [globalAdmin, ...localAdmins];
@@ -118,11 +112,10 @@ async function recreateHolyloyAdmins() {
     console.log('   Email: global@holyloy.com');
     console.log('   Password: holyloy123');
     console.log('');
-    console.log('🏢 Local Admins (4 accounts):');
-    console.log('   Email: local1@holyloy.com | Password: local123');
-    console.log('   Email: local2@holyloy.com | Password: local123');
-    console.log('   Email: local3@holyloy.com | Password: local123');
-    console.log('   Email: local4@holyloy.com | Password: local123');
+    console.log('🏢 Local Admins (17 countries):');
+    countries.forEach(country => {
+      console.log(`   ${country.name}: ${country.email} | Password: local123`);
+    });
     console.log('');
     console.log(`✅ Verification: ${finalGlobalAdmins.length} global admin, ${finalLocalAdmins.length} local admins`);
     

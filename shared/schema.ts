@@ -12,7 +12,7 @@ export const users = pgTable("users", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   role: text("role", { enum: ["customer", "merchant", "admin", "global_admin", "local_admin"] }).notNull().default("customer"),
-  country: text("country").notNull().default("BD"), // BD, MY, AE, PH
+  country: text("country").notNull().default("BD"), // KE, MU, RW, UG, BH, BD, IN, ID, MY, PK, PH, QA, SG, LK, TH, TR, AE
   phone: text("phone"),
   address: text("address"),
   dateOfBirth: text("date_of_birth"),
@@ -275,6 +275,8 @@ export const admins = pgTable("admins", {
   totalPointsDistributed: integer("total_points_distributed").notNull().default(0),
   permissions: jsonb("permissions").default([]),
   isActive: boolean("is_active").notNull().default(true),
+  mustResetPassword: boolean("must_reset_password").notNull().default(false),
+  lastPasswordReset: timestamp("last_password_reset"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

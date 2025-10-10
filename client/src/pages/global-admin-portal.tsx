@@ -26,6 +26,7 @@ import PointsManagementPanel from "@/components/PointsManagementPanel";
 import { useStorageListener } from "@/hooks/use-storage-listener";
 import { NotificationProvider } from "@/hooks/use-notifications";
 import NotificationBadge, { NotificationWrapper, MessageNotificationBadge } from "@/components/NotificationBadge";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 
 interface GlobalAdminUser {
   id: string;
@@ -623,6 +624,25 @@ export default function GlobalAdminPortal() {
     email: "",
     password: ""
   });
+  
+  // Password reset state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  
+  // Debug logging
+  console.log('Current showForgotPassword state:', showForgotPassword);
+  const [forgotPasswordStep, setForgotPasswordStep] = useState<'email' | 'verification' | 'reset'>('email');
+  const [forgotPasswordForm, setForgotPasswordForm] = useState({
+    email: "",
+    phone: "",
+    verificationCode: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationMethod, setVerificationMethod] = useState<'email' | 'phone'>('email');
   const [showPassword, setShowPassword] = useState(false);
 
   // Points form states
@@ -746,8 +766,11 @@ export default function GlobalAdminPortal() {
       });
       
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+        const errorData = await response.json();
+        if (errorData.requiresPasswordReset) {
+          throw new Error('PASSWORD_RESET_REQUIRED');
+        }
+        throw new Error(errorData.message || 'Invalid credentials');
       }
       
       return response.json();
@@ -764,11 +787,20 @@ export default function GlobalAdminPortal() {
       }
     },
     onError: (error: Error) => {
-      toast({ 
-        title: "Login Failed", 
-        description: error.message || "Invalid credentials",
-        variant: "destructive" 
-      });
+      if (error.message === 'PASSWORD_RESET_REQUIRED') {
+        toast({ 
+          title: "Password Reset Required", 
+          description: "You must reset your password before logging in. Please use the 'Forgot Password?' option.",
+          variant: "destructive" 
+        });
+        setShowForgotPassword(true);
+      } else {
+        toast({ 
+          title: "Login Failed", 
+          description: error.message || "Invalid credentials",
+          variant: "destructive" 
+        });
+      }
     }
   });
 
@@ -916,6 +948,27 @@ export default function GlobalAdminPortal() {
     retry: false
   });
 
+  // Global Analytics Data
+  const { data: globalAnalytics, isLoading: analyticsLoading } = useQuery({
+    queryKey: ['/api/admin/global/analytics', timeFilter],
+    enabled: isAuthenticated,
+    refetchInterval: 60000, // Refresh every minute
+    queryFn: async () => {
+      const token = localStorage.getItem('globalAdminToken');
+      if (!token) throw new Error('No authentication token');
+      
+      const response = await fetch(`/api/admin/global/analytics?period=${timeFilter}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch analytics data');
+      }
+      
+      return response.json();
+    }
+  });
+
   // Point generation mutation (global admin only)
   const addPointsMutation = useMutation({
     mutationFn: async (data: { points: number; description: string }) => {
@@ -1021,6 +1074,256 @@ export default function GlobalAdminPortal() {
     window.location.href = "/";
   };
 
+  // Password reset functions
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPasswordForm.email) {
+      toast({ title: "Error", description: "Please enter your email address", variant: "destructive" });
+      return;
+    }
+    
+    if (verificationMethod === 'phone' && !forgotPasswordForm.phone) {
+      toast({ title: "Error", description: "Please enter your phone number", variant: "destructive" });
+      return;
+    }
+    
+    setForgotPasswordLoading(true);
+    try {
+      const response = await fetch('/api/admin/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: forgotPasswordForm.email,
+          phone: forgotPasswordForm.phone,
+          method: verificationMethod
+        })
+      });
+      
+      if (response.ok) {
+        setVerificationSent(true);
+        setForgotPasswordStep('verification');
+        toast({ title: "Success", description: `Verification code sent to your ${verificationMethod}` });
+      } else {
+        const errorData = await response.json();
+        toast({ title: "Error", description: errorData.message || "Failed to send verification code", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Network error. Please try again.", variant: "destructive" });
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
+  const handleVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPasswordForm.verificationCode) {
+      toast({ title: "Error", description: "Please enter the verification code", variant: "destructive" });
+      return;
+    }
+    
+    setVerificationLoading(true);
+    try {
+      const response = await fetch('/api/admin/verify-reset-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: forgotPasswordForm.email,
+          phone: forgotPasswordForm.phone,
+          code: forgotPasswordForm.verificationCode,
+          method: verificationMethod
+        })
+      });
+      
+      if (response.ok) {
+        setForgotPasswordStep('reset');
+        toast({ title: "Success", description: "Code verified. Please set your new password." });
+      } else {
+        const errorData = await response.json();
+        toast({ title: "Error", description: errorData.message || "Invalid verification code", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Network error. Please try again.", variant: "destructive" });
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (forgotPasswordForm.newPassword !== forgotPasswordForm.confirmPassword) {
+      toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
+      return;
+    }
+    
+    if (forgotPasswordForm.newPassword.length < 8) {
+      toast({ title: "Error", description: "Password must be at least 8 characters long", variant: "destructive" });
+      return;
+    }
+    
+    setResetLoading(true);
+    try {
+      const response = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: forgotPasswordForm.email,
+          phone: forgotPasswordForm.phone,
+          code: forgotPasswordForm.verificationCode,
+          newPassword: forgotPasswordForm.newPassword,
+          method: verificationMethod
+        })
+      });
+      
+      if (response.ok) {
+        toast({ title: "Success", description: "Password reset successfully. Please login with your new password." });
+        setShowForgotPassword(false);
+        setForgotPasswordStep('email');
+        setForgotPasswordForm({
+          email: "",
+          phone: "",
+          verificationCode: "",
+          newPassword: "",
+          confirmPassword: ""
+        });
+        setVerificationSent(false);
+      } else {
+        toast({ title: "Error", description: "Failed to reset password", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Network error. Please try again.", variant: "destructive" });
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const resetForgotPasswordFlow = () => {
+    setShowForgotPassword(false);
+    setForgotPasswordStep('email');
+    setForgotPasswordForm({
+      email: "",
+      phone: "",
+      verificationCode: "",
+      newPassword: "",
+      confirmPassword: ""
+    });
+    setVerificationSent(false);
+  };
+
+  // Export functionality
+  const exportData = (format: 'csv' | 'excel' | 'pdf') => {
+    if (!transactionHistory?.transactions) {
+      toast({
+        title: "No data to export",
+        description: "There are no transactions to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const transactions = transactionHistory.transactions;
+    const timestamp = new Date().toISOString().split('T')[0];
+    
+    if (format === 'csv') {
+      const headers = ['Date', 'Type', 'Description', 'Amount', 'Balance After', 'Status'];
+      const csvContent = [
+        headers.join(','),
+        ...transactions.map(t => [
+          new Date(t.createdAt).toLocaleString(),
+          t.type === 'credit' ? 'Generated' : 'Distributed',
+          `"${t.description || 'No description'}"`,
+          t.amount || 0,
+          t.balanceAfter || 0,
+          'Completed'
+        ].join(','))
+      ].join('\n');
+      
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `point-history-${timestamp}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } else if (format === 'excel') {
+      const headers = ['Date', 'Type', 'Description', 'Amount', 'Balance After', 'Status'];
+      const csvContent = [
+        headers.join('\t'),
+        ...transactions.map(t => [
+          new Date(t.createdAt).toLocaleString(),
+          t.type === 'credit' ? 'Generated' : 'Distributed',
+          t.description || 'No description',
+          t.amount || 0,
+          t.balanceAfter || 0,
+          'Completed'
+        ].join('\t'))
+      ].join('\n');
+      
+      const blob = new Blob([csvContent], { type: 'application/vnd.ms-excel' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `point-history-${timestamp}.xls`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } else if (format === 'pdf') {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const htmlContent = `
+          <html>
+            <head>
+              <title>Point History Report</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                .header { text-align: center; margin-bottom: 20px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>Point History Report</h1>
+                <p>Generated on: ${new Date().toLocaleString()}</p>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Balance After</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${transactions.map(t => `
+                    <tr>
+                      <td>${new Date(t.createdAt).toLocaleString()}</td>
+                      <td>${t.type === 'credit' ? 'Generated' : 'Distributed'}</td>
+                      <td>${t.description || 'No description'}</td>
+                      <td>${t.amount || 0}</td>
+                      <td>${t.balanceAfter || 0}</td>
+                      <td>Completed</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </body>
+          </html>
+        `;
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+    
+    toast({
+      title: "Export successful",
+      description: `Point history exported as ${format.toUpperCase()} file.`,
+    });
+  };
+
   const handleAddPoints = () => {
     if (!addPointsForm.points || !addPointsForm.description) {
       toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
@@ -1083,6 +1386,193 @@ export default function GlobalAdminPortal() {
     );
   }
 
+  // Password Reset Forms - Check this BEFORE authentication check
+  if (showForgotPassword) {
+    console.log('Rendering password reset form');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg shadow-2xl border-0">
+          <CardHeader className="text-center bg-gradient-to-r from-red-600 to-red-500 text-white rounded-t-lg">
+            <div className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg">
+              <img 
+                src="/images/holyloy-logo.png" 
+                alt="HOLYLOY Logo" 
+                className="w-14 h-14 object-contain"
+              />
+            </div>
+            <CardTitle className="text-3xl font-bold">
+              {forgotPasswordStep === 'email' && 'Reset Password'}
+              {forgotPasswordStep === 'verification' && 'Verify Code'}
+              {forgotPasswordStep === 'reset' && 'Set New Password'}
+            </CardTitle>
+            <p className="text-red-100">
+              {forgotPasswordStep === 'email' && 'Enter your email to receive verification code'}
+              {forgotPasswordStep === 'verification' && 'Enter the verification code sent to your email'}
+              {forgotPasswordStep === 'reset' && 'Create a new secure password'}
+            </p>
+          </CardHeader>
+          <CardContent className="p-8">
+            {forgotPasswordStep === 'email' && (
+              <form onSubmit={handleForgotPassword} className="space-y-6">
+                <div>
+                  <Label className="text-sm font-semibold text-gray-700">Verification Method</Label>
+                  <div className="mt-2 flex space-x-4">
+                    <Button
+                      type="button"
+                      variant={verificationMethod === 'email' ? 'default' : 'outline'}
+                      onClick={() => setVerificationMethod('email')}
+                      className={`flex-1 ${verificationMethod === 'email' ? 'bg-red-600 text-white hover:bg-red-700' : 'border-red-200 text-red-600 hover:bg-red-50'}`}
+                    >
+                      📧 Email
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={verificationMethod === 'phone' ? 'default' : 'outline'}
+                      onClick={() => setVerificationMethod('phone')}
+                      className={`flex-1 ${verificationMethod === 'phone' ? 'bg-red-600 text-white hover:bg-red-700' : 'border-red-200 text-red-600 hover:bg-red-50'}`}
+                    >
+                      📱 SMS
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="reset-email" className="text-sm font-semibold text-gray-700">
+                    {verificationMethod === 'email' ? 'Email Address' : 'Phone Number'}
+                  </Label>
+                  {verificationMethod === 'email' ? (
+                    <Input
+                      id="reset-email"
+                      type="email"
+                      value={forgotPasswordForm.email}
+                      onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, email: e.target.value})}
+                      className="mt-1"
+                      placeholder="Enter your email address"
+                      required
+                    />
+                  ) : (
+                    <Input
+                      id="reset-phone"
+                      type="tel"
+                      value={forgotPasswordForm.phone}
+                      onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, phone: e.target.value})}
+                      className="mt-1"
+                      placeholder="Enter your phone number"
+                      required
+                    />
+                  )}
+                </div>
+
+                <div className="flex space-x-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetForgotPasswordFlow}
+                    className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-red-600 text-white hover:bg-red-700"
+                    disabled={forgotPasswordLoading}
+                  >
+                    {forgotPasswordLoading ? "Sending..." : "Send Verification Code"}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {forgotPasswordStep === 'verification' && (
+              <form onSubmit={handleVerification} className="space-y-6">
+                <div>
+                  <Label htmlFor="verification-code" className="text-sm font-semibold text-gray-700">
+                    Verification Code
+                  </Label>
+                  <Input
+                    id="verification-code"
+                    type="text"
+                    value={forgotPasswordForm.verificationCode}
+                    onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, verificationCode: e.target.value})}
+                    className="mt-1"
+                    placeholder="Enter the 6-digit code"
+                    maxLength={6}
+                    required
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Enter the verification code sent to {verificationMethod === 'email' ? forgotPasswordForm.email : forgotPasswordForm.phone}
+                  </p>
+                </div>
+
+                <div className="flex space-x-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setForgotPasswordStep('email')}
+                    className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-red-600 text-white hover:bg-red-700"
+                    disabled={verificationLoading}
+                  >
+                    {verificationLoading ? "Verifying..." : "Verify Code"}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {forgotPasswordStep === 'reset' && (
+              <form onSubmit={handlePasswordReset} className="space-y-6">
+                <div>
+                  <Label htmlFor="new-password" className="text-sm font-semibold text-gray-700">
+                    New Password
+                  </Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    value={forgotPasswordForm.newPassword}
+                    onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, newPassword: e.target.value})}
+                    className="mt-1"
+                    placeholder="Enter your new password"
+                    required
+                    minLength={8}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="confirm-password" className="text-sm font-semibold text-gray-700">
+                    Confirm New Password
+                  </Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    value={forgotPasswordForm.confirmPassword}
+                    onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, confirmPassword: e.target.value})}
+                    className="mt-1"
+                    placeholder="Confirm your new password"
+                    required
+                    minLength={8}
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full bg-red-600 text-white hover:bg-red-700"
+                  disabled={resetLoading}
+                >
+                  {resetLoading ? "Resetting Password..." : "Reset Password"}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 flex items-center justify-center p-4">
@@ -1107,7 +1597,7 @@ export default function GlobalAdminPortal() {
                   type="email"
                   value={loginForm.email}
                   onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
-                  placeholder="global@holyloy.com"
+                  placeholder="tkhanishan@gmail.com"
                   className="mt-2 h-12 w-full"
                   required
                   data-testid="input-global-admin-email"
@@ -1153,9 +1643,25 @@ export default function GlobalAdminPortal() {
               </Button>
             </form>
             
+            <div className="mt-4 text-center">
+              <Button
+                type="button"
+                variant="link"
+                className="text-red-600 hover:text-red-700 font-medium"
+                onClick={() => {
+                  console.log('Forgot Password button clicked');
+                  setShowForgotPassword(true);
+                  console.log('showForgotPassword set to true');
+                }}
+                data-testid="button-forgot-password"
+              >
+                Forgot Password?
+              </Button>
+            </div>
+            
             <div className="mt-6 text-center text-sm text-gray-500">
               <p>Test Credentials:</p>
-              <p>Email: global@holyloy.com</p>
+              <p>Email: tkhanishan@gmail.com</p>
               <p>Password: holyloy123</p>
             </div>
           </CardContent>
@@ -1249,203 +1755,291 @@ export default function GlobalAdminPortal() {
           <ScrollArea className="h-[calc(100vh-4rem)]">
             <nav className="p-4 space-y-2 text-gray-700">
               <Button
-                variant={activeTab === "dashboard" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "dashboard" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "dashboard" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "dashboard" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("dashboard")}
               >
-                <BarChart3 className={`w-4 h-4 mr-2 ${activeTab === "dashboard" ? "text-white" : "text-red-600"}`} />
+                <BarChart3 className={`w-4 h-4 mr-2 ${activeTab === "dashboard" ? "text-white" : "text-gray-600"}`} />
                 Dashboard Overview
               </Button>
               
               <Button
-                variant={activeTab === "merchants" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "merchants" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "merchants" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "merchants" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("merchants")}
               >
-                <Building2 className={`w-4 h-4 mr-2 ${activeTab === "merchants" ? "text-white" : "text-red-600"}`} />
+                <Building2 className={`w-4 h-4 mr-2 ${activeTab === "merchants" ? "text-white" : "text-gray-600"}`} />
                 Global Merchants
               </Button>
               
               <Button
-                variant={activeTab === "customers" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "customers" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "customers" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "customers" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("customers")}
               >
-                <Users className={`w-4 h-4 mr-2 ${activeTab === "customers" ? "text-white" : "text-red-600"}`} />
+                <Users className={`w-4 h-4 mr-2 ${activeTab === "customers" ? "text-white" : "text-gray-600"}`} />
                 Global Customers
               </Button>
               
               <Button
-                variant={activeTab === "cofounder-staff" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "cofounder-staff" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "cofounder-staff" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "cofounder-staff" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("cofounder-staff")}
               >
-                <UserCheck className={`w-4 h-4 mr-2 ${activeTab === "cofounder-staff" ? "text-white" : "text-red-600"}`} />
+                <UserCheck className={`w-4 h-4 mr-2 ${activeTab === "cofounder-staff" ? "text-white" : "text-gray-600"}`} />
                 Co-Founder & Staff
               </Button>
               
               <Button
-                variant={activeTab === "reward-points" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "reward-points" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "reward-points" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "reward-points" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("reward-points")}
               >
-                <Award className={`w-4 h-4 mr-2 ${activeTab === "reward-points" ? "text-white" : "text-red-600"}`} />
+                <Award className={`w-4 h-4 mr-2 ${activeTab === "reward-points" ? "text-white" : "text-gray-600"}`} />
                 Reward Points
               </Button>
               
               <Button
-                variant={activeTab === "withdrawals" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "withdrawals" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "withdrawals" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "withdrawals" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("withdrawals")}
               >
-                <CreditCard className={`w-4 h-4 mr-2 ${activeTab === "withdrawals" ? "text-white" : "text-red-600"}`} />
+                <CreditCard className={`w-4 h-4 mr-2 ${activeTab === "withdrawals" ? "text-white" : "text-gray-600"}`} />
                 Withdrawals
               </Button>
               
               <Button
-                variant={activeTab === "commission-settings" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "commission-settings" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "commission-settings" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "commission-settings" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("commission-settings")}
               >
-                <Percent className={`w-4 h-4 mr-2 ${activeTab === "commission-settings" ? "text-white" : "text-red-600"}`} />
+                <Percent className={`w-4 h-4 mr-2 ${activeTab === "commission-settings" ? "text-white" : "text-gray-600"}`} />
                 Commission Settings
               </Button>
               
               <Button
-                variant={activeTab === "cashback-management" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "cashback-management" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "cashback-management" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "cashback-management" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("cashback-management")}
               >
-                <DollarSign className={`w-4 h-4 mr-2 ${activeTab === "cashback-management" ? "text-white" : "text-red-600"}`} />
+                <DollarSign className={`w-4 h-4 mr-2 ${activeTab === "cashback-management" ? "text-white" : "text-gray-600"}`} />
                 Cashback Management
               </Button>
               
               <Button
-                variant={activeTab === "merchant-list" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "merchant-list" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "merchant-list" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "merchant-list" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("merchant-list")}
               >
-                <Building className={`w-4 h-4 mr-2 ${activeTab === "merchant-list" ? "text-white" : "text-red-600"}`} />
+                <Building className={`w-4 h-4 mr-2 ${activeTab === "merchant-list" ? "text-white" : "text-gray-600"}`} />
                 Merchant List
               </Button>
               
               <Button
-                variant={activeTab === "customer-list" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "customer-list" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "customer-list" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "customer-list" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("customer-list")}
               >
-                <Users className={`w-4 h-4 mr-2 ${activeTab === "customer-list" ? "text-white" : "text-red-600"}`} />
+                <Users className={`w-4 h-4 mr-2 ${activeTab === "customer-list" ? "text-white" : "text-gray-600"}`} />
                 Customer List
               </Button>
               
               <Button
-                variant={activeTab === "header-footer" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "header-footer" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "header-footer" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "header-footer" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("header-footer")}
               >
-                <Globe className={`w-4 h-4 mr-2 ${activeTab === "header-footer" ? "text-white" : "text-red-600"}`} />
+                <Globe className={`w-4 h-4 mr-2 ${activeTab === "header-footer" ? "text-white" : "text-gray-600"}`} />
                 Header & Footer
               </Button>
               
               <Button
-                variant={activeTab === "user-roles" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "user-roles" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "user-roles" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "user-roles" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("user-roles")}
               >
-                <Shield className={`w-4 h-4 mr-2 ${activeTab === "user-roles" ? "text-white" : "text-red-600"}`} />
+                <Shield className={`w-4 h-4 mr-2 ${activeTab === "user-roles" ? "text-white" : "text-gray-600"}`} />
                 User Roles
               </Button>
               
               <Button
-                variant={activeTab === "customer-care" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "customer-care" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "customer-care" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "customer-care" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("customer-care")}
               >
-                <Headphones className={`w-4 h-4 mr-2 ${activeTab === "customer-care" ? "text-white" : "text-red-600"}`} />
+                <Headphones className={`w-4 h-4 mr-2 ${activeTab === "customer-care" ? "text-white" : "text-gray-600"}`} />
                 Customer Care
               </Button>
               
               <Button
-                variant={activeTab === "vat-service" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "vat-service" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "vat-service" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "vat-service" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("vat-service")}
               >
-                <Calculator className={`w-4 h-4 mr-2 ${activeTab === "vat-service" ? "text-white" : "text-red-600"}`} />
+                <Calculator className={`w-4 h-4 mr-2 ${activeTab === "vat-service" ? "text-white" : "text-gray-600"}`} />
                 VAT & Service Charge
               </Button>
               
               <Button
-                variant={activeTab === "analytics" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "analytics" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "analytics" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "analytics" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("analytics")}
               >
-                <BarChart className={`w-4 h-4 mr-2 ${activeTab === "analytics" ? "text-white" : "text-red-600"}`} />
+                <BarChart className={`w-4 h-4 mr-2 ${activeTab === "analytics" ? "text-white" : "text-gray-600"}`} />
                 Analytics & Reporting
               </Button>
               
               <Button
-                variant={activeTab === "acquisition" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "acquisition" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "acquisition" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "acquisition" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("acquisition")}
               >
-                <UserPlus className={`w-4 h-4 mr-2 ${activeTab === "acquisition" ? "text-white" : "text-red-600"}`} />
+                <UserPlus className={`w-4 h-4 mr-2 ${activeTab === "acquisition" ? "text-white" : "text-gray-600"}`} />
                 Acquisition Reports
               </Button>
               
               <Button
-                variant={activeTab === "backup" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "backup" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "backup" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "backup" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("backup")}
               >
-                <Database className={`w-4 h-4 mr-2 ${activeTab === "backup" ? "text-white" : "text-red-600"}`} />
+                <Database className={`w-4 h-4 mr-2 ${activeTab === "backup" ? "text-white" : "text-gray-600"}`} />
                 Backup System
               </Button>
               
               <Button
-                variant={activeTab === "nps" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "nps" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "nps" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "nps" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("nps")}
               >
-                <StarIcon className={`w-4 h-4 mr-2 ${activeTab === "nps" ? "text-white" : "text-red-600"}`} />
+                <StarIcon className={`w-4 h-4 mr-2 ${activeTab === "nps" ? "text-white" : "text-gray-600"}`} />
                 NPS Setup
               </Button>
               
               <Button
-                variant={activeTab === "generate-points" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "generate-points" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "generate-points" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "generate-points" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("generate-points")}
               >
-              <Plus className={`w-4 h-4 mr-2 ${activeTab === "generate-points" ? "text-white" : "text-red-600"}`} />
+              <Plus className={`w-4 h-4 mr-2 ${activeTab === "generate-points" ? "text-white" : "text-gray-600"}`} />
               Generate Points
               </Button>
               
               <Button
-                variant={activeTab === "distribute" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "distribute" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "distribute" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "distribute" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("distribute")}
               >
-              <DollarSign className={`w-4 h-4 mr-2 ${activeTab === "distribute" ? "text-white" : "text-red-600"}`} />
+              <DollarSign className={`w-4 h-4 mr-2 ${activeTab === "distribute" ? "text-white" : "text-gray-600"}`} />
               Distribute Points
               </Button>
               
               <NotificationWrapper badgeProps={{ type: 'custom', size: 'sm', count: pendingRequests?.length || 0 }}>
                 <Button
-                  variant={activeTab === "requests" ? "default" : "outline"}
-                  className={`w-full justify-start ${activeTab === "requests" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                  variant={activeTab === "requests" ? "default" : "ghost"}
+                  className={`w-full justify-start transition-colors duration-200 ${
+                    activeTab === "requests" 
+                      ? "bg-red-600 text-white hover:bg-red-700" 
+                      : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                  }`}
                   onClick={() => setActiveTab("requests")}
                 >
-                  <Send className={`w-4 h-4 mr-2 ${activeTab === "requests" ? "text-white" : "text-red-600"}`} />
+                  <Send className={`w-4 h-4 mr-2 ${activeTab === "requests" ? "text-white" : "text-gray-600"}`} />
                   Manage Requests
                 </Button>
               </NotificationWrapper>
               
               <NotificationWrapper badgeProps={{ type: 'messages' }}>
                 <Button
-                  variant={activeTab === "chat" ? "default" : "outline"}
-                  className={`w-full justify-start ${activeTab === "chat" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                  variant={activeTab === "chat" ? "default" : "ghost"}
+                  className={`w-full justify-start transition-colors duration-200 ${
+                    activeTab === "chat" 
+                      ? "bg-red-600 text-white hover:bg-red-700" 
+                      : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                  }`}
                   onClick={() => setActiveTab("chat")}
                 >
-                <MessageCircle className={`w-4 h-4 mr-2 ${activeTab === "chat" ? "text-white" : "text-red-600"}`} />
+                <MessageCircle className={`w-4 h-4 mr-2 ${activeTab === "chat" ? "text-white" : "text-gray-600"}`} />
                   Secure Chat
                 </Button>
               </NotificationWrapper>
@@ -1782,6 +2376,334 @@ export default function GlobalAdminPortal() {
                                 ></div>
                               </div>
                               <span className="text-sm text-gray-600">{stat.count}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {/* Analytics & Reporting Tab */}
+            {activeTab === "analytics" && (
+              <div className="space-y-6">
+                {/* Time Period Selector */}
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Analytics & Reporting Dashboard</h2>
+                  <div className="flex space-x-2">
+                    <Button 
+                      variant={timeFilter === "daily" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTimeFilter("daily")}
+                    >
+                      Daily
+                    </Button>
+                    <Button 
+                      variant={timeFilter === "weekly" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTimeFilter("weekly")}
+                    >
+                      Weekly
+                    </Button>
+                    <Button 
+                      variant={timeFilter === "monthly" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTimeFilter("monthly")}
+                    >
+                      Monthly
+                    </Button>
+                    <Button 
+                      variant={timeFilter === "yearly" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTimeFilter("yearly")}
+                    >
+                      Yearly
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Global Analytics Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-blue-800">Global Sales</p>
+                          <p className="text-3xl font-bold text-blue-900">
+                            ${globalAnalytics?.totalSales?.toLocaleString() || '0'}
+                          </p>
+                          <p className="text-sm text-green-600">
+                            +{globalAnalytics?.salesGrowth || 0}% vs last period
+                          </p>
+                        </div>
+                        <div className="p-3 bg-blue-200 rounded-xl">
+                          <DollarSign className="w-8 h-8 text-blue-700" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-green-800">Points Distributed</p>
+                          <p className="text-3xl font-bold text-green-900">
+                            {globalAnalytics?.totalPointsDistributed?.toLocaleString() || '0'}
+                          </p>
+                          <p className="text-sm text-green-600">
+                            +{globalAnalytics?.pointsGrowth || 0}% vs last period
+                          </p>
+                        </div>
+                        <div className="p-3 bg-green-200 rounded-xl">
+                          <Award className="w-8 h-8 text-green-700" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-2 border-purple-200">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-purple-800">Global Serial Numbers</p>
+                          <p className="text-3xl font-bold text-purple-900">
+                            {globalAnalytics?.totalSerialNumbers?.toLocaleString() || '0'}
+                          </p>
+                          <p className="text-sm text-green-600">
+                            +{globalAnalytics?.serialGrowth || 0}% vs last period
+                          </p>
+                        </div>
+                        <div className="p-3 bg-purple-200 rounded-xl">
+                          <Award className="w-8 h-8 text-purple-700" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-200">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-orange-800">VAT & Service</p>
+                          <p className="text-3xl font-bold text-orange-900">
+                            ${globalAnalytics?.totalVATService?.toLocaleString() || '0'}
+                          </p>
+                          <p className="text-sm text-green-600">
+                            +{globalAnalytics?.vatGrowth || 0}% vs last period
+                          </p>
+                        </div>
+                        <div className="p-3 bg-orange-200 rounded-xl">
+                          <TrendingUp className="w-8 h-8 text-orange-700" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Charts Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Global Sales Performance Chart */}
+                  <Card className="bg-white/80 backdrop-blur-sm border-2 border-blue-200 shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="text-xl font-bold text-gray-800">Global Sales Performance</CardTitle>
+                      <p className="text-sm text-gray-600">Total sales to all merchants by period</p>
+                    </CardHeader>
+                    <CardContent>
+                      {globalAnalytics?.chartData && globalAnalytics.chartData.length > 0 ? (
+                        <div className="h-64">
+                          <LineChart data={globalAnalytics.chartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="period" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Line type="monotone" dataKey="globalSales" stroke="#3b82f6" strokeWidth={2} name="Global Sales" />
+                          </LineChart>
+                        </div>
+                      ) : (
+                        <div className="h-64 flex items-center justify-center text-gray-500">
+                          <div className="text-center">
+                            <BarChart className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                            <p>Sales performance chart will be displayed here</p>
+                            <p className="text-sm">Data: {globalAnalytics?.totalSales || 0} total sales</p>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Points Distribution Chart */}
+                  <Card className="bg-white/80 backdrop-blur-sm border-2 border-green-200 shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="text-xl font-bold text-gray-800">Points Distribution</CardTitle>
+                      <p className="text-sm text-gray-600">Reward points distributed by type</p>
+                    </CardHeader>
+                    <CardContent>
+                      {globalAnalytics?.chartData && globalAnalytics.chartData.length > 0 ? (
+                        <div className="h-64">
+                          <LineChart data={globalAnalytics.chartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="period" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Line type="monotone" dataKey="distributedPoints" stroke="#10b981" strokeWidth={2} name="Points Distributed" />
+                          </LineChart>
+                        </div>
+                      ) : (
+                        <div className="h-64 flex items-center justify-center text-gray-500">
+                          <div className="text-center">
+                            <Award className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                            <p>Points distribution chart will be displayed here</p>
+                            <p className="text-sm">Data: {globalAnalytics?.totalPointsDistributed || 0} points distributed</p>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Point History Panel */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center">
+                        <TrendingUp className="w-5 h-5 mr-2" />
+                        Point History & Transactions
+                      </CardTitle>
+                      <div className="flex space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => exportData('csv')}
+                          className="flex items-center"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export CSV
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => exportData('excel')}
+                          className="flex items-center"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export Excel
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => exportData('pdf')}
+                          className="flex items-center"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export PDF
+                        </Button>
+                      </div>
+                    </div>
+                    <CardDescription>
+                      Complete history of all point generation and distribution activities
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {transactionHistory?.transactions && transactionHistory.transactions.length > 0 ? (
+                      <div className="space-y-3">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Date & Time</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Description</TableHead>
+                              <TableHead>Amount</TableHead>
+                              <TableHead>Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {transactionHistory.transactions.map((transaction: any) => (
+                              <TableRow key={transaction.id}>
+                                <TableCell className="font-medium">
+                                  {new Date(transaction.createdAt).toLocaleString()}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge 
+                                    variant={transaction.type === 'credit' ? 'default' : 'secondary'}
+                                    className={transaction.type === 'credit' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}
+                                  >
+                                    {transaction.type === 'credit' ? 'Generated' : 'Distributed'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>{transaction.description || 'No description'}</TableCell>
+                                <TableCell className={`font-semibold ${
+                                  transaction.type === 'credit' ? 'text-green-600' : 'text-blue-600'
+                                }`}>
+                                  {transaction.type === 'credit' ? '+' : '-'}{transaction.amount?.toLocaleString() || '0'} Points
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="bg-green-50 text-green-700">
+                                    Completed
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <TrendingUp className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                        <p>No transaction history available</p>
+                        <p className="text-sm">Generate or distribute points to see activity here</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Country-wise Analytics */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Top Performing Countries</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {globalAnalytics?.topCountries?.map((country: any, index: number) => (
+                          <div key={country.name} className="flex justify-between items-center">
+                            <div className="flex items-center">
+                              <Badge variant={index < 3 ? "default" : "secondary"} className="mr-2">
+                                #{index + 1}
+                              </Badge>
+                              <span className="font-medium">{country.name}</span>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">${country.sales?.toLocaleString() || 0}</p>
+                              <p className="text-sm text-gray-500">{country.merchants || 0} merchants</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Merchant Performance</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {globalAnalytics?.topMerchants?.map((merchant: any, index: number) => (
+                          <div key={merchant.id} className="flex justify-between items-center">
+                            <div className="flex items-center">
+                              <Badge variant={index < 3 ? "default" : "secondary"} className="mr-2">
+                                #{index + 1}
+                              </Badge>
+                              <span className="font-medium">{merchant.name}</span>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">${merchant.sales?.toLocaleString() || 0}</p>
+                              <p className="text-sm text-gray-500">{merchant.country}</p>
                             </div>
                           </div>
                         ))}
@@ -2315,9 +3237,13 @@ export default function GlobalAdminPortal() {
                         <SelectTrigger data-testid="select-local-admin">
                           <SelectValue placeholder="Select local admin" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-white border border-gray-200 shadow-lg">
                           {adminsList?.map((admin: any) => (
-                            <SelectItem key={admin.id || admin.userId} value={admin.id || admin.userId}>
+                            <SelectItem 
+                              key={admin.id || admin.userId} 
+                              value={admin.id || admin.userId}
+                              className="text-gray-900 hover:bg-blue-50 hover:text-blue-900 focus:bg-blue-50 focus:text-blue-900 cursor-pointer"
+                            >
                               {admin.user?.firstName || admin.firstName} {admin.user?.lastName || admin.lastName} ({admin.user?.country || admin.country}) - {admin.user?.email || 'No email'}
                             </SelectItem>
                           ))}

@@ -1,8 +1,10 @@
 import type { Express, Request, Response } from "express";
 import { storage } from "./storage";
-import { insertPointDistributionSchema, insertChatMessageSchema, insertPointGenerationRequestSchema } from "@shared/schema";
+import { insertPointDistributionSchema, insertChatMessageSchema, insertPointGenerationRequestSchema, admins, pointDistributions } from "@shared/schema";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { db } from "./db";
+import { eq, sql } from "drizzle-orm";
 
 const JWT_SECRET = process.env.JWT_SECRET || "komarce-secret-key";
 
@@ -428,14 +430,14 @@ export function setupAdminRoutes(app: Express) {
         totalPointsReceived: (receiverAdmin?.totalPointsReceived || 0) + request.pointsRequested
       });
       // Log distribution from global to local
-      await storage.createPointDistribution({
+      await db.insert(pointDistributions).values({
         fromUserId: req.user.userId,
         toUserId: request.requesterId,
         points: request.pointsRequested,
         description: request.reason || 'Approved point generation request',
         distributionType: 'admin_to_admin',
         status: 'completed'
-      });
+      }).returning();
 
       // Real-time Socket.IO updates
       const io = (global as any).socketIO;
@@ -553,14 +555,14 @@ export function setupAdminRoutes(app: Express) {
       });
       
       // Create a record of manual point addition
-      await storage.createPointDistribution({
+      await db.insert(pointDistributions).values({
         fromUserId: 'system',
         toUserId: globalAdminId,
         points,
         description: description || 'Manual points addition by global admin',
         distributionType: 'manual_addition',
         status: 'completed'
-      });
+      }).returning();
       
       res.json({
         message: 'Points added successfully',
@@ -795,21 +797,24 @@ export function setupAdminRoutes(app: Express) {
         status: 'completed'
       };
       
-      const distribution = await storage.createPointDistribution(distributionData);
+      // Create distribution record directly in database
+      const distribution = await db.insert(pointDistributions).values(distributionData).returning();
       
-      // Update distributor's balance
-      await storage.updateAdmin(distributorId, {
-        pointsBalance: (distributorAdmin.pointsBalance || 0) - points,
-        totalPointsDistributed: (distributorAdmin.totalPointsDistributed || 0) + points
-      });
+      // Update distributor's balance in database
+      await db.update(admins)
+        .set({
+          pointsBalance: (distributorAdmin.pointsBalance || 0) - points,
+          totalPointsDistributed: (distributorAdmin.totalPointsDistributed || 0) + points
+        })
+        .where(eq(admins.userId, distributorId));
       
       // Update recipient's balance
       if (toUserType === 'local_admin') {
-        let receiverAdmin = await storage.getAdmin(toUserId);
-        if (!receiverAdmin) {
+        let receiverAdmin = await db.select().from(admins).where(eq(admins.userId, toUserId)).limit(1);
+        if (receiverAdmin.length === 0) {
           // Create local admin record if it doesn't exist
           const toUser = await storage.getUser(toUserId);
-          receiverAdmin = await storage.createAdmin({
+          await db.insert(admins).values({
             userId: toUserId,
             adminType: 'local',
             country: toUser?.country || 'Unknown',
@@ -818,12 +823,15 @@ export function setupAdminRoutes(app: Express) {
             totalPointsDistributed: 0,
             isActive: true
           });
+          receiverAdmin = [{ pointsBalance: 0, totalPointsReceived: 0 }];
         }
         
-        await storage.updateAdmin(toUserId, {
-          pointsBalance: (receiverAdmin.pointsBalance || 0) + points,
-          totalPointsReceived: (receiverAdmin.totalPointsReceived || 0) + points
-        });
+        await db.update(admins)
+          .set({
+            pointsBalance: (receiverAdmin[0].pointsBalance || 0) + points,
+            totalPointsReceived: (receiverAdmin[0].totalPointsReceived || 0) + points
+          })
+          .where(eq(admins.userId, toUserId));
       } else if (toUserType === 'merchant') {
         const merchant = await storage.getMerchantByUserId(toUserId);
         console.log(`🔍 Found merchant for userId ${toUserId}:`, merchant ? `ID: ${merchant.id}, Current balance: ${merchant.loyaltyPointsBalance || 0}` : 'NOT FOUND');
@@ -1105,7 +1113,14 @@ export function setupAdminRoutes(app: Express) {
   // Get point distributions with enhanced details
   app.get('/api/admin/point-distributions', authenticateToken, authorizeRole(['global_admin', 'local_admin']), async (req, res) => {
     try {
-      const distributions = await storage.getPointDistributions(req.user.userId);
+      // Get point distributions directly from database
+      // Only include distributions that are relevant to this admin
+      const distributions = await db.select().from(pointDistributions).where(
+        sql`(
+          (${pointDistributions.toUserId} = ${req.user.userId} AND ${pointDistributions.fromUserId} != ${req.user.userId} AND ${pointDistributions.fromUserId} != 'system') OR
+          (${pointDistributions.fromUserId} = ${req.user.userId} AND ${pointDistributions.toUserId} != ${req.user.userId} AND ${pointDistributions.toUserId} != 'system')
+        ) AND ${pointDistributions.distributionType} != 'point_generation'`
+      );
       
       // Enhance with user details
       const enhancedDistributions = await Promise.all(distributions.map(async (dist) => {
@@ -1133,32 +1148,76 @@ export function setupAdminRoutes(app: Express) {
     try {
       const userId = req.user.userId || req.user.id;
       
-      // Get admin data for balance info
-      const adminData = await storage.getAdmin(userId);
+      // Get admin data for balance info from database
+      const adminData = await db.select().from(admins).where(eq(admins.userId, userId)).limit(1);
+      const admin = adminData[0];
       
-      // Get point distributions where this admin is involved
-      const distributions = await storage.getPointDistributions();
-      const userDistributions = distributions.filter(d => 
-        d.fromUserId === userId || d.toUserId === userId || d.fromUserId === 'system'
+      // Get point distributions directly from database
+      // Only include distributions that are relevant to this admin:
+      // 1. Credits TO this admin (when this admin is the receiver)
+      // 2. Debits FROM this admin (when this admin is the sender)
+      // Exclude: self-transactions, system transactions, point generation
+      const distributions = await db.select().from(pointDistributions).where(
+        sql`(
+          (${pointDistributions.toUserId} = ${userId} AND ${pointDistributions.fromUserId} != ${userId} AND ${pointDistributions.fromUserId} != 'system') OR
+          (${pointDistributions.fromUserId} = ${userId} AND ${pointDistributions.toUserId} != ${userId} AND ${pointDistributions.toUserId} != 'system')
+        ) AND ${pointDistributions.distributionType} != 'point_generation'`
       );
       
-      // Convert distributions to transaction format
-      const transactionHistory = userDistributions.map(dist => ({
-        id: dist.id,
-        type: dist.fromUserId === 'system' ? 'credit' : dist.toUserId === userId ? 'credit' : 'debit',
-        amount: dist.points,
-        description: dist.description,
-        createdAt: dist.createdAt,
-        status: dist.status,
-        distributionType: dist.distributionType,
-        balanceAfter: dist.toUserId === userId ? adminData?.pointsBalance : undefined
-      })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      // Convert distributions to transaction format with proper sequential balance calculation
+      const sortedDistributions = distributions.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      
+      // Calculate total credits and debits to determine starting balance
+      const totalCredits = sortedDistributions
+        .filter(d => d.toUserId === userId)
+        .reduce((sum, d) => sum + d.points, 0);
+      
+      const totalDebits = sortedDistributions
+        .filter(d => d.fromUserId === userId)
+        .reduce((sum, d) => sum + d.points, 0);
+      
+      // Starting balance before any transactions
+      const startingBalance = (admin?.pointsBalance || 0) - totalCredits + totalDebits;
+      
+      let runningBalance = startingBalance;
+      const transactionHistory = sortedDistributions.map((dist) => {
+        const isCredit = dist.toUserId === userId;
+        const isDebit = dist.fromUserId === userId;
+        
+        // Update running balance based on transaction type
+        if (isCredit) {
+          runningBalance += dist.points;
+        } else if (isDebit) {
+          runningBalance -= dist.points;
+        }
+        
+        return {
+          id: dist.id,
+          type: isCredit ? 'credit' : 'debit',
+          amount: Math.abs(dist.points),
+          description: dist.description,
+          createdAt: dist.createdAt,
+          status: dist.status,
+          distributionType: dist.distributionType
+        };
+      }).reverse(); // Reverse to show most recent first
+      
+      // Calculate totals correctly
+      const calculatedTotalCredits = transactionHistory
+        .filter(t => t.type === 'credit')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const calculatedTotalDebits = transactionHistory
+        .filter(t => t.type === 'debit')
+        .reduce((sum, t) => sum + t.amount, 0);
       
       res.json({
         transactions: transactionHistory,
-        currentBalance: adminData?.pointsBalance || 0,
-        totalReceived: adminData?.totalPointsReceived || 0,
-        totalDistributed: adminData?.totalPointsDistributed || 0
+        currentBalance: admin?.pointsBalance || 0,
+        totalReceived: admin?.totalPointsReceived || 0,
+        totalDistributed: admin?.totalPointsDistributed || 0,
+        totalCredits: calculatedTotalCredits,
+        totalDebits: calculatedTotalDebits
       });
       
     } catch (error) {
@@ -1177,9 +1236,12 @@ export function setupAdminRoutes(app: Express) {
       // Bust conditional requests by changing ETag each response
       res.setHeader('ETag', `bal-${Date.now()}`);
       const userId = req.user.userId;
-      const adminData = await storage.getAdmin(userId);
       
-      if (!adminData) {
+      // Get admin data directly from database
+      const adminData = await db.select().from(admins).where(eq(admins.userId, userId)).limit(1);
+      const admin = adminData[0];
+      
+      if (!admin) {
         // Create admin record if it doesn't exist
         const user = await storage.getUser(userId);
         const newAdmin = await storage.createAdmin({
@@ -1200,9 +1262,9 @@ export function setupAdminRoutes(app: Express) {
       }
       
       res.json({
-        balance: adminData.pointsBalance || 0,
-        totalReceived: adminData.totalPointsReceived || 0,
-        totalDistributed: adminData.totalPointsDistributed || 0
+        balance: admin.pointsBalance || 0,
+        totalReceived: admin.totalPointsReceived || 0,
+        totalDistributed: admin.totalPointsDistributed || 0
       });
       
     } catch (error) {

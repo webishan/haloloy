@@ -43,37 +43,35 @@ export default function LocalAdminPortal() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState("daily");
-  // Local admin point transaction history
-  const localTransactionsKey = ['/api/admin/local/transactions', currentUser?.id] as const;
-  const { data: localTransactions = [], refetch: refetchLocalTransactions, isFetching: txLoading } = useQuery({
-    queryKey: localTransactionsKey as unknown as any,
-    enabled: isAuthenticated && !!currentUser,
+  // Local admin point transaction history - using same endpoint as global admin
+  const { data: transactionHistory, refetch: refetchTransactions } = useQuery({
+    queryKey: ['/api/admin/transactions'],
+    enabled: isAuthenticated,
+    refetchInterval: 30000, // Poll every 30 seconds
+    retry: false,
     queryFn: async () => {
-      const res = await fetch(`/api/admin/local/transactions/${currentUser?.id}?t=${Date.now()}`, {
+      const res = await fetch('/api/admin/transactions', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
       });
-      if (!res.ok) return [];
-      const json = await res.json();
-      return Array.isArray(json) ? json : (json?.transactions || []);
-    },
-    select: (data: any) => Array.isArray(data) ? data : (data?.transactions || []),
-    refetchInterval: 15000,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    staleTime: 0,
-    gcTime: 0
+      if (!res.ok) return { transactions: [], currentBalance: 0 };
+      return res.json();
+    }
   });
+
+  // Extract transactions and balance from the response
+  const localTransactions = transactionHistory?.transactions || [];
+  const currentBalance = transactionHistory?.currentBalance || 0;
+  const totalCredits = transactionHistory?.totalCredits || 0;
+  const totalDebits = transactionHistory?.totalDebits || 0;
 
   // Helper: compute totals and running balances
   const localTotals = useMemo(() => {
-    const totals = { credits: 0, debits: 0, net: 0 } as { credits: number; debits: number; net: number };
-    for (const tx of localTransactions) {
-      const amt = Number(tx.amount || 0);
-      if (tx.type === 'credit') totals.credits += amt; else totals.debits += amt;
-    }
-    totals.net = totals.credits - totals.debits;
-    return totals;
-  }, [localTransactions]);
+    return { 
+      credits: totalCredits, 
+      debits: totalDebits, 
+      net: totalCredits - totalDebits 
+    };
+  }, [totalCredits, totalDebits]);
 
   const transactionsWithRunning = useMemo(() => {
     if (!Array.isArray(localTransactions)) return [] as any[];
@@ -91,6 +89,123 @@ export default function LocalAdminPortal() {
       return { ...tx, _runningBalance: running };
     }).reverse(); // show newest first
   }, [localTransactions]);
+
+  // Export functionality
+  const exportData = (format: 'csv' | 'excel' | 'pdf') => {
+    if (!localTransactions || localTransactions.length === 0) {
+      toast({
+        title: "No data to export",
+        description: "There are no transactions to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const transactions = localTransactions;
+    const timestamp = new Date().toISOString().split('T')[0];
+    
+    if (format === 'csv') {
+      const headers = ['Date', 'Type', 'Description', 'Amount', 'Balance After', 'Status'];
+      const csvContent = [
+        headers.join(','),
+        ...transactions.map(t => [
+          new Date(t.createdAt).toLocaleString(),
+          t.type === 'credit' ? 'Generated' : 'Distributed',
+          `"${t.description || 'No description'}"`,
+          t.amount || 0,
+          t.balanceAfter || 0,
+          'Completed'
+        ].join(','))
+      ].join('\n');
+      
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `local-admin-point-history-${timestamp}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } else if (format === 'excel') {
+      const headers = ['Date', 'Type', 'Description', 'Amount', 'Balance After', 'Status'];
+      const csvContent = [
+        headers.join('\t'),
+        ...transactions.map(t => [
+          new Date(t.createdAt).toLocaleString(),
+          t.type === 'credit' ? 'Generated' : 'Distributed',
+          t.description || 'No description',
+          t.amount || 0,
+          t.balanceAfter || 0,
+          'Completed'
+        ].join('\t'))
+      ].join('\n');
+      
+      const blob = new Blob([csvContent], { type: 'application/vnd.ms-excel' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `local-admin-point-history-${timestamp}.xls`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } else if (format === 'pdf') {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const htmlContent = `
+          <html>
+            <head>
+              <title>Local Admin Point History Report</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                .header { text-align: center; margin-bottom: 20px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>Local Admin Point History Report</h1>
+                <p>Generated on: ${new Date().toLocaleString()}</p>
+                <p>Admin: ${currentUser?.firstName} ${currentUser?.lastName} (${currentUser?.country})</p>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Balance After</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${transactions.map(t => `
+                    <tr>
+                      <td>${new Date(t.createdAt).toLocaleString()}</td>
+                      <td>${t.type === 'credit' ? 'Generated' : 'Distributed'}</td>
+                      <td>${t.description || 'No description'}</td>
+                      <td>${t.amount || 0}</td>
+                      <td>${t.balanceAfter || 0}</td>
+                      <td>Completed</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </body>
+          </html>
+        `;
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+    
+    toast({
+      title: "Export successful",
+      description: `Point history exported as ${format.toUpperCase()} file.`,
+    });
+  };
+
   const [authLoading, setAuthLoading] = useState(true);
   
   const { toast } = useToast();
@@ -109,6 +224,22 @@ export default function LocalAdminPortal() {
     country: ""
   });
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Password reset state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [forgotPasswordStep, setForgotPasswordStep] = useState<'email' | 'verification' | 'reset'>('email');
+  const [forgotPasswordForm, setForgotPasswordForm] = useState({
+    email: "",
+    phone: "",
+    verificationCode: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationMethod, setVerificationMethod] = useState<'email' | 'phone'>('email');
 
   // Point distribution form
   const [distributeForm, setDistributeForm] = useState({
@@ -469,6 +600,141 @@ export default function LocalAdminPortal() {
     window.location.href = "/";
   };
 
+  // Password reset functions
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPasswordForm.email) {
+      toast({ title: "Error", description: "Please enter your email address", variant: "destructive" });
+      return;
+    }
+    
+    if (verificationMethod === 'phone' && !forgotPasswordForm.phone) {
+      toast({ title: "Error", description: "Please enter your phone number", variant: "destructive" });
+      return;
+    }
+    
+    setForgotPasswordLoading(true);
+    try {
+      const response = await fetch('/api/admin/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: forgotPasswordForm.email,
+          phone: forgotPasswordForm.phone,
+          method: verificationMethod
+        })
+      });
+      
+      if (response.ok) {
+        setVerificationSent(true);
+        setForgotPasswordStep('verification');
+        toast({ title: "Success", description: `Verification code sent to your ${verificationMethod}` });
+      } else {
+        const errorData = await response.json();
+        toast({ title: "Error", description: errorData.message || "Failed to send verification code", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Network error. Please try again.", variant: "destructive" });
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
+  const handleVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPasswordForm.verificationCode) {
+      toast({ title: "Error", description: "Please enter the verification code", variant: "destructive" });
+      return;
+    }
+    
+    setVerificationLoading(true);
+    try {
+      const response = await fetch('/api/admin/verify-reset-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: forgotPasswordForm.email,
+          phone: forgotPasswordForm.phone,
+          code: forgotPasswordForm.verificationCode,
+          method: verificationMethod
+        })
+      });
+      
+      if (response.ok) {
+        setForgotPasswordStep('reset');
+        toast({ title: "Success", description: "Code verified. Please set your new password." });
+      } else {
+        const errorData = await response.json();
+        toast({ title: "Error", description: errorData.message || "Invalid verification code", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Network error. Please try again.", variant: "destructive" });
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (forgotPasswordForm.newPassword !== forgotPasswordForm.confirmPassword) {
+      toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
+      return;
+    }
+    
+    if (forgotPasswordForm.newPassword.length < 8) {
+      toast({ title: "Error", description: "Password must be at least 8 characters long", variant: "destructive" });
+      return;
+    }
+    
+    setResetLoading(true);
+    try {
+      const response = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: forgotPasswordForm.email,
+          phone: forgotPasswordForm.phone,
+          code: forgotPasswordForm.verificationCode,
+          newPassword: forgotPasswordForm.newPassword,
+          method: verificationMethod
+        })
+      });
+      
+      if (response.ok) {
+        toast({ title: "Success", description: "Password reset successfully. Please login with your new password." });
+        setShowForgotPassword(false);
+        setForgotPasswordStep('email');
+        setForgotPasswordForm({
+          email: "",
+          phone: "",
+          verificationCode: "",
+          newPassword: "",
+          confirmPassword: ""
+        });
+        setVerificationSent(false);
+      } else {
+        toast({ title: "Error", description: "Failed to reset password", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Network error. Please try again.", variant: "destructive" });
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const resetForgotPasswordFlow = () => {
+    setShowForgotPassword(false);
+    setForgotPasswordStep('email');
+    setForgotPasswordForm({
+      email: "",
+      phone: "",
+      verificationCode: "",
+      newPassword: "",
+      confirmPassword: ""
+    });
+    setVerificationSent(false);
+  };
+
   const handleDistributePoints = () => {
     if (!distributeForm.merchantId || !distributeForm.points || !distributeForm.description) {
       toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
@@ -510,6 +776,181 @@ export default function LocalAdminPortal() {
           <CardContent className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Verifying authentication...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Password Reset Forms - Check this BEFORE authentication check
+  if (showForgotPassword) {
+    console.log('Rendering password reset form');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg shadow-2xl border-0">
+          <CardHeader className="text-center bg-gradient-to-r from-red-600 to-red-500 text-white rounded-t-lg">
+            <div className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg">
+              <img 
+                src="/images/holyloy-logo.png" 
+                alt="HOLYLOY Logo" 
+                className="w-14 h-14 object-contain"
+              />
+            </div>
+            <CardTitle className="text-3xl font-bold">
+              {forgotPasswordStep === 'email' && 'Reset Password'}
+              {forgotPasswordStep === 'verification' && 'Verify Code'}
+              {forgotPasswordStep === 'reset' && 'Set New Password'}
+            </CardTitle>
+            <p className="text-red-100">
+              {forgotPasswordStep === 'email' && 'Enter your email to receive verification code'}
+              {forgotPasswordStep === 'verification' && 'Enter the verification code sent to your email'}
+              {forgotPasswordStep === 'reset' && 'Create a new secure password'}
+            </p>
+          </CardHeader>
+          <CardContent className="p-8">
+            {forgotPasswordStep === 'email' && (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="flex items-center space-x-4">
+                  <Label className="text-sm font-semibold text-gray-700">Verification Method:</Label>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setVerificationMethod('email')}
+                      className={`px-3 py-1 rounded text-sm ${
+                        verificationMethod === 'email' 
+                          ? 'bg-red-600 text-white' 
+                          : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationMethod('phone')}
+                      className={`px-3 py-1 rounded text-sm ${
+                        verificationMethod === 'phone' 
+                          ? 'bg-red-600 text-white' 
+                          : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      SMS
+                    </button>
+                  </div>
+                </div>
+
+                {verificationMethod === 'email' && (
+                  <div>
+                    <Label htmlFor="reset-email" className="text-sm font-semibold text-gray-700">Email Address</Label>
+                    <Input
+                      id="reset-email"
+                      type="email"
+                      value={forgotPasswordForm.email}
+                      onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, email: e.target.value})}
+                      placeholder="Enter your email address"
+                      className="mt-2 h-12 w-full"
+                      required
+                    />
+                  </div>
+                )}
+
+                {verificationMethod === 'phone' && (
+                  <div>
+                    <Label htmlFor="reset-phone" className="text-sm font-semibold text-gray-700">Phone Number</Label>
+                    <Input
+                      id="reset-phone"
+                      type="tel"
+                      value={forgotPasswordForm.phone}
+                      onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, phone: e.target.value})}
+                      placeholder="Enter your phone number"
+                      className="mt-2 h-12 w-full"
+                      required
+                    />
+                  </div>
+                )}
+
+                <Button 
+                  type="submit" 
+                  className="w-full h-12 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white font-semibold"
+                  disabled={forgotPasswordLoading}
+                >
+                  {forgotPasswordLoading ? "Sending..." : "Send Verification Code"}
+                </Button>
+              </form>
+            )}
+
+            {forgotPasswordStep === 'verification' && (
+              <form onSubmit={handleVerification} className="space-y-4">
+                <div>
+                  <Label htmlFor="verification-code" className="text-sm font-semibold text-gray-700">Verification Code</Label>
+                  <Input
+                    id="verification-code"
+                    type="text"
+                    value={forgotPasswordForm.verificationCode}
+                    onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, verificationCode: e.target.value})}
+                    placeholder="Enter 6-digit code"
+                    className="mt-2 h-12 w-full text-center text-lg tracking-widest"
+                    maxLength={6}
+                    required
+                  />
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full h-12 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white font-semibold"
+                  disabled={verificationLoading}
+                >
+                  {verificationLoading ? "Verifying..." : "Verify Code"}
+                </Button>
+              </form>
+            )}
+
+            {forgotPasswordStep === 'reset' && (
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                <div>
+                  <Label htmlFor="new-password" className="text-sm font-semibold text-gray-700">New Password</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    value={forgotPasswordForm.newPassword}
+                    onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, newPassword: e.target.value})}
+                    placeholder="Enter new password"
+                    className="mt-2 h-12 w-full"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="confirm-password" className="text-sm font-semibold text-gray-700">Confirm Password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    value={forgotPasswordForm.confirmPassword}
+                    onChange={(e) => setForgotPasswordForm({...forgotPasswordForm, confirmPassword: e.target.value})}
+                    placeholder="Confirm new password"
+                    className="mt-2 h-12 w-full"
+                    required
+                  />
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full h-12 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white font-semibold"
+                  disabled={resetLoading}
+                >
+                  {resetLoading ? "Resetting..." : "Reset Password"}
+                </Button>
+              </form>
+            )}
+
+            <div className="mt-6 text-center">
+              <button
+                type="button"
+                onClick={resetForgotPasswordFlow}
+                className="text-sm text-gray-500 hover:text-gray-700 hover:underline"
+              >
+                ← Back to Login
+              </button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -586,13 +1027,37 @@ export default function LocalAdminPortal() {
               </Button>
             </form>
             
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-sm text-red-600 hover:text-red-700 hover:underline font-medium"
+              >
+                Forgot Password?
+              </button>
+            </div>
+            
+
             <div className="mt-6 text-center text-sm text-gray-500">
-              <p className="font-semibold mb-2">Test Credentials:</p>
-              <div className="space-y-1">
-                <p>Local Admin 1: local1@holyloy.com / local123</p>
-                <p>Local Admin 2: local2@holyloy.com / local123</p>
-                <p>Local Admin 3: local3@holyloy.com / local123</p>
-                <p>Local Admin 4: local4@holyloy.com / local123</p>
+              <p className="font-semibold mb-2">Test Credentials (17 Countries):</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                <p>🇰🇪 Kenya: ke@holyloy.com / local123</p>
+                <p>🇲🇺 Mauritius: mu@holyloy.com / local123</p>
+                <p>🇷🇼 Rwanda: rw@holyloy.com / local123</p>
+                <p>🇺🇬 Uganda: ug@holyloy.com / local123</p>
+                <p>🇧🇭 Bahrain: bh@holyloy.com / local123</p>
+                <p>🇧🇩 Bangladesh: bd@holyloy.com / local123</p>
+                <p>🇮🇳 India: in@holyloy.com / local123</p>
+                <p>🇮🇩 Indonesia: id@holyloy.com / local123</p>
+                <p>🇲🇾 Malaysia: my@holyloy.com / local123</p>
+                <p>🇵🇰 Pakistan: pk@holyloy.com / local123</p>
+                <p>🇵🇭 Philippines: ph@holyloy.com / local123</p>
+                <p>🇶🇦 Qatar: qa@holyloy.com / local123</p>
+                <p>🇸🇬 Singapore: sg@holyloy.com / local123</p>
+                <p>🇱🇰 Sri Lanka: lk@holyloy.com / local123</p>
+                <p>🇹🇭 Thailand: th@holyloy.com / local123</p>
+                <p>🇹🇷 Turkey: tr@holyloy.com / local123</p>
+                <p>🇦🇪 UAE: ae@holyloy.com / local123</p>
               </div>
             </div>
           </CardContent>
@@ -688,104 +1153,148 @@ export default function LocalAdminPortal() {
           <ScrollArea className="h-[calc(100vh-4rem)]">
             <nav className="p-4 space-y-2 text-gray-700">
               <Button
-                variant={activeTab === "dashboard" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "dashboard" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "dashboard" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "dashboard" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("dashboard")}
               >
-                <BarChart3 className={`w-4 h-4 mr-2 ${activeTab === "dashboard" ? "text-white" : "text-red-600"}`} />
+                <BarChart3 className={`w-4 h-4 mr-2 ${activeTab === "dashboard" ? "text-white" : "text-gray-600"}`} />
                 Dashboard Overview
               </Button>
               
               <Button
-                variant={activeTab === "merchants" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "merchants" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "merchants" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "merchants" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("merchants")}
               >
-                <Building2 className={`w-4 h-4 mr-2 ${activeTab === "merchants" ? "text-white" : "text-red-600"}`} />
+                <Building2 className={`w-4 h-4 mr-2 ${activeTab === "merchants" ? "text-white" : "text-gray-600"}`} />
                 Local Country Merchants
               </Button>
               
               <Button
-                variant={activeTab === "customers" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "customers" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "customers" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "customers" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("customers")}
               >
-                <Users className={`w-4 h-4 mr-2 ${activeTab === "customers" ? "text-white" : "text-red-600"}`} />
+                <Users className={`w-4 h-4 mr-2 ${activeTab === "customers" ? "text-white" : "text-gray-600"}`} />
                 Local Country Customers
               </Button>
               
               <Button
-                variant={activeTab === "reward-points" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "reward-points" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "reward-points" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "reward-points" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("reward-points")}
               >
-                <Award className={`w-4 h-4 mr-2 ${activeTab === "reward-points" ? "text-white" : "text-red-600"}`} />
+                <Award className={`w-4 h-4 mr-2 ${activeTab === "reward-points" ? "text-white" : "text-gray-600"}`} />
                 Reward Points
               </Button>
               
               <Button
-                variant={activeTab === "withdrawals" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "withdrawals" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "withdrawals" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "withdrawals" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("withdrawals")}
               >
-                <CreditCard className={`w-4 h-4 mr-2 ${activeTab === "withdrawals" ? "text-white" : "text-red-600"}`} />
+                <CreditCard className={`w-4 h-4 mr-2 ${activeTab === "withdrawals" ? "text-white" : "text-gray-600"}`} />
                 Withdrawals
               </Button>
               
               <Button
-                variant={activeTab === "merchant-list" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "merchant-list" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "merchant-list" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "merchant-list" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("merchant-list")}
               >
-                <Building className={`w-4 h-4 mr-2 ${activeTab === "merchant-list" ? "text-white" : "text-red-600"}`} />
+                <Building className={`w-4 h-4 mr-2 ${activeTab === "merchant-list" ? "text-white" : "text-gray-600"}`} />
                 Merchant List
               </Button>
               
               <Button
-                variant={activeTab === "customer-list" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "customer-list" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "customer-list" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "customer-list" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("customer-list")}
               >
-                <Users className={`w-4 h-4 mr-2 ${activeTab === "customer-list" ? "text-white" : "text-red-600"}`} />
+                <Users className={`w-4 h-4 mr-2 ${activeTab === "customer-list" ? "text-white" : "text-gray-600"}`} />
                 Customer List
               </Button>
               
               <Button
-                variant={activeTab === "distribute" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "distribute" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "distribute" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "distribute" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("distribute")}
               >
-                <DollarSign className={`w-4 h-4 mr-2 ${activeTab === "distribute" ? "text-white" : "text-red-600"}`} />
+                <DollarSign className={`w-4 h-4 mr-2 ${activeTab === "distribute" ? "text-white" : "text-gray-600"}`} />
                 Distribute Points
               </Button>
               
               <NotificationWrapper badgeProps={{ type: 'custom', size: 'sm', count: 0 }} className="w-full">
                 <Button
-                  variant={activeTab === "requests" ? "default" : "outline"}
-                  className={`w-full justify-start ${activeTab === "requests" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                  variant={activeTab === "requests" ? "default" : "ghost"}
+                  className={`w-full justify-start transition-colors duration-200 ${
+                    activeTab === "requests" 
+                      ? "bg-red-600 text-white hover:bg-red-700" 
+                      : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                  }`}
                   onClick={() => setActiveTab("requests")}
                 >
-                  <Send className={`w-4 h-4 mr-2 ${activeTab === "requests" ? "text-white" : "text-red-600"}`} />
+                  <Send className={`w-4 h-4 mr-2 ${activeTab === "requests" ? "text-white" : "text-gray-600"}`} />
                   Manage Requests
                 </Button>
               </NotificationWrapper>
               
               <Button
-                variant={activeTab === "transactions" ? "default" : "outline"}
-                className={`w-full justify-start ${activeTab === "transactions" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                variant={activeTab === "transactions" ? "default" : "ghost"}
+                className={`w-full justify-start transition-colors duration-200 ${
+                  activeTab === "transactions" 
+                    ? "bg-red-600 text-white hover:bg-red-700" 
+                    : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                }`}
                 onClick={() => setActiveTab("transactions")}
               >
-                <History className={`w-4 h-4 mr-2 ${activeTab === "transactions" ? "text-white" : "text-red-600"}`} />
+                <History className={`w-4 h-4 mr-2 ${activeTab === "transactions" ? "text-white" : "text-gray-600"}`} />
                 Point Transaction History
               </Button>
               
               <NotificationWrapper badgeProps={{ type: 'messages' }} className="w-full">
                 <Button
-                  variant={activeTab === "chat" ? "default" : "outline"}
-                  className={`w-full justify-start ${activeTab === "chat" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                  variant={activeTab === "chat" ? "default" : "ghost"}
+                  className={`w-full justify-start transition-colors duration-200 ${
+                    activeTab === "chat" 
+                      ? "bg-red-600 text-white hover:bg-red-700" 
+                      : "text-gray-700 hover:bg-red-50 hover:text-red-600"
+                  }`}
                   onClick={() => setActiveTab("chat")}
                 >
-                  <MessageCircle className={`w-4 h-4 mr-2 ${activeTab === "chat" ? "text-white" : "text-red-600"}`} />
+                  <MessageCircle className={`w-4 h-4 mr-2 ${activeTab === "chat" ? "text-white" : "text-gray-600"}`} />
                   Secure Chat
                 </Button>
               </NotificationWrapper>
@@ -964,65 +1473,104 @@ export default function LocalAdminPortal() {
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Point Transaction History</CardTitle>
-                    <CardDescription>All credits, debits and balances for this local admin</CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Point Transaction History</CardTitle>
+                        <CardDescription>All credits, debits and balances for this local admin</CardDescription>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => exportData('csv')}
+                          className="flex items-center"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export CSV
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => exportData('excel')}
+                          className="flex items-center"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export Excel
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => exportData('pdf')}
+                          className="flex items-center"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export PDF
+                        </Button>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
                       <div className="p-4 rounded-lg border bg-white">
-                        <p className="text-xs text-gray-500">Total Credits</p>
-                        <p className="text-2xl font-bold text-green-600">{localTotals.credits.toLocaleString()}</p>
-                      </div>
-                      <div className="p-4 rounded-lg border bg-white">
-                        <p className="text-xs text-gray-500">Total Debits</p>
-                        <p className="text-2xl font-bold text-red-600">{localTotals.debits.toLocaleString()}</p>
-                      </div>
-                      <div className="p-4 rounded-lg border bg-white">
-                        <p className="text-xs text-gray-500">Net Change</p>
-                        <p className={`text-2xl font-bold ${localTotals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{localTotals.net >= 0 ? '+' : ''}{localTotals.net.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">Current Balance</p>
+                        <p className="text-2xl font-bold text-blue-600">{currentBalance.toLocaleString()}</p>
                       </div>
                     </div>
 
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
-                          <TableHead className="text-right">Running Balance</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {transactionsWithRunning.length > 0 ? (
-                          transactionsWithRunning.map((tx: any) => (
-                            <TableRow key={tx.id}>
-                              <TableCell>{new Date(tx.createdAt).toLocaleString()}</TableCell>
-                              <TableCell>
-                                <Badge variant={tx.type === 'credit' ? 'default' : 'destructive'}>
-                                  {tx.type === 'credit' ? 'Credit' : 'Debit'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>{tx.description || (tx.type === 'credit' ? 'Points credited' : 'Points debited')}</TableCell>
-                              <TableCell className={`text-right ${tx.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                                {tx.type === 'credit' ? '+' : '-'}{Number(tx.amount || 0).toLocaleString()}
-                              </TableCell>
-                              <TableCell className="text-right">{Number(tx._runningBalance ?? tx.balanceAfter ?? 0).toLocaleString()}</TableCell>
+                    {localTransactions && localTransactions.length > 0 ? (
+                      <div className="space-y-3">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Date & Time</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Description</TableHead>
+                              <TableHead>Amount</TableHead>
+                              <TableHead>Status</TableHead>
                             </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={5} className="text-center text-gray-500">
-                              {txLoading ? 'Loading transactions…' : 'No transactions found'}
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {localTransactions.map((transaction: any) => (
+                              <TableRow key={transaction.id}>
+                                <TableCell className="text-sm">
+                                  {new Date(transaction.createdAt).toLocaleString()}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge 
+                                    variant={transaction.type === 'credit' ? 'default' : 'destructive'}
+                                    className={transaction.type === 'credit' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}
+                                  >
+                                    {transaction.type === 'credit' ? 'Credit' : 'Debit'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="max-w-xs truncate">
+                                  {transaction.description || (transaction.type === 'credit' ? 'Points credited' : 'Points debited')}
+                                </TableCell>
+                                <TableCell className={`font-medium ${transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                                  {transaction.type === 'credit' ? '+' : '-'}{Number(transaction.amount || 0).toLocaleString()}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                                    Completed
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="text-gray-500">
+                          <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg font-medium">No transactions found</p>
+                          <p className="text-sm">Your transaction history will appear here</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex justify-end mt-4">
                       <Button variant="outline" size="sm" className="rounded-full px-4" onClick={() => {
-                        queryClient.invalidateQueries({ queryKey: localTransactionsKey as unknown as any });
-                        refetchLocalTransactions();
+                        refetchTransactions();
                       }}>
                         <RefreshCw className="w-4 h-4 mr-2" /> Refresh
                       </Button>
@@ -1367,17 +1915,21 @@ export default function LocalAdminPortal() {
                         <SelectTrigger data-testid="select-merchant">
                           <SelectValue placeholder="Select merchant" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-white border border-gray-200 shadow-lg">
                           {merchantsLoading ? (
-                            <SelectItem value="loading" disabled>Loading merchants...</SelectItem>
+                            <SelectItem value="loading" disabled className="text-gray-900">Loading merchants...</SelectItem>
                           ) : merchants && merchants.length > 0 ? (
                             merchants.map((merchant: any) => (
-                              <SelectItem key={merchant.id || merchant.userId} value={merchant.userId || merchant.id}>
+                              <SelectItem 
+                                key={merchant.id || merchant.userId} 
+                                value={merchant.userId || merchant.id}
+                                className="text-gray-900 hover:bg-gray-100 focus:bg-gray-100 cursor-pointer"
+                              >
                                 {merchant.businessName || `Merchant ${merchant.id?.slice(0, 8)}`} - {merchant.tier || 'Bronze'} Tier
                               </SelectItem>
                             ))
                           ) : (
-                            <SelectItem value="no-merchants" disabled>No merchants available in {currentUser?.country}</SelectItem>
+                            <SelectItem value="no-merchants" disabled className="text-gray-900">No merchants available in {currentUser?.country}</SelectItem>
                           )}
                         </SelectContent>
                       </Select>

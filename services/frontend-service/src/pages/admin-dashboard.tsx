@@ -28,10 +28,26 @@ export default function AdminDashboard() {
   });
 
   const countries = [
+    // Africa
+    { code: 'KE', name: 'Kenya', flag: '🇰🇪' },
+    { code: 'MU', name: 'Mauritius', flag: '🇲🇺' },
+    { code: 'RW', name: 'Rwanda', flag: '🇷🇼' },
+    { code: 'UG', name: 'Uganda', flag: '🇺🇬' },
+    
+    // Asia & Middle East
+    { code: 'BH', name: 'Bahrain', flag: '🇧🇭' },
     { code: 'BD', name: 'Bangladesh', flag: '🇧🇩' },
+    { code: 'IN', name: 'India', flag: '🇮🇳' },
+    { code: 'ID', name: 'Indonesia', flag: '🇮🇩' },
     { code: 'MY', name: 'Malaysia', flag: '🇲🇾' },
-    { code: 'AE', name: 'UAE', flag: '🇦🇪' },
-    { code: 'PH', name: 'Philippines', flag: '🇵🇭' }
+    { code: 'PK', name: 'Pakistan', flag: '🇵🇰' },
+    { code: 'PH', name: 'Philippines', flag: '🇵🇭' },
+    { code: 'QA', name: 'Qatar', flag: '🇶🇦' },
+    { code: 'SG', name: 'Singapore', flag: '🇸🇬' },
+    { code: 'LK', name: 'Sri Lanka', flag: '🇱🇰' },
+    { code: 'TH', name: 'Thailand', flag: '🇹🇭' },
+    { code: 'TR', name: 'Turkey', flag: '🇹🇷' },
+    { code: 'AE', name: 'UAE', flag: '🇦🇪' }
   ];
 
   const { data: merchants = [] } = useQuery({

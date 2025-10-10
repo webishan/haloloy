@@ -59,8 +59,35 @@ app.use((req, res, next) => {
       console.log("❌ Error seeding test data:", error);
       console.log("⚠️  Auto-seed skipped (data may already exist)");
     }
+    
+    // Update global admin credentials
+    try {
+      const { updateGlobalAdminCredentials } = await import("./update-global-admin");
+      await updateGlobalAdminCredentials();
+    } catch (error) {
+      console.log("⚠️  Could not update global admin credentials:", error);
+    }
   } else {
     console.log("🚀 Production mode - skipping auto-seed");
+  }
+
+  // Run database migrations
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    
+    // Add password reset fields to admins table
+    await db.execute(sql`
+      ALTER TABLE admins 
+      ADD COLUMN IF NOT EXISTS must_reset_password BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    await db.execute(sql`
+      ALTER TABLE admins 
+      ADD COLUMN IF NOT EXISTS last_password_reset TIMESTAMP
+    `);
+    console.log("✅ Database migrations completed");
+  } catch (error) {
+    console.log("⚠️ Migration warning:", error);
   }
 
   // Initialize Global Number System

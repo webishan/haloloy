@@ -28,10 +28,26 @@ export default function AdminDashboard() {
   });
 
   const countries = [
+    // Africa
+    { code: 'KE', name: 'Kenya', flag: '🇰🇪' },
+    { code: 'MU', name: 'Mauritius', flag: '🇲🇺' },
+    { code: 'RW', name: 'Rwanda', flag: '🇷🇼' },
+    { code: 'UG', name: 'Uganda', flag: '🇺🇬' },
+    
+    // Asia & Middle East
+    { code: 'BH', name: 'Bahrain', flag: '🇧🇭' },
     { code: 'BD', name: 'Bangladesh', flag: '🇧🇩' },
+    { code: 'IN', name: 'India', flag: '🇮🇳' },
+    { code: 'ID', name: 'Indonesia', flag: '🇮🇩' },
     { code: 'MY', name: 'Malaysia', flag: '🇲🇾' },
-    { code: 'AE', name: 'UAE', flag: '🇦🇪' },
-    { code: 'PH', name: 'Philippines', flag: '🇵🇭' }
+    { code: 'PK', name: 'Pakistan', flag: '🇵🇰' },
+    { code: 'PH', name: 'Philippines', flag: '🇵🇭' },
+    { code: 'QA', name: 'Qatar', flag: '🇶🇦' },
+    { code: 'SG', name: 'Singapore', flag: '🇸🇬' },
+    { code: 'LK', name: 'Sri Lanka', flag: '🇱🇰' },
+    { code: 'TH', name: 'Thailand', flag: '🇹🇭' },
+    { code: 'TR', name: 'Turkey', flag: '🇹🇷' },
+    { code: 'AE', name: 'UAE', flag: '🇦🇪' }
   ];
 
   const { data: merchants = [] } = useQuery({
@@ -437,8 +453,12 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-blue-800">Global Sales</p>
-                      <p className="text-3xl font-bold text-blue-900">$2.8M</p>
-                      <p className="text-sm text-green-600">+15.7% vs last period</p>
+                      <p className="text-3xl font-bold text-blue-900">
+                        ${stats?.totalSales ? (stats.totalSales / 1000000).toFixed(1) + 'M' : '0'}
+                      </p>
+                      <p className="text-sm text-green-600">
+                        +{stats?.salesGrowth || 0}% vs last period
+                      </p>
                     </div>
                     <div className="p-3 bg-blue-200 rounded-xl">
                       <DollarSign className="w-8 h-8 text-blue-700" />
@@ -452,8 +472,12 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-green-800">Points Distributed</p>
-                      <p className="text-3xl font-bold text-green-900">1.2M</p>
-                      <p className="text-sm text-green-600">+22.3% vs last period</p>
+                      <p className="text-3xl font-bold text-green-900">
+                        {stats?.totalPointsDistributed ? (stats.totalPointsDistributed / 1000000).toFixed(1) + 'M' : '0'}
+                      </p>
+                      <p className="text-sm text-green-600">
+                        +{stats?.pointsGrowth || 0}% vs last period
+                      </p>
                     </div>
                     <div className="p-3 bg-green-200 rounded-xl">
                       <Coins className="w-8 h-8 text-green-700" />
@@ -467,8 +491,12 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-purple-800">Global Serial Numbers</p>
-                      <p className="text-3xl font-bold text-purple-900">8,456</p>
-                      <p className="text-sm text-green-600">+18.2% vs last period</p>
+                      <p className="text-3xl font-bold text-purple-900">
+                        {stats?.totalSerialNumbers?.toLocaleString() || '0'}
+                      </p>
+                      <p className="text-sm text-green-600">
+                        +{stats?.serialGrowth || 0}% vs last period
+                      </p>
                     </div>
                     <div className="p-3 bg-purple-200 rounded-xl">
                       <Award className="w-8 h-8 text-purple-700" />
@@ -482,8 +510,12 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-orange-800">VAT & Service</p>
-                      <p className="text-3xl font-bold text-orange-900">$156K</p>
-                      <p className="text-sm text-green-600">+12.8% vs last period</p>
+                      <p className="text-3xl font-bold text-orange-900">
+                        ${stats?.totalVATService ? (stats.totalVATService / 1000).toFixed(0) + 'K' : '0'}
+                      </p>
+                      <p className="text-sm text-green-600">
+                        +{stats?.vatGrowth || 0}% vs last period
+                      </p>
                     </div>
                     <div className="p-3 bg-orange-200 rounded-xl">
                       <TrendingUp className="w-8 h-8 text-orange-700" />
@@ -503,13 +535,13 @@ export default function AdminDashboard() {
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={[
-                      { period: 'Jul', globalSales: 45000, distributedPoints: 25000 },
-                      { period: 'Aug', globalSales: 52000, distributedPoints: 28000 },
-                      { period: 'Sep', globalSales: 48000, distributedPoints: 26000 },
-                      { period: 'Oct', globalSales: 61000, distributedPoints: 32000 },
-                      { period: 'Nov', globalSales: 55000, distributedPoints: 30000 },
-                      { period: 'Dec', globalSales: 67000, distributedPoints: 38000 }
+                    <LineChart data={stats?.chartData || [
+                      { period: 'Jul', globalSales: 0, distributedPoints: 0 },
+                      { period: 'Aug', globalSales: 0, distributedPoints: 0 },
+                      { period: 'Sep', globalSales: 0, distributedPoints: 0 },
+                      { period: 'Oct', globalSales: 0, distributedPoints: 0 },
+                      { period: 'Nov', globalSales: 0, distributedPoints: 0 },
+                      { period: 'Dec', globalSales: 0, distributedPoints: 0 }
                     ]}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
                       <XAxis dataKey="period" />

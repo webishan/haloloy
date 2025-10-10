@@ -132,8 +132,10 @@ export interface IStorage {
   
   // Admin management
   getAdmin(userId: string): Promise<Admin | undefined>;
+  getAdminByEmail(email: string): Promise<Admin | undefined>;
   createAdmin(admin: InsertAdmin): Promise<Admin>;
   updateAdmin(userId: string, admin: Partial<Admin>): Promise<Admin>;
+  updateAdminPassword(userId: string, newPassword: string): Promise<void>;
   getAdminsByType(adminType: 'global' | 'local'): Promise<Admin[]>;
   getAdminsByCountry(country: string): Promise<Admin[]>;
   
@@ -1691,6 +1693,20 @@ export class MemStorage implements IStorage {
     return result[0];
   }
 
+  async getAdminByEmail(email: string): Promise<Admin | undefined> {
+    // First find the user by email
+    const userResult = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (userResult.length === 0) {
+      return undefined;
+    }
+    
+    const user = userResult[0];
+    
+    // Then find the admin by userId
+    const adminResult = await db.select().from(admins).where(eq(admins.userId, user.id)).limit(1);
+    return adminResult[0];
+  }
+
   async createAdmin(admin: InsertAdmin): Promise<Admin> {
     const id = crypto.randomUUID();
     const adminData = {
@@ -1714,6 +1730,21 @@ export class MemStorage implements IStorage {
     
     const updated = { ...existingAdmin, ...admin };
     return updated;
+  }
+
+  async updateAdminPassword(userId: string, newPassword: string): Promise<void> {
+    const existingAdmin = await this.getAdmin(userId);
+    if (!existingAdmin) {
+      throw new Error("Admin not found");
+    }
+    
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    // Update password in the users table
+    await db.update(users)
+      .set({ password: hashedPassword })
+      .where(eq(users.id, userId));
   }
 
   async getAdminsByType(adminType: 'global' | 'local'): Promise<Admin[]> {

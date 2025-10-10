@@ -12,7 +12,7 @@ export const users = pgTable("users", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   role: text("role", { enum: ["customer", "merchant", "admin", "global_admin", "local_admin"] }).notNull().default("customer"),
-  country: text("country").notNull().default("BD"),
+  country: text("country").notNull().default("BD"), // KE, MU, RW, UG, BH, BD, IN, ID, MY, PK, PH, QA, SG, LK, TH, TR, AE
   phone: text("phone"),
   address: text("address"),
   dateOfBirth: text("date_of_birth"),
