@@ -661,10 +661,19 @@ export default function GlobalAdminPortal() {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('globalAdminToken')}` }
       });
-      if (!res.ok) throw new Error('Approve failed');
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Approve failed');
+      }
       return res.json();
     },
     onSuccess: (data: any) => {
+      toast({
+        title: "Request Approved ✓",
+        description: `Successfully transferred ${data.pointsRequested?.toLocaleString() || 'points'} to local admin. Your new balance: ${data.newGlobalBalance?.toLocaleString() || 0} points.`,
+        variant: "default"
+      });
+
       queryClient.invalidateQueries({ queryKey: ['/api/admin/pending-point-requests'] });
       // Optimistically set new balance if backend returned it
       if (data?.newGlobalBalance !== undefined) {
@@ -678,9 +687,17 @@ export default function GlobalAdminPortal() {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/global/analytics'] });
       refetchAnalytics();
+      refetchBalance();
       // Broadcast a custom event so other tabs/components refresh now
       window.dispatchEvent(new CustomEvent('dataUpdate'));
       localStorage.setItem('lastAdminUpdate', Date.now().toString());
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Approval Failed",
+        description: error.message,
+        variant: "destructive"
+      });
     }
   });
 
@@ -690,13 +707,29 @@ export default function GlobalAdminPortal() {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('globalAdminToken')}` }
       });
-      if (!res.ok) throw new Error('Reject failed');
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Reject failed');
+      }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
+      toast({
+        title: "Request Rejected",
+        description: "Point generation request has been rejected.",
+        variant: "default"
+      });
+
       queryClient.invalidateQueries({ queryKey: ['/api/admin/pending-point-requests'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/global/analytics'] });
       refetchAnalytics();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Rejection Failed",
+        description: error.message,
+        variant: "destructive"
+      });
     }
   });
 
@@ -802,7 +835,7 @@ export default function GlobalAdminPortal() {
     localStorage.getItem('globalAdminToken') || undefined
   );
 
-  // Socket connection for real-time chat
+  // Socket connection for real-time chat and request notifications
   useEffect(() => {
     if (isAuthenticated && currentUser) {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -831,11 +864,54 @@ export default function GlobalAdminPortal() {
         });
       });
 
+      // Listen for balance updates in real-time
+      newSocket.on('balanceUpdate', (data: any) => {
+        if (data.type === 'global_admin_balance') {
+          // Update balance immediately
+          queryClient.setQueryData(['/api/admin/balance'], (prev: any) => ({
+            ...(prev || {}),
+            balance: data.newBalance
+          }));
+          
+          toast({
+            title: "Balance Updated",
+            description: `${data.change > 0 ? '+' : ''}${data.change.toLocaleString()} points - ${data.reason}`,
+            variant: data.change < 0 ? "destructive" : "default"
+          });
+
+          // Refresh all related queries
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/global/analytics'] });
+        }
+      });
+
+      // Listen for new point generation requests from local admins
+      newSocket.on('newPointRequest', (data: any) => {
+        toast({
+          title: "New Point Request",
+          description: `Local admin requests ${data.points.toLocaleString()} points from ${data.country || 'Unknown'}`,
+          variant: "default"
+        });
+
+        // Refresh pending requests immediately
+        queryClient.invalidateQueries({ queryKey: ['/api/admin/pending-point-requests'] });
+      });
+
+      // Listen for notification events
+      newSocket.on('notification', (data: any) => {
+        toast({
+          title: data.title || "Notification",
+          description: data.message,
+          variant: data.type === "error" ? "destructive" : "default"
+        });
+      });
+
       return () => {
         newSocket.disconnect();
       };
     }
-  }, [isAuthenticated, currentUser, selectedChatUser]);
+  }, [isAuthenticated, currentUser, selectedChatUser, queryClient, toast]);
 
   // Login mutation for global admin
   const loginMutation = useMutation({
@@ -2958,42 +3034,153 @@ export default function GlobalAdminPortal() {
             {/* Manage Requests Tab */}
             {activeTab === "requests" && (
               <div className="space-y-6">
+                {/* Summary Card */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-600">Pending Requests</p>
+                          <p className="text-3xl font-bold text-blue-600">{pendingRequests.length}</p>
+                        </div>
+                        <Send className="w-10 h-10 text-blue-400" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-600">Total Points Requested</p>
+                          <p className="text-3xl font-bold text-orange-600">
+                            {pendingRequests.reduce((sum: number, r: any) => sum + r.pointsRequested, 0).toLocaleString()}
+                          </p>
+                        </div>
+                        <Coins className="w-10 h-10 text-orange-400" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-600">Your Balance</p>
+                          <p className="text-3xl font-bold text-green-600">
+                            {adminBalance?.balance ? adminBalance.balance.toLocaleString() : '0'}
+                          </p>
+                        </div>
+                        <Crown className="w-10 h-10 text-green-400" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
                 <Card>
                   <CardHeader>
-                    <CardTitle>Pending Point Generation Requests</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center">
+                          <Send className="w-5 h-5 mr-2 text-blue-600" />
+                          Pending Point Generation Requests
+                        </CardTitle>
+                        <CardDescription>
+                          Review and approve point requests from local administrators
+                        </CardDescription>
+                      </div>
+                      <Badge variant="outline" className="text-lg px-4 py-2">
+                        {pendingRequests.length} Pending
+                      </Badge>
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Requester</TableHead>
-                          <TableHead>Country</TableHead>
-                          <TableHead>Points</TableHead>
-                          <TableHead>Reason</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                    {pendingRequests.length === 0 ? (
+                      <div className="text-center py-12">
+                        <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold text-gray-700 mb-2">All Caught Up!</h3>
+                        <p className="text-gray-500">No pending requests at the moment.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
                         {pendingRequests.map((r: any) => (
-                          <TableRow key={r.id}>
-                            <TableCell>{new Date(r.createdAt).toLocaleString()}</TableCell>
-                            <TableCell>{r.requesterId?.slice(0,8)}</TableCell>
-                            <TableCell>{r.requesterCountry}</TableCell>
-                            <TableCell>{r.pointsRequested.toLocaleString()}</TableCell>
-                            <TableCell>{r.reason || '-'}</TableCell>
-                            <TableCell className="space-x-2">
-                              <Button size="sm" onClick={() => approveMutation.mutate(r.id)}>
-                                <Check className="w-4 h-4 mr-1" /> Approve
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => rejectMutation.mutate(r.id)}>
-                                <X className="w-4 h-4 mr-1" /> Reject
-                              </Button>
-                            </TableCell>
-                          </TableRow>
+                          <Card key={r.id} className="border-l-4 border-l-blue-500 hover:shadow-lg transition-shadow">
+                            <CardContent className="p-6">
+                              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <div className="flex-1 space-y-3">
+                                  <div className="flex items-center gap-3">
+                                    <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                                      {r.requesterCountry || 'Unknown'}
+                                    </Badge>
+                                    <span className="text-sm text-gray-500">
+                                      {new Date(r.createdAt).toLocaleString()}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <Coins className="w-5 h-5 text-orange-500" />
+                                    <span className="text-2xl font-bold text-gray-900">
+                                      {r.pointsRequested.toLocaleString()} Points
+                                    </span>
+                                  </div>
+
+                                  {r.reason && (
+                                    <div className="flex items-start gap-2">
+                                      <FileText className="w-4 h-4 text-gray-400 mt-1" />
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-700">Reason:</p>
+                                        <p className="text-sm text-gray-600">{r.reason}</p>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                                    <Users className="w-4 h-4" />
+                                    <span>Requester ID: {r.requesterId?.slice(0, 12)}...</span>
+                                  </div>
+
+                                  {adminBalance?.balance && adminBalance.balance < r.pointsRequested && (
+                                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+                                      <AlertCircle className="w-4 h-4" />
+                                      <span>Insufficient balance to approve this request</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-col gap-2 md:min-w-[150px]">
+                                  <Button
+                                    size="lg"
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    onClick={() => {
+                                      if (adminBalance?.balance && adminBalance.balance < r.pointsRequested) {
+                                        toast({
+                                          title: "Insufficient Balance",
+                                          description: "You don't have enough points to approve this request.",
+                                          variant: "destructive"
+                                        });
+                                        return;
+                                      }
+                                      approveMutation.mutate(r.id);
+                                    }}
+                                    disabled={approveMutation.isPending}
+                                  >
+                                    <Check className="w-4 h-4 mr-2" />
+                                    {approveMutation.isPending ? 'Approving...' : 'Approve'}
+                                  </Button>
+                                  <Button
+                                    size="lg"
+                                    variant="destructive"
+                                    onClick={() => rejectMutation.mutate(r.id)}
+                                    disabled={rejectMutation.isPending}
+                                  >
+                                    <X className="w-4 h-4 mr-2" />
+                                    {rejectMutation.isPending ? 'Rejecting...' : 'Reject'}
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
                         ))}
-                      </TableBody>
-                    </Table>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>

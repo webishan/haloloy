@@ -197,7 +197,9 @@ export function setupAdminRoutes(app: Express) {
       const { period = 'all' } = req.query;
       
       // Get all data directly from database
-      const merchantsData = await db.select().from(merchants);
+      const merchantsData = await db.select()
+        .from(merchants)
+        .innerJoin(users, eq(merchants.userId, users.id));
       const customersData = await db.select().from(users).where(eq(users.role, 'customer'));
       const ordersData = await db.select().from(orders);
       const adminsData = await db.select().from(admins);
@@ -210,7 +212,7 @@ export function setupAdminRoutes(app: Express) {
         const periodDate = getPeriodDate(now, period as string);
         
         filteredData = {
-          merchants: merchantsData.filter(m => new Date(m.createdAt) >= periodDate),
+          merchants: merchantsData.filter(m => new Date(m.merchants.createdAt) >= periodDate),
           customers: customersData.filter(c => new Date(c.createdAt) >= periodDate),
           orders: ordersData.filter(o => new Date(o.createdAt) >= periodDate),
           admins: adminsData.filter(a => new Date(a.createdAt) >= periodDate),
@@ -230,17 +232,17 @@ export function setupAdminRoutes(app: Express) {
         },
         merchants: {
           byType: {
-            regular: filteredData.merchants.filter(m => !m.isEMerchant).length,
-            eMerchant: filteredData.merchants.filter(m => m.isEMerchant).length
+            regular: filteredData.merchants.filter(m => m.merchants.accountType === 'merchant').length,
+            eMerchant: filteredData.merchants.filter(m => m.merchants.accountType === 'e_merchant').length
           },
           byRank: {
-            star: filteredData.merchants.filter(m => m.rank === 'star').length,
-            doubleStar: filteredData.merchants.filter(m => m.rank === 'double_star').length,
-            tripleStar: filteredData.merchants.filter(m => m.rank === 'triple_star').length,
-            executive: filteredData.merchants.filter(m => m.rank === 'executive').length
+            star: filteredData.merchants.filter(m => m.merchants.tier === 'star').length,
+            doubleStar: filteredData.merchants.filter(m => m.merchants.tier === 'double_star').length,
+            tripleStar: filteredData.merchants.filter(m => m.merchants.tier === 'triple_star').length,
+            executive: filteredData.merchants.filter(m => m.merchants.tier === 'executive').length
           },
           byCountry: filteredData.merchants.reduce((acc, m) => {
-            acc[m.country] = (acc[m.country] || 0) + 1;
+            acc[m.users.country] = (acc[m.users.country] || 0) + 1;
             return acc;
           }, {} as Record<string, number>)
         },
@@ -404,8 +406,8 @@ export function setupAdminRoutes(app: Express) {
         merchants: {
           total: merchants.length,
           active: activeMerchants,
-          regular: merchants.filter(m => !m.isEMerchant).length,
-          eMerchant: merchants.filter(m => m.isEMerchant).length,
+          regular: merchants.filter(m => m.accountType === 'merchant').length,
+          eMerchant: merchants.filter(m => m.accountType === 'e_merchant').length,
         },
         customers: {
           total: totalCustomers,
@@ -475,6 +477,27 @@ export function setupAdminRoutes(app: Express) {
         status: 'pending'
       });
       const request = await storage.createPointGenerationRequest(data);
+
+      // Real-time Socket.IO notification to all global admins
+      const io = (global as any).socketIO;
+      if (io) {
+        // Get all global admins
+        const globalAdmins = await storage.getAdminsByType('global');
+        
+        // Emit to each global admin
+        globalAdmins.forEach((admin: any) => {
+          io.to(admin.userId).emit('newPointRequest', {
+            requestId: request.id,
+            requesterId: req.user.userId,
+            requesterName: requester?.username || 'Local Admin',
+            country: requester?.country || 'Unknown',
+            points: request.pointsRequested,
+            reason: request.reason,
+            timestamp: new Date().toISOString()
+          });
+        });
+      }
+
       res.json(request);
     } catch (error: any) {
       res.status(400).json({ message: error.message || 'Failed to create request' });
@@ -1426,25 +1449,27 @@ export function setupAdminRoutes(app: Express) {
         return res.status(400).json({ message: 'Admin country not found' });
       }
 
-      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const merchantsData = await db.select()
+        .from(merchants)
+        .innerJoin(users, eq(merchants.userId, users.id))
+        .where(eq(users.country, currentUser[0].country));
       
       // Enhance with user details and point information
       const enhancedMerchants = [];
-      for (const merchant of merchantsData) {
-        const user = await db.select().from(users).where(eq(users.id, merchant.userId)).limit(1);
-        if (user[0]) {
-          enhancedMerchants.push({
-            id: merchant.id,
-            firstName: user[0].firstName,
-            lastName: user[0].lastName,
-            email: user[0].email,
-            serialNumber: merchant.serialNumber || `SN${merchant.id.slice(0, 8)}`,
-            totalPoints: merchant.loyaltyPointsBalance || 0,
-            referralCount: merchant.referralCount || 0,
-            businessName: merchant.businessName,
-            isActive: merchant.isActive
-          });
-        }
+      for (const merchantRow of merchantsData) {
+        const merchant = merchantRow.merchants;
+        const user = merchantRow.users;
+        enhancedMerchants.push({
+          id: merchant.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          serialNumber: merchant.referralId || `SN${merchant.id.slice(0, 8)}`,
+          totalPoints: merchant.loyaltyPointsBalance || 0,
+          referralCount: 0, // This would need to be calculated from referrals table
+          businessName: merchant.businessName,
+          isActive: merchant.isActive
+        });
       }
       
       res.json(enhancedMerchants);
@@ -1535,7 +1560,10 @@ export function setupAdminRoutes(app: Express) {
         return res.status(400).json({ message: 'Admin country not found' });
       }
 
-      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const merchantsData = await db.select()
+        .from(merchants)
+        .innerJoin(users, eq(merchants.userId, users.id))
+        .where(eq(users.country, currentUser[0].country));
       const customersData = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
       const ordersData = await db.select().from(orders);
       
@@ -1584,8 +1612,8 @@ export function setupAdminRoutes(app: Express) {
       
       // Calculate acquisition metrics
       const customerReferral = customers.filter(c => c.referralCount > 0).length;
-      const merchantSignup = merchants.filter(m => !m.isEMerchant).length;
-      const eMerchantSignup = merchants.filter(m => m.isEMerchant).length;
+      const merchantSignup = merchants.filter(m => m.accountType === 'merchant').length;
+      const eMerchantSignup = merchants.filter(m => m.accountType === 'e_merchant').length;
       
       res.json({
         customerReferral,
@@ -1613,16 +1641,19 @@ export function setupAdminRoutes(app: Express) {
         return res.status(400).json({ message: 'Admin country not found' });
       }
 
-      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const merchantsData = await db.select()
+        .from(merchants)
+        .innerJoin(users, eq(merchants.userId, users.id))
+        .where(eq(users.country, currentUser[0].country));
       
       res.json({
         totalMerchants: merchantsData.length,
-        regularMerchants: merchantsData.filter(m => !m.isEMerchant).length,
-        eMerchants: merchantsData.filter(m => m.isEMerchant).length,
-        starMerchants: merchantsData.filter(m => m.rank === 'star').length,
-        doubleStarMerchants: merchantsData.filter(m => m.rank === 'double_star').length,
-        tripleStarMerchants: merchantsData.filter(m => m.rank === 'triple_star').length,
-        executiveMerchants: merchantsData.filter(m => m.rank === 'executive').length
+        regularMerchants: merchantsData.filter(m => m.merchants.accountType === 'merchant').length,
+        eMerchants: merchantsData.filter(m => m.merchants.accountType === 'e_merchant').length,
+        starMerchants: merchantsData.filter(m => m.merchants.tier === 'star').length,
+        doubleStarMerchants: merchantsData.filter(m => m.merchants.tier === 'double_star').length,
+        tripleStarMerchants: merchantsData.filter(m => m.merchants.tier === 'triple_star').length,
+        executiveMerchants: merchantsData.filter(m => m.merchants.tier === 'executive').length
       });
     } catch (error) {
       console.error('Get local admin merchant stats error:', error);
@@ -1658,7 +1689,10 @@ export function setupAdminRoutes(app: Express) {
         return res.status(400).json({ message: 'Admin country not found' });
       }
 
-      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const merchantsData = await db.select()
+        .from(merchants)
+        .innerJoin(users, eq(merchants.userId, users.id))
+        .where(eq(users.country, currentUser[0].country));
       const customersData = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
       const ordersData = await db.select().from(orders);
       
@@ -1718,7 +1752,10 @@ export function setupAdminRoutes(app: Express) {
       const country = currentUser[0].country;
       
       // Get merchants and customers for this country
-      const merchantsData = await db.select().from(merchants).where(eq(merchants.country, country));
+      const merchantsData = await db.select()
+        .from(merchants)
+        .innerJoin(users, eq(merchants.userId, users.id))
+        .where(eq(users.country, country));
       const customersData = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, country)));
       
       // Get all merchants globally for market share calculation
@@ -1739,7 +1776,7 @@ export function setupAdminRoutes(app: Express) {
       
       // Get merchants created this month
       const currentMonthMerchants = merchantsData.filter(m => {
-        const createdDate = new Date(m.createdAt || 0);
+        const createdDate = new Date(m.merchants.createdAt || 0);
         return createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear;
       });
       
@@ -1748,7 +1785,7 @@ export function setupAdminRoutes(app: Express) {
       const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
       
       const lastMonthMerchants = merchantsData.filter(m => {
-        const createdDate = new Date(m.createdAt || 0);
+        const createdDate = new Date(m.merchants.createdAt || 0);
         return createdDate.getMonth() === lastMonth && createdDate.getFullYear() === lastMonthYear;
       });
       
@@ -1884,12 +1921,12 @@ export function setupAdminRoutes(app: Express) {
       
       res.json({
         totalMerchants: merchantsData.length,
-        regularMerchants: merchantsData.filter(m => !m.isEMerchant).length,
-        eMerchants: merchantsData.filter(m => m.isEMerchant).length,
-        starMerchants: merchantsData.filter(m => m.rank === 'star').length,
-        doubleStarMerchants: merchantsData.filter(m => m.rank === 'double_star').length,
-        tripleStarMerchants: merchantsData.filter(m => m.rank === 'triple_star').length,
-        executiveMerchants: merchantsData.filter(m => m.rank === 'executive').length
+        regularMerchants: merchantsData.filter(m => m.merchants.accountType === 'merchant').length,
+        eMerchants: merchantsData.filter(m => m.merchants.accountType === 'e_merchant').length,
+        starMerchants: merchantsData.filter(m => m.merchants.tier === 'star').length,
+        doubleStarMerchants: merchantsData.filter(m => m.merchants.tier === 'double_star').length,
+        tripleStarMerchants: merchantsData.filter(m => m.merchants.tier === 'triple_star').length,
+        executiveMerchants: merchantsData.filter(m => m.merchants.tier === 'executive').length
       });
     } catch (error) {
       console.error('Get merchant stats error:', error);
@@ -1976,15 +2013,17 @@ export function setupAdminRoutes(app: Express) {
   // Get global merchants for global admin
   app.get('/api/admin/global-merchants', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
     try {
-      const merchantsData = await db.select().from(merchants);
+      const merchantsData = await db.select()
+        .from(merchants)
+        .innerJoin(users, eq(merchants.userId, users.id));
       
-      const globalMerchants = merchantsData.map(merchant => ({
-        id: merchant.id,
-        businessName: merchant.businessName,
-        country: merchant.country,
-        tier: merchant.tier || 'Star',
-        points: merchant.loyaltyPointsBalance || 0,
-        isActive: merchant.isActive
+      const globalMerchants = merchantsData.map(merchantRow => ({
+        id: merchantRow.merchants.id,
+        businessName: merchantRow.merchants.businessName,
+        country: merchantRow.users.country,
+        tier: merchantRow.merchants.tier || 'Star',
+        points: merchantRow.merchants.loyaltyPointsBalance || 0,
+        isActive: merchantRow.merchants.isActive
       }));
       
       res.json(globalMerchants);

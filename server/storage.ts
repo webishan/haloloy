@@ -1,5 +1,5 @@
 import { 
-  users, merchants, admins, type User, type InsertUser, type Customer, type InsertCustomer,
+  users, merchants, admins, pointGenerationRequests, type User, type InsertUser, type Customer, type InsertCustomer,
   type Merchant, type InsertMerchant, type Product, type InsertProduct,
   type Category, type InsertCategory, type Brand, type InsertBrand,
   type Order, type InsertOrder, type RewardTransaction, type InsertRewardTransaction,
@@ -42,7 +42,7 @@ import {
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User management
@@ -1748,11 +1748,13 @@ export class MemStorage implements IStorage {
   }
 
   async getAdminsByType(adminType: 'global' | 'local'): Promise<Admin[]> {
-    return Array.from(this.admins.values()).filter(admin => admin.adminType === adminType);
+    const result = await db.select().from(admins).where(eq(admins.adminType, adminType));
+    return result;
   }
 
   async getAdminsByCountry(country: string): Promise<Admin[]> {
-    return Array.from(this.admins.values()).filter(admin => admin.country === country);
+    const result = await db.select().from(admins).where(eq(admins.country, country));
+    return result;
   }
 
   // Global Admin Analytics Methods
@@ -2450,37 +2452,49 @@ export class MemStorage implements IStorage {
 
   // Point generation request methods
   async createPointGenerationRequest(data: InsertPointGenerationRequest): Promise<PointGenerationRequest> {
-    const id = crypto.randomUUID();
-    const request: PointGenerationRequest = {
-      id,
-      createdAt: new Date(),
-      reviewedAt: null,
-      reviewedBy: null,
-      requesterCountry: null,
-      reason: null,
-      ...data
-    } as any;
-    this.pointGenerationRequests.set(id, request);
-    return request;
+    const result = await db.insert(pointGenerationRequests).values(data).returning();
+    return result[0];
   }
 
   async getPointGenerationRequests(filter?: { requesterId?: string; status?: string }): Promise<PointGenerationRequest[]> {
-    let list = Array.from(this.pointGenerationRequests.values());
-    if (filter?.requesterId) list = list.filter(r => r.requesterId === filter.requesterId);
-    if (filter?.status) list = list.filter(r => r.status === filter.status);
-    return list.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+    let query = db.select().from(pointGenerationRequests);
+    
+    if (filter?.requesterId && filter?.status) {
+      const result = await query
+        .where(and(
+          eq(pointGenerationRequests.requesterId, filter.requesterId),
+          eq(pointGenerationRequests.status, filter.status)
+        ))
+        .orderBy(desc(pointGenerationRequests.createdAt));
+      return result;
+    } else if (filter?.requesterId) {
+      const result = await query
+        .where(eq(pointGenerationRequests.requesterId, filter.requesterId))
+        .orderBy(desc(pointGenerationRequests.createdAt));
+      return result;
+    } else if (filter?.status) {
+      const result = await query
+        .where(eq(pointGenerationRequests.status, filter.status))
+        .orderBy(desc(pointGenerationRequests.createdAt));
+      return result;
+    }
+    
+    const result = await query.orderBy(desc(pointGenerationRequests.createdAt));
+    return result;
   }
 
   async getPointGenerationRequest(id: string): Promise<PointGenerationRequest | undefined> {
-    return this.pointGenerationRequests.get(id);
+    const result = await db.select().from(pointGenerationRequests).where(eq(pointGenerationRequests.id, id)).limit(1);
+    return result[0];
   }
 
   async updatePointGenerationRequest(id: string, data: Partial<PointGenerationRequest>): Promise<PointGenerationRequest> {
-    const existing = this.pointGenerationRequests.get(id);
-    if (!existing) throw new Error("Point generation request not found");
-    const updated = { ...existing, ...data } as PointGenerationRequest;
-    this.pointGenerationRequests.set(id, updated);
-    return updated;
+    const result = await db.update(pointGenerationRequests)
+      .set(data)
+      .where(eq(pointGenerationRequests.id, id))
+      .returning();
+    if (!result[0]) throw new Error("Point generation request not found");
+    return result[0];
   }
 
   // Enhanced secure chat functionality methods

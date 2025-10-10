@@ -19,6 +19,7 @@ import {
   Database, BarChart, UserPlus, Building, Calendar, Download, Star as StarIcon, Star,
   Percent, Calculator, Eye, EyeOff, Edit, Trash2, Save, RefreshCw, Filter, Search, Bell, History
 } from "lucide-react";
+import io from "socket.io-client";
 import SecureChat from "@/components/SecureChat";
 import { useStorageListener } from "@/hooks/use-storage-listener";
 import { NotificationProvider } from "@/hooks/use-notifications";
@@ -307,6 +308,77 @@ export default function LocalAdminPortal() {
     return () => window.removeEventListener('dataUpdate', handler);
   }, [queryClient, refetchBalance]);
 
+  // Socket.IO connection for real-time updates
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const socket = io(wsUrl);
+
+      socket.on('connect', () => {
+        socket.emit('authenticate', {
+          userId: currentUser.id,
+          role: currentUser.role,
+          token: localStorage.getItem('localAdminToken')
+        });
+      });
+
+      socket.on('authenticated', () => {
+        console.log('Local admin socket authenticated');
+      });
+
+      // Listen for balance updates in real-time
+      socket.on('balanceUpdate', (data: any) => {
+        if (data.type === 'local_admin_balance') {
+          // Update balance immediately
+          queryClient.setQueryData(['/api/admin/balance'], (prev: any) => ({
+            ...(prev || {}),
+            balance: data.newBalance
+          }));
+          
+          toast({
+            title: "Balance Updated",
+            description: `${data.change > 0 ? '+' : ''}${data.change.toLocaleString()} points - ${data.reason}`,
+            variant: data.change > 0 ? "default" : "destructive"
+          });
+
+          // Refresh all related queries
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/local/dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/transactions'] });
+          refetchBalance();
+        }
+      });
+
+      // Listen for request status updates
+      socket.on('requestStatusUpdate', (data: any) => {
+        toast({
+          title: data.status === 'approved' ? "Request Approved! ✓" : "Request Updated",
+          description: `Your request for ${data.points.toLocaleString()} points has been ${data.status}.`,
+          variant: data.status === 'approved' ? "default" : "destructive"
+        });
+
+        // Refresh pending requests
+        queryClient.invalidateQueries({ queryKey: ['/api/admin/point-generation-requests'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
+        refetchBalance();
+      });
+
+      // Listen for notification events
+      socket.on('notification', (data: any) => {
+        toast({
+          title: data.title || "Notification",
+          description: data.message,
+          variant: data.type === "error" ? "destructive" : "default"
+        });
+      });
+
+      return () => {
+        socket.disconnect();
+      };
+    }
+  }, [isAuthenticated, currentUser, queryClient, toast, refetchBalance]);
+
   // Get current user's country dashboard data  
   const { data: localDashboard, isLoading: isDashboardLoading } = useQuery({
     queryKey: ['/api/admin/local/dashboard', currentUser?.country],
@@ -525,7 +597,7 @@ export default function LocalAdminPortal() {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/local/dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/merchants'] });
-      queryClient.invalidateQueries({ queryKey: localTransactionsKey as unknown as any });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/transactions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/local-admin/analytics'] });
       queryClient.invalidateQueries({ queryKey: ['/api/local-admin/merchant-stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/local-admin/customer-stats'] });
@@ -534,7 +606,7 @@ export default function LocalAdminPortal() {
       refetchMerchantStats();
       refetchCustomerStats();
       refetchRewardStats();
-      refetchLocalTransactions();
+      refetchTransactions();
       // Also invalidate merchant wallet cache to ensure merchant dashboard updates
       queryClient.invalidateQueries({ queryKey: ['/api/merchant/wallet'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/merchant'] });
@@ -566,8 +638,8 @@ export default function LocalAdminPortal() {
     onSuccess: () => {
       toast({ title: 'Request submitted', description: 'Your request has been sent to Global Admin.' });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/point-generation-requests'] });
-      queryClient.invalidateQueries({ queryKey: localTransactionsKey as unknown as any });
-      refetchLocalTransactions();
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/transactions'] });
+      refetchTransactions();
       setRequestForm({ pointsRequested: "", reason: "" });
     },
     onError: (error: Error) => {
@@ -2019,7 +2091,7 @@ export default function LocalAdminPortal() {
             )}
 
             {/* Request Points Tab */}
-            {activeTab === "request" && (
+            {activeTab === "requests" && (
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
