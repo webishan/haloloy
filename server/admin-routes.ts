@@ -1,10 +1,10 @@
 import type { Express, Request, Response } from "express";
 import { storage } from "./storage";
-import { insertPointDistributionSchema, insertChatMessageSchema, insertPointGenerationRequestSchema, admins, pointDistributions } from "@shared/schema";
+import { insertPointDistributionSchema, insertChatMessageSchema, insertPointGenerationRequestSchema, admins, pointDistributions, users, merchants, orders } from "@shared/schema";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 
 const JWT_SECRET = process.env.JWT_SECRET || "komarce-secret-key";
 
@@ -190,6 +190,123 @@ export function setupAdminRoutes(app: Express) {
       res.status(500).json({ message: error.message || 'Failed to fetch VAT & service charge analytics' });
     }
   });
+
+  // Global Admin Dashboard - Comprehensive Analytics
+  app.get('/api/admin/global/analytics', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
+    try {
+      const { period = 'all' } = req.query;
+      
+      // Get all data directly from database
+      const merchantsData = await db.select().from(merchants);
+      const customersData = await db.select().from(users).where(eq(users.role, 'customer'));
+      const ordersData = await db.select().from(orders);
+      const adminsData = await db.select().from(admins);
+      const pointDistributionsData = await db.select().from(pointDistributions);
+      
+      // Filter by period if specified
+      let filteredData = { merchants: merchantsData, customers: customersData, orders: ordersData, admins: adminsData, pointDistributions: pointDistributionsData };
+      if (period !== 'all') {
+        const now = new Date();
+        const periodDate = getPeriodDate(now, period as string);
+        
+        filteredData = {
+          merchants: merchantsData.filter(m => new Date(m.createdAt) >= periodDate),
+          customers: customersData.filter(c => new Date(c.createdAt) >= periodDate),
+          orders: ordersData.filter(o => new Date(o.createdAt) >= periodDate),
+          admins: adminsData.filter(a => new Date(a.createdAt) >= periodDate),
+          pointDistributions: pointDistributionsData.filter(p => new Date(p.createdAt) >= periodDate)
+        };
+      }
+      
+      // Calculate comprehensive analytics
+      const analytics = {
+        overview: {
+          totalMerchants: filteredData.merchants.length,
+          totalCustomers: filteredData.customers.length,
+          totalOrders: filteredData.orders.length,
+          totalAdmins: filteredData.admins.length,
+          totalPointDistributions: filteredData.pointDistributions.length,
+          period
+        },
+        merchants: {
+          byType: {
+            regular: filteredData.merchants.filter(m => !m.isEMerchant).length,
+            eMerchant: filteredData.merchants.filter(m => m.isEMerchant).length
+          },
+          byRank: {
+            star: filteredData.merchants.filter(m => m.rank === 'star').length,
+            doubleStar: filteredData.merchants.filter(m => m.rank === 'double_star').length,
+            tripleStar: filteredData.merchants.filter(m => m.rank === 'triple_star').length,
+            executive: filteredData.merchants.filter(m => m.rank === 'executive').length
+          },
+          byCountry: filteredData.merchants.reduce((acc, m) => {
+            acc[m.country] = (acc[m.country] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        },
+        customers: {
+          byCountry: filteredData.customers.reduce((acc, c) => {
+            acc[c.country] = (acc[c.country] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>),
+          active: filteredData.customers.filter(c => c.isActive).length,
+          totalPoints: filteredData.customers.reduce((sum, c) => sum + (c.totalPoints || 0), 0)
+        },
+        financial: {
+          totalSales: filteredData.orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0),
+          totalPointsDistributed: filteredData.pointDistributions.reduce((sum, p) => sum + p.points, 0),
+          averageOrderValue: filteredData.orders.length > 0 
+            ? filteredData.orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0) / filteredData.orders.length 
+            : 0
+        },
+        adminBalances: {
+          globalAdmins: filteredData.admins.filter(a => a.adminType === 'global').reduce((sum, a) => sum + (a.pointsBalance || 0), 0),
+          localAdmins: filteredData.admins.filter(a => a.adminType === 'local').reduce((sum, a) => sum + (a.pointsBalance || 0), 0)
+        },
+        recentActivity: {
+          recentMerchants: filteredData.merchants
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, 5),
+          recentCustomers: filteredData.customers
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, 5),
+          recentOrders: filteredData.orders
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, 5)
+        }
+      };
+      
+      res.json(analytics);
+    } catch (error: any) {
+      console.error('Global analytics error:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch global analytics' });
+    }
+  });
+
+  // Helper function to get period date
+  function getPeriodDate(now: Date, period: string): Date {
+    const date = new Date(now);
+    switch (period) {
+      case 'today':
+        date.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        date.setDate(date.getDate() - 7);
+        break;
+      case 'month':
+        date.setMonth(date.getMonth() - 1);
+        break;
+      case 'quarter':
+        date.setMonth(date.getMonth() - 3);
+        break;
+      case 'year':
+        date.setFullYear(date.getFullYear() - 1);
+        break;
+      default:
+        date.setFullYear(2000); // Very old date for 'all'
+    }
+    return date;
+  }
 
   // Global Admin - Commission & Percentage Settings
   app.get('/api/admin/global/commission-settings', authenticateToken, authorizeRole(['global_admin']), async (req, res) => {
@@ -533,11 +650,11 @@ export function setupAdminRoutes(app: Express) {
       }
       
       const globalAdminId = req.user.userId;
-      let globalAdmin = await storage.getAdmin(globalAdminId);
+      let globalAdmin = await db.select().from(admins).where(eq(admins.userId, globalAdminId)).limit(1);
       
-      if (!globalAdmin) {
+      if (!globalAdmin[0]) {
         // Create admin record if it doesn't exist
-        globalAdmin = await storage.createAdmin({
+        const newAdmin = await db.insert(admins).values({
           userId: globalAdminId,
           adminType: 'global',
           country: 'Global',
@@ -545,28 +662,29 @@ export function setupAdminRoutes(app: Express) {
           totalPointsReceived: 0,
           totalPointsDistributed: 0,
           isActive: true
-        });
+        }).returning();
+        globalAdmin = newAdmin;
       }
       
       // Update global admin's points balance
-      const updatedAdmin = await storage.updateAdmin(globalAdminId, {
-        pointsBalance: (globalAdmin.pointsBalance || 0) + points,
-        totalPointsReceived: (globalAdmin.totalPointsReceived || 0) + points
-      });
+      const updatedAdmin = await db.update(admins).set({
+        pointsBalance: (globalAdmin[0].pointsBalance || 0) + points,
+        totalPointsReceived: (globalAdmin[0].totalPointsReceived || 0) + points
+      }).where(eq(admins.userId, globalAdminId)).returning();
       
-      // Create a record of manual point addition
+      // Create a record of point generation
       await db.insert(pointDistributions).values({
         fromUserId: 'system',
         toUserId: globalAdminId,
         points,
-        description: description || 'Manual points addition by global admin',
-        distributionType: 'manual_addition',
+        description: description || 'Point generation by global admin',
+        distributionType: 'point_generation',
         status: 'completed'
       }).returning();
       
       res.json({
         message: 'Points added successfully',
-        newBalance: updatedAdmin.pointsBalance || (globalAdmin.pointsBalance || 0) + points
+        newBalance: updatedAdmin[0].pointsBalance || (globalAdmin[0].pointsBalance || 0) + points
       });
       
     } catch (error) {
@@ -1119,7 +1237,7 @@ export function setupAdminRoutes(app: Express) {
         sql`(
           (${pointDistributions.toUserId} = ${req.user.userId} AND ${pointDistributions.fromUserId} != ${req.user.userId} AND ${pointDistributions.fromUserId} != 'system') OR
           (${pointDistributions.fromUserId} = ${req.user.userId} AND ${pointDistributions.toUserId} != ${req.user.userId} AND ${pointDistributions.toUserId} != 'system')
-        ) AND ${pointDistributions.distributionType} != 'point_generation'`
+        )`
       );
       
       // Enhance with user details
@@ -1153,15 +1271,16 @@ export function setupAdminRoutes(app: Express) {
       const admin = adminData[0];
       
       // Get point distributions directly from database
-      // Only include distributions that are relevant to this admin:
+      // Include all distributions that are relevant to this admin:
       // 1. Credits TO this admin (when this admin is the receiver)
       // 2. Debits FROM this admin (when this admin is the sender)
-      // Exclude: self-transactions, system transactions, point generation
+      // 3. Point generation transactions (self-transactions for point generation)
+      // Exclude: system transactions that don't involve this admin
       const distributions = await db.select().from(pointDistributions).where(
         sql`(
-          (${pointDistributions.toUserId} = ${userId} AND ${pointDistributions.fromUserId} != ${userId} AND ${pointDistributions.fromUserId} != 'system') OR
-          (${pointDistributions.fromUserId} = ${userId} AND ${pointDistributions.toUserId} != ${userId} AND ${pointDistributions.toUserId} != 'system')
-        ) AND ${pointDistributions.distributionType} != 'point_generation'`
+          (${pointDistributions.toUserId} = ${userId} AND ${pointDistributions.fromUserId} != 'system') OR
+          (${pointDistributions.fromUserId} = ${userId} AND ${pointDistributions.toUserId} != 'system')
+        )`
       );
       
       // Convert distributions to transaction format with proper sequential balance calculation
@@ -1191,9 +1310,19 @@ export function setupAdminRoutes(app: Express) {
           runningBalance -= dist.points;
         }
         
+        // Determine transaction type for display
+        let displayType = isCredit ? 'credit' : 'debit';
+        if (dist.distributionType === 'point_generation') {
+          displayType = 'Generated';
+        } else if (isCredit) {
+          displayType = 'Received';
+        } else if (isDebit) {
+          displayType = 'Distributed';
+        }
+        
         return {
           id: dist.id,
-          type: isCredit ? 'credit' : 'debit',
+          type: displayType,
           amount: Math.abs(dist.points),
           description: dist.description,
           createdAt: dist.createdAt,
@@ -1204,11 +1333,11 @@ export function setupAdminRoutes(app: Express) {
       
       // Calculate totals correctly
       const calculatedTotalCredits = transactionHistory
-        .filter(t => t.type === 'credit')
+        .filter(t => t.type === 'Received' || t.type === 'Generated')
         .reduce((sum, t) => sum + t.amount, 0);
       
       const calculatedTotalDebits = transactionHistory
-        .filter(t => t.type === 'debit')
+        .filter(t => t.type === 'Distributed')
         .reduce((sum, t) => sum + t.amount, 0);
       
       res.json({
@@ -1270,6 +1399,296 @@ export function setupAdminRoutes(app: Express) {
     } catch (error) {
       console.error('Balance error:', error);
       res.status(500).json({ message: 'Failed to load balance' });
+    }
+  });
+
+  // ========== Local Admin Specific Endpoints ==========
+  
+  // Get merchant list for local admin (filtered by country)
+  app.get('/api/local-admin/merchant-list', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      if (!currentUser[0]?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      const merchants = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      
+      // Enhance with user details and point information
+      const enhancedMerchants = [];
+      for (const merchant of merchants) {
+        const user = await db.select().from(users).where(eq(users.id, merchant.userId)).limit(1);
+        if (user[0]) {
+          enhancedMerchants.push({
+            id: merchant.id,
+            firstName: user[0].firstName,
+            lastName: user[0].lastName,
+            email: user[0].email,
+            serialNumber: merchant.serialNumber || `SN${merchant.id.slice(0, 8)}`,
+            totalPoints: merchant.loyaltyPointsBalance || 0,
+            referralCount: merchant.referralCount || 0,
+            businessName: merchant.businessName,
+            isActive: merchant.isActive
+          });
+        }
+      }
+      
+      res.json(enhancedMerchants);
+    } catch (error) {
+      console.error('Get local admin merchant list error:', error);
+      res.status(500).json({ message: 'Failed to fetch merchant list' });
+    }
+  });
+
+  // Get customer list for local admin (filtered by country)
+  app.get('/api/local-admin/customer-list', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      if (!currentUser[0]?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      const customers = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
+      
+      // Enhance with user details and point information
+      const enhancedCustomers = [];
+      for (const customer of customers) {
+        enhancedCustomers.push({
+          id: customer.id,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          email: customer.email,
+          serialNumber: customer.serialNumber || `SN${customer.id.slice(0, 8)}`,
+          totalPoints: customer.totalPoints || 0,
+          referralCount: customer.referralCount || 0,
+          isActive: customer.isActive
+        });
+      }
+      
+      res.json(enhancedCustomers);
+    } catch (error) {
+      console.error('Get local admin customer list error:', error);
+      res.status(500).json({ message: 'Failed to fetch customer list' });
+    }
+  });
+
+  // Get cofounder and staff list for local admin
+  app.get('/api/local-admin/cofounder-staff', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.userId);
+      if (!currentUser?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      // Get all users from the same country with admin or staff roles
+      const allUsers = await storage.getUsers();
+      const countryUsers = allUsers.filter(user => 
+        user.country === currentUser.country && 
+        (user.role === 'local_admin' || user.role === 'staff')
+      );
+
+      const cofounders = countryUsers.filter(user => user.role === 'local_admin');
+      const staff = countryUsers.filter(user => user.role === 'staff');
+
+      res.json({
+        cofounders: cofounders.map(user => ({
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: 'Co-Founder'
+        })),
+        staff: staff.map(user => ({
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: 'Staff'
+        }))
+      });
+    } catch (error) {
+      console.error('Get local admin cofounder staff error:', error);
+      res.status(500).json({ message: 'Failed to fetch cofounder staff data' });
+    }
+  });
+
+  // Get analytics data for local admin
+  app.get('/api/local-admin/analytics', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      if (!currentUser[0]?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      const merchants = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const customers = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
+      const orders = await db.select().from(orders);
+      
+      // Filter orders by country (assuming orders have merchant info)
+      const countryOrders = [];
+      for (const order of orders) {
+        const merchant = merchants.find(m => m.id === order.merchantId);
+        if (merchant) {
+          countryOrders.push(order);
+        }
+      }
+
+      // Calculate analytics
+      const totalSales = countryOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+      const activeMerchants = merchants.filter(m => m.isActive).length;
+      const activeCustomers = customers.filter(c => c.isActive).length;
+      
+      const salesPerformance = merchants.length > 0 ? Math.round((activeMerchants / merchants.length) * 100) : 0;
+      
+      res.json({
+        salesPerformance,
+        popularBrands: ['Electronics', 'Fashion', 'Home & Living'], // Could be calculated from actual data
+        customerBehavior: activeCustomers > customers.length * 0.7 ? 'Very Active' : 'Active',
+        inventoryStatus: 'Good',
+        totalSales: totalSales.toFixed(2),
+        activeMerchants,
+        activeCustomers,
+        totalOrders: countryOrders.length
+      });
+    } catch (error) {
+      console.error('Get local admin analytics error:', error);
+      res.status(500).json({ message: 'Failed to fetch analytics data' });
+    }
+  });
+
+  // Get acquisition data for local admin
+  app.get('/api/local-admin/acquisition', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.userId);
+      if (!currentUser?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      const merchants = await storage.getMerchants(currentUser.country);
+      const customers = await storage.getCustomers(currentUser.country);
+      
+      // Calculate acquisition metrics
+      const customerReferral = customers.filter(c => c.referralCount > 0).length;
+      const merchantSignup = merchants.filter(m => !m.isEMerchant).length;
+      const eMerchantSignup = merchants.filter(m => m.isEMerchant).length;
+      
+      res.json({
+        customerReferral,
+        merchantSignup,
+        eMerchantSignup,
+        totalMerchants: merchants.length,
+        totalCustomers: customers.length,
+        newMerchantsThisMonth: merchants.filter(m => {
+          const createdDate = new Date(m.createdAt);
+          const now = new Date();
+          return createdDate.getMonth() === now.getMonth() && createdDate.getFullYear() === now.getFullYear();
+        }).length
+      });
+    } catch (error) {
+      console.error('Get local admin acquisition error:', error);
+      res.status(500).json({ message: 'Failed to fetch acquisition data' });
+    }
+  });
+
+  // Get merchant stats for local admin
+  app.get('/api/local-admin/merchant-stats', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      if (!currentUser[0]?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      const merchants = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      
+      res.json({
+        totalMerchants: merchants.length,
+        regularMerchants: merchants.filter(m => !m.isEMerchant).length,
+        eMerchants: merchants.filter(m => m.isEMerchant).length,
+        starMerchants: merchants.filter(m => m.rank === 'star').length,
+        doubleStarMerchants: merchants.filter(m => m.rank === 'double_star').length,
+        tripleStarMerchants: merchants.filter(m => m.rank === 'triple_star').length,
+        executiveMerchants: merchants.filter(m => m.rank === 'executive').length
+      });
+    } catch (error) {
+      console.error('Get local admin merchant stats error:', error);
+      res.status(500).json({ message: 'Failed to fetch merchant stats' });
+    }
+  });
+
+  // Get customer stats for local admin
+  app.get('/api/local-admin/customer-stats', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      if (!currentUser[0]?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      const customers = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
+      
+      res.json({
+        totalCustomers: customers.length,
+        activeCustomers: customers.filter(c => c.isActive).length
+      });
+    } catch (error) {
+      console.error('Get local admin customer stats error:', error);
+      res.status(500).json({ message: 'Failed to fetch customer stats' });
+    }
+  });
+
+  // Get reward stats for local admin
+  app.get('/api/local-admin/reward-stats', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      if (!currentUser[0]?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      const merchants = await db.select().from(merchants).where(eq(merchants.country, currentUser[0].country));
+      const customers = await db.select().from(users).where(and(eq(users.role, 'customer'), eq(users.country, currentUser[0].country)));
+      const orders = await db.select().from(orders);
+      
+      // Filter orders by country
+      const countryOrders = [];
+      for (const order of orders) {
+        const merchant = merchants.find(m => m.id === order.merchantId);
+        if (merchant) {
+          countryOrders.push(order);
+        }
+      }
+
+      const totalSales = countryOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+      const distributedPoints = merchants.reduce((sum, m) => sum + (m.loyaltyPointsBalance || 0), 0);
+      const totalPoints = customers.reduce((sum, c) => sum + (c.totalPoints || 0), 0);
+      
+      res.json({
+        totalSales: totalSales.toFixed(2),
+        distributedPoints,
+        totalPoints
+      });
+    } catch (error) {
+      console.error('Get local admin reward stats error:', error);
+      res.status(500).json({ message: 'Failed to fetch reward stats' });
+    }
+  });
+
+  // Get withdrawal stats for local admin
+  app.get('/api/local-admin/withdrawal-stats', authenticateToken, authorizeRole(['local_admin']), async (req, res) => {
+    try {
+      const currentUser = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      if (!currentUser[0]?.country) {
+        return res.status(400).json({ message: 'Admin country not found' });
+      }
+
+      // This would need withdrawal data from database - for now return basic stats
+      res.json({
+        totalWithdrawals: 0,
+        merchantWithdrawals: 0,
+        customerWithdrawals: 0,
+        withdrawableNotWithdrawn: 0
+      });
+    } catch (error) {
+      console.error('Get local admin withdrawal stats error:', error);
+      res.status(500).json({ message: 'Failed to fetch withdrawal stats' });
     }
   });
 

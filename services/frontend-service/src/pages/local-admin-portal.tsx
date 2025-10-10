@@ -110,21 +110,16 @@ export default function LocalAdminPortal() {
     retry: false
   });
 
-  // Local Admin specific data queries - using mock data for now
+  // Local Admin specific data queries - now using real API calls
   const { data: localMerchantStats } = useQuery({
     queryKey: ['/api/local-admin/merchant-stats'],
     enabled: isAuthenticated,
     queryFn: async () => {
-      // Mock data for now - will be replaced with real API calls
-      return {
-        totalMerchants: 0,
-        regularMerchants: 0,
-        eMerchants: 0,
-        starMerchants: 0,
-        doubleStarMerchants: 0,
-        tripleStarMerchants: 0,
-        executiveMerchants: 0
-      };
+      const res = await fetch('/api/local-admin/merchant-stats', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch merchant stats');
+      return res.json();
     }
   });
 
@@ -132,11 +127,11 @@ export default function LocalAdminPortal() {
     queryKey: ['/api/local-admin/customer-stats'],
     enabled: isAuthenticated,
     queryFn: async () => {
-      // Mock data for now
-      return {
-        totalCustomers: 0,
-        activeCustomers: 0
-      };
+      const res = await fetch('/api/local-admin/customer-stats', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch customer stats');
+      return res.json();
     }
   });
 
@@ -144,12 +139,11 @@ export default function LocalAdminPortal() {
     queryKey: ['/api/local-admin/reward-stats'],
     enabled: isAuthenticated,
     queryFn: async () => {
-      // Mock data for now
-      return {
-        totalSales: 50000,
-        distributedPoints: 25000,
-        totalPoints: 100000
-      };
+      const res = await fetch('/api/local-admin/reward-stats', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch reward stats');
+      return res.json();
     }
   });
 
@@ -157,13 +151,11 @@ export default function LocalAdminPortal() {
     queryKey: ['/api/local-admin/withdrawal-stats'],
     enabled: isAuthenticated,
     queryFn: async () => {
-      // Mock data for now
-      return {
-        totalWithdrawals: 15000,
-        merchantWithdrawals: 8000,
-        customerWithdrawals: 5000,
-        withdrawableNotWithdrawn: 2000
-      };
+      const res = await fetch('/api/local-admin/withdrawal-stats', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch withdrawal stats');
+      return res.json();
     }
   });
 
@@ -171,12 +163,11 @@ export default function LocalAdminPortal() {
     queryKey: ['/api/local-admin/merchant-list'],
     enabled: isAuthenticated,
     queryFn: async () => {
-      // Mock data for now
-      return [
-        { id: '1', firstName: 'John', lastName: 'Doe', serialNumber: 'SN001', totalPoints: 5000, referralCount: 5 },
-        { id: '2', firstName: 'Jane', lastName: 'Smith', serialNumber: 'SN002', totalPoints: 4500, referralCount: 3 },
-        { id: '3', firstName: 'Bob', lastName: 'Johnson', serialNumber: 'SN003', totalPoints: 4000, referralCount: 7 }
-      ];
+      const res = await fetch('/api/local-admin/merchant-list', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch merchant list');
+      return res.json();
     }
   });
 
@@ -184,12 +175,11 @@ export default function LocalAdminPortal() {
     queryKey: ['/api/local-admin/customer-list'],
     enabled: isAuthenticated,
     queryFn: async () => {
-      // Mock data for now
-      return [
-        { id: '1', firstName: 'Alice', lastName: 'Brown', serialNumber: 'SN001', totalPoints: 5000, referralCount: 5 },
-        { id: '2', firstName: 'Charlie', lastName: 'Wilson', serialNumber: 'SN002', totalPoints: 4500, referralCount: 3 },
-        { id: '3', firstName: 'Diana', lastName: 'Davis', serialNumber: 'SN003', totalPoints: 4000, referralCount: 7 }
-      ];
+      const res = await fetch('/api/local-admin/customer-list', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch customer list');
+      return res.json();
     }
   });
 
@@ -197,15 +187,11 @@ export default function LocalAdminPortal() {
     queryKey: ['/api/local-admin/cofounder-staff'],
     enabled: isAuthenticated,
     queryFn: async () => {
-      // Mock data for now
-      return {
-        cofounders: [
-          { id: '1', firstName: 'Local', lastName: 'Co-Founder', email: 'cofounder@komarce.com' }
-        ],
-        staff: [
-          { id: '1', firstName: 'Staff', lastName: 'Member', email: 'staff@komarce.com', role: 'Manager' }
-        ]
-      };
+      const res = await fetch('/api/local-admin/cofounder-staff', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch cofounder staff data');
+      return res.json();
     }
   });
 
@@ -213,13 +199,11 @@ export default function LocalAdminPortal() {
     queryKey: ['/api/local-admin/analytics'],
     enabled: isAuthenticated,
     queryFn: async () => {
-      // Mock data for now
-      return {
-        salesPerformance: 85,
-        popularBrands: ['Brand A', 'Brand B', 'Brand C'],
-        customerBehavior: 'Active',
-        inventoryStatus: 'Good'
-      };
+      const res = await fetch('/api/local-admin/analytics', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch analytics data');
+      return res.json();
     }
   });
 
@@ -227,12 +211,11 @@ export default function LocalAdminPortal() {
     queryKey: ['/api/local-admin/acquisition'],
     enabled: isAuthenticated,
     queryFn: async () => {
-      // Mock data for now
-      return {
-        customerReferral: 45,
-        merchantSignup: 12,
-        eMerchantSignup: 8
-      };
+      const res = await fetch('/api/local-admin/acquisition', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('localAdminToken')}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch acquisition data');
+      return res.json();
     }
   });
 

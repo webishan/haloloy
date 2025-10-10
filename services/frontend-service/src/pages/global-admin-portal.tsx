@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useStorageListener } from "@/hooks/use-storage-listener";
 import { 
   Shield, Crown, LogOut, Users, DollarSign, BarChart3, Star, Settings, MessageCircle,
   TrendingUp, Coins, CheckCircle, Send, Plus, AlertCircle, Check, X, Menu, X as XIcon,
@@ -367,11 +368,17 @@ export default function GlobalAdminPortal() {
     cacheTime: 0 // Don't cache the results
   });
 
+  // Listen for storage/custom events to force immediate refresh
+  useStorageListener(['/api/admin/balance','/api/admin/dashboard','/api/admin/transactions']);
+
   // Transaction history from database
   const { data: transactionHistory, refetch: refetchTransactions } = useQuery({
     queryKey: ['/api/admin/transactions'],
     enabled: isAuthenticated,
-    refetchInterval: 10000, // Poll every 10 seconds
+    refetchInterval: 30000, // Poll every 30 seconds
+    refetchOnWindowFocus: true, // Refresh when window gains focus
+    staleTime: 10000, // Consider data stale after 10 seconds
+    gcTime: 60000, // Cache for 1 minute
     retry: false
   });
 

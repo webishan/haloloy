@@ -40,6 +40,83 @@ interface GlobalAdminUser {
   createdAt: string;
 }
 
+interface GlobalAnalytics {
+  overview: {
+    totalMerchants: number;
+    totalCustomers: number;
+    totalOrders: number;
+    totalAdmins: number;
+    totalPointDistributions: number;
+    period: string;
+  };
+  merchants: {
+    byType: {
+      regular: number;
+      eMerchant: number;
+    };
+    byRank: {
+      star: number;
+      doubleStar: number;
+      tripleStar: number;
+      executive: number;
+    };
+    byCountry: Record<string, number>;
+  };
+  customers: {
+    byCountry: Record<string, number>;
+    active: number;
+    totalPoints: number;
+  };
+  financial: {
+    totalSales: number;
+    totalPointsDistributed: number;
+    averageOrderValue: number;
+  };
+  adminBalances: {
+    globalAdmins: number;
+    localAdmins: number;
+  };
+  recentActivity: {
+    recentMerchants: any[];
+    recentCustomers: any[];
+    recentOrders: any[];
+  };
+  totalSales?: number;
+  salesGrowth?: number;
+  totalPointsDistributed?: number;
+  pointsGrowth?: number;
+  totalSerialNumbers?: number;
+  serialGrowth?: number;
+  totalVATService?: number;
+  vatGrowth?: number;
+  chartData?: any[];
+  topCountries?: any[];
+  topMerchants?: any[];
+}
+
+interface TransactionHistory {
+  transactions: Array<{
+    id: string;
+    type: 'credit' | 'debit';
+    amount: number;
+    description: string;
+    createdAt: string;
+    status: string;
+    distributionType: string;
+  }>;
+  currentBalance: number;
+  totalReceived: number;
+  totalDistributed: number;
+  totalCredits: number;
+  totalDebits: number;
+}
+
+interface AdminBalance {
+  balance: number;
+  totalReceived: number;
+  totalDistributed: number;
+}
+
 interface ChatMessage {
   id: string;
   senderId: string;
@@ -599,6 +676,8 @@ export default function GlobalAdminPortal() {
       // Force immediate refresh of balance and dashboard everywhere
       queryClient.invalidateQueries({ queryKey: ['/api/admin/balance'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/global/analytics'] });
+      refetchAnalytics();
       // Broadcast a custom event so other tabs/components refresh now
       window.dispatchEvent(new CustomEvent('dataUpdate'));
       localStorage.setItem('lastAdminUpdate', Date.now().toString());
@@ -616,6 +695,8 @@ export default function GlobalAdminPortal() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/pending-point-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/global/analytics'] });
+      refetchAnalytics();
     }
   });
 
@@ -914,13 +995,13 @@ export default function GlobalAdminPortal() {
   });
 
   // Real-time admin balance from database
-  const { data: adminBalance, refetch: refetchBalance } = useQuery({
+  const { data: adminBalance, refetch: refetchBalance } = useQuery<AdminBalance>({
     queryKey: ['/api/admin/balance'],
     enabled: isAuthenticated,
     refetchInterval: 30000, // Poll every 30 seconds
     retry: false,
     staleTime: 0, // Always fetch fresh data
-    cacheTime: 0 // Don't cache the results
+    gcTime: 0 // Don't cache the results
   });
 
   // Infinity Rewards from cycles
@@ -938,21 +1019,27 @@ export default function GlobalAdminPortal() {
   });
 
   // Listen for storage/custom events to force immediate refresh
-  useStorageListener(['/api/admin/balance','/api/admin/dashboard']);
+  useStorageListener(['/api/admin/balance','/api/admin/dashboard','/api/admin/transactions']);
 
   // Transaction history from database
-  const { data: transactionHistory, refetch: refetchTransactions } = useQuery({
+  const { data: transactionHistory, refetch: refetchTransactions } = useQuery<TransactionHistory>({
     queryKey: ['/api/admin/transactions'],
     enabled: isAuthenticated,
     refetchInterval: 30000, // Poll every 30 seconds
+    refetchOnWindowFocus: true, // Refresh when window gains focus
+    staleTime: 10000, // Consider data stale after 10 seconds
+    gcTime: 60000, // Cache for 1 minute
     retry: false
   });
 
-  // Global Analytics Data
-  const { data: globalAnalytics, isLoading: analyticsLoading } = useQuery({
+  // Global Analytics Data with real-time updates
+  const { data: globalAnalytics, isLoading: analyticsLoading, refetch: refetchAnalytics } = useQuery<GlobalAnalytics>({
     queryKey: ['/api/admin/global/analytics', timeFilter],
     enabled: isAuthenticated,
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 30000, // Refresh every 30 seconds for real-time analytics
+    refetchOnWindowFocus: true, // Refresh when window gains focus
+    staleTime: 10000, // Consider data stale after 10 seconds
+    gcTime: 60000, // Cache for 1 minute
     queryFn: async () => {
       const token = localStorage.getItem('globalAdminToken');
       if (!token) throw new Error('No authentication token');
@@ -997,6 +1084,7 @@ export default function GlobalAdminPortal() {
       // Refresh balance and transaction history
       refetchBalance();
       refetchTransactions();
+      refetchAnalytics();
       queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
       
       setAddPointsForm({ points: "", description: "" });
@@ -2432,7 +2520,7 @@ export default function GlobalAdminPortal() {
                         <div>
                           <p className="text-sm font-semibold text-blue-800">Global Sales</p>
                           <p className="text-3xl font-bold text-blue-900">
-                            ${globalAnalytics?.totalSales?.toLocaleString() || '0'}
+                            ${globalAnalytics?.financial?.totalSales?.toLocaleString() || '0'}
                           </p>
                           <p className="text-sm text-green-600">
                             +{globalAnalytics?.salesGrowth || 0}% vs last period
@@ -2451,7 +2539,7 @@ export default function GlobalAdminPortal() {
                         <div>
                           <p className="text-sm font-semibold text-green-800">Points Distributed</p>
                           <p className="text-3xl font-bold text-green-900">
-                            {globalAnalytics?.totalPointsDistributed?.toLocaleString() || '0'}
+                            {globalAnalytics?.financial?.totalPointsDistributed?.toLocaleString() || '0'}
                           </p>
                           <p className="text-sm text-green-600">
                             +{globalAnalytics?.pointsGrowth || 0}% vs last period
