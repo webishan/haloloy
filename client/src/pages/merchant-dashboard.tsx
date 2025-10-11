@@ -172,6 +172,7 @@ function QRScanComponent({ onCustomerScanned, onError }: {
       console.log('✅ Camera access granted');
       
       if (videoRef.current) {
+        console.log('📹 Setting video srcObject...');
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         setCameraActive(true);
@@ -181,6 +182,32 @@ function QRScanComponent({ onCustomerScanned, onError }: {
           console.log('🎬 Video metadata loaded, starting QR scanning');
           startQRScanning();
         };
+        
+        // Also listen for when video starts playing
+        videoRef.current.onplay = () => {
+          console.log('▶️ Video started playing');
+        };
+        
+        videoRef.current.oncanplay = () => {
+          console.log('🎯 Video can start playing');
+        };
+        
+        // Try to play the video explicitly (required on some mobile devices)
+        videoRef.current.play().then(() => {
+          console.log('🎬 Video play() succeeded');
+        }).catch((error) => {
+          console.error('❌ Video play() failed:', error);
+        });
+        
+        // Also try to start scanning after a short delay as backup
+        setTimeout(() => {
+          if (cameraActive && !scanIntervalRef.current) {
+            console.log('🔄 Backup: Starting QR scanning after timeout');
+            startQRScanning();
+          }
+        }, 1000);
+      } else {
+        console.error('❌ videoRef.current is null');
       }
     } catch (error: any) {
       console.error('❌ Camera error:', error);
@@ -221,12 +248,15 @@ function QRScanComponent({ onCustomerScanned, onError }: {
     }
     
     console.log('🔍 Starting QR code scanning...');
+    console.log('📊 Camera state:', { cameraActive, videoRef: !!videoRef.current, canvasRef: !!canvasRef.current, isScanning });
     
     scanIntervalRef.current = setInterval(() => {
       if (videoRef.current && canvasRef.current && !isScanning && cameraActive) {
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
+        
+        console.log('🎥 Video dimensions:', { videoWidth: video.videoWidth, videoHeight: video.videoHeight, readyState: video.readyState });
         
         if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
           // Use a smaller canvas for better performance
@@ -307,14 +337,25 @@ function QRScanComponent({ onCustomerScanned, onError }: {
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Camera Status */}
+                <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>Camera Active - Scanning for QR codes...</span>
+                </div>
+                
                 <div className="relative bg-white rounded-xl shadow-lg overflow-hidden">
                   <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted
-                    className="w-full h-64 object-cover"
+                    className="w-full h-64 object-cover bg-gray-100"
+                    style={{ minHeight: '256px' }}
                   />
+                  {/* Fallback message if video is not visible */}
+                  <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+                    Camera Feed
+                  </div>
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-48 h-48 border-2 border-blue-500 rounded-lg bg-transparent">
                       <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
