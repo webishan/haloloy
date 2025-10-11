@@ -47,7 +47,13 @@ function QRScanComponent({ onCustomerScanned, onError }: {
   const [scanMode, setScanMode] = useState<'camera' | 'upload'>('camera');
   const [isScanning, setIsScanning] = useState(false);
   const [qrCodeInput, setQrCodeInput] = useState('');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const scanQRCode = async (qrCode: string) => {
     try {
@@ -143,6 +149,120 @@ function QRScanComponent({ onCustomerScanned, onError }: {
     }
   };
 
+  // Camera functions
+  const startCamera = async () => {
+    try {
+      setCameraError(null);
+      console.log('🎥 Starting camera...');
+      
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera not supported on this device');
+      }
+      
+      console.log('📱 Requesting camera access...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment', // Use back camera if available
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
+      });
+      
+      console.log('✅ Camera access granted');
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        setCameraActive(true);
+        
+        // Wait for video to be ready before starting scanning
+        videoRef.current.onloadedmetadata = () => {
+          console.log('🎬 Video metadata loaded, starting QR scanning');
+          startQRScanning();
+        };
+      }
+    } catch (error: any) {
+      console.error('❌ Camera error:', error);
+      let errorMessage = 'Camera access denied or not available.';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Camera permission denied. Please allow camera access and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No camera found on this device.';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = 'Camera not supported on this device.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = 'Camera is already in use by another application.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage = 'Camera constraints cannot be satisfied.';
+      }
+      
+      setCameraError(errorMessage);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    setCameraActive(false);
+    setCameraError(null);
+  };
+
+  const startQRScanning = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+    }
+    
+    console.log('🔍 Starting QR code scanning...');
+    
+    scanIntervalRef.current = setInterval(() => {
+      if (videoRef.current && canvasRef.current && !isScanning && cameraActive) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
+          // Use a smaller canvas for better performance
+          const scale = 0.5;
+          canvas.width = video.videoWidth * scale;
+          canvas.height = video.videoHeight * scale;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          
+          if (code && code.data) {
+            console.log('✅ QR code detected:', code.data);
+            // Found a QR code, stop scanning and process it
+            stopCamera();
+            scanQRCode(code.data);
+          }
+        }
+      }
+    }, 200); // Check every 200ms for better performance
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  // Stop camera when switching modes
+  useEffect(() => {
+    if (scanMode !== 'camera') {
+      stopCamera();
+    }
+  }, [scanMode]);
+
   return (
     <div className="space-y-4">
       {/* Mode Selection */}
@@ -167,36 +287,101 @@ function QRScanComponent({ onCustomerScanned, onError }: {
 
       {scanMode === 'camera' ? (
         <div className="space-y-4">
-          <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
-            <QrCode className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600 mb-4">Camera scanning not implemented yet</p>
-            <p className="text-sm text-gray-500">Please use manual input or upload option</p>
+          {/* Camera Section */}
+          <div className="space-y-4">
+            {!cameraActive ? (
+              <div className="text-center p-8 bg-white border-2 border-dashed border-gray-200 rounded-xl shadow-sm">
+                <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-full flex items-center justify-center">
+                  <QrCode className="w-10 h-10 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to scan QR codes</h3>
+                <p className="text-gray-600 mb-6">Click "Start Camera" to begin real-time scanning</p>
+                <Button 
+                  onClick={startCamera}
+                  disabled={isScanning}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  <QrCode className="w-4 h-4 mr-2" />
+                  Start Camera
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="relative bg-white rounded-xl shadow-lg overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-64 object-cover"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-48 h-48 border-2 border-blue-500 rounded-lg bg-transparent">
+                      <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
+                      <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-lg"></div>
+                      <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-lg"></div>
+                      <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-500 rounded-br-lg"></div>
+                    </div>
+                  </div>
+                  <div className="absolute bottom-2 left-2 right-2">
+                    <div className="bg-white bg-opacity-95 backdrop-blur-sm text-gray-900 text-center py-3 px-4 rounded-lg shadow-lg border border-gray-200">
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <p className="text-sm font-medium">Point your camera at a QR code</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <Button 
+                  onClick={stopCamera}
+                  variant="outline"
+                  className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Stop Camera
+                </Button>
+              </div>
+            )}
+            
+            {cameraError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center">
+                  <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                  <p className="text-red-700 text-sm">{cameraError}</p>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Manual QR Code Input */}
-          <div className="space-y-2">
-            <Label htmlFor="qrInput">Or enter QR code manually:</Label>
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <Label htmlFor="qrInput" className="text-sm font-medium text-gray-700 mb-2 block">Or enter QR code manually:</Label>
             <Input
               id="qrInput"
               placeholder="KOMARCE:CUSTOMER:..."
               value={qrCodeInput}
               onChange={(e) => setQrCodeInput(e.target.value)}
+              className="mb-3 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
             />
             <Button 
               onClick={handleManualInput}
               disabled={!qrCodeInput.trim() || isScanning}
-              className="w-full"
+              className="w-full bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white py-2 rounded-lg font-medium transition-all duration-200"
             >
               {isScanning ? 'Scanning...' : 'Scan QR Code'}
             </Button>
           </div>
+          
+          {/* Hidden canvas for QR code detection */}
+          <canvas ref={canvasRef} className="hidden" />
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
-            <Upload className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600 mb-2">Upload QR code image or text file</p>
-            <p className="text-sm text-gray-500 mb-4">Supports PNG, JPG, GIF, TXT, JSON</p>
+          <div className="text-center p-8 bg-white border-2 border-dashed border-gray-200 rounded-xl shadow-sm">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-purple-50 to-pink-100 rounded-full flex items-center justify-center">
+              <Upload className="w-10 h-10 text-purple-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload QR code image or text file</h3>
+            <p className="text-gray-600 mb-6">Supports PNG, JPG, GIF, TXT, JSON</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -206,25 +391,26 @@ function QRScanComponent({ onCustomerScanned, onError }: {
             />
             <Button 
               onClick={() => fileInputRef.current?.click()}
-              variant="outline"
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-8 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
             >
               Choose File
             </Button>
           </div>
           
           {/* Manual QR Code Input */}
-          <div className="space-y-2">
-            <Label htmlFor="qrInputUpload">Or enter QR code manually:</Label>
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <Label htmlFor="qrInputUpload" className="text-sm font-medium text-gray-700 mb-2 block">Or enter QR code manually:</Label>
             <Input
               id="qrInputUpload"
               placeholder="KOMARCE:CUSTOMER:..."
               value={qrCodeInput}
               onChange={(e) => setQrCodeInput(e.target.value)}
+              className="mb-3 border-gray-300 focus:border-purple-500 focus:ring-purple-500"
             />
             <Button 
               onClick={handleManualInput}
               disabled={!qrCodeInput.trim() || isScanning}
-              className="w-full"
+              className="w-full bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white py-2 rounded-lg font-medium transition-all duration-200"
             >
               {isScanning ? 'Scanning...' : 'Scan QR Code'}
             </Button>
@@ -3350,32 +3536,34 @@ export default function MerchantDashboard() {
 
       {/* QR Code Scan Dialog */}
       <Dialog open={showQRScanDialog} onOpenChange={setShowQRScanDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Scan Customer QR Code</DialogTitle>
+        <DialogContent className="max-w-md bg-white border-0 shadow-2xl">
+          <DialogHeader className="pb-4 border-b border-gray-100">
+            <DialogTitle className="text-xl font-semibold text-gray-900">Scan Customer QR Code</DialogTitle>
           </DialogHeader>
-          <QRScanComponent 
-            onCustomerScanned={(customer) => {
-              toast({
-                title: "Customer Added!",
-                description: `${customer.fullName} has been added to your customer list.`,
-              });
-              // Force refresh customer list immediately with aggressive cache clearing
-              queryClient.invalidateQueries(['/api/merchant/scanned-customers']);
-              queryClient.removeQueries(['/api/merchant/scanned-customers']);
-              setTimeout(() => {
-                refetchCustomers();
-              }, 100);
-              setShowQRScanDialog(false);
-            }}
-            onError={(error) => {
-              toast({
-                title: "Scan Failed",
-                description: error,
-                variant: "destructive",
-              });
-            }}
-          />
+          <div className="bg-gray-50 rounded-lg p-6 mt-4">
+            <QRScanComponent 
+              onCustomerScanned={(customer) => {
+                toast({
+                  title: "Customer Added!",
+                  description: `${customer.fullName} has been added to your customer list.`,
+                });
+                // Force refresh customer list immediately with aggressive cache clearing
+                queryClient.invalidateQueries(['/api/merchant/scanned-customers']);
+                queryClient.removeQueries(['/api/merchant/scanned-customers']);
+                setTimeout(() => {
+                  refetchCustomers();
+                }, 100);
+                setShowQRScanDialog(false);
+              }}
+              onError={(error) => {
+                toast({
+                  title: "Scan Failed",
+                  description: error,
+                  variant: "destructive",
+                });
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 

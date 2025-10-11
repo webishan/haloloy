@@ -46,6 +46,7 @@ import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { eq, and, or, desc, max, asc, sql, gt } from "drizzle-orm";
+import { DatabaseStorage } from "./database-storage";
 
 export interface IStorage {
   // User management
@@ -650,7 +651,7 @@ export interface IStorage {
   getMerchantsByRank(rank: string): Promise<Merchant[]>;
 }
 
-export class MemStorage implements IStorage {
+export class DatabaseStorage implements IStorage {
   private users: Map<string, User> = new Map();
   private customers: Map<string, Customer> = new Map();
   private merchants: Map<string, Merchant> = new Map();
@@ -7069,4 +7070,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
