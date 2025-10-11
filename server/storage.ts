@@ -7068,6 +7068,52 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
   }
+
+  // Search customers by email or phone number
+  async searchCustomersByEmailOrPhone(query: string): Promise<CustomerProfile[]> {
+    try {
+      console.log(`🔍 Searching customers with query: "${query}"`);
+      
+      // Search in customer profiles by email or mobile number
+      const results = await db.select()
+        .from(customerProfiles)
+        .where(
+          or(
+            sql`LOWER(${customerProfiles.email}) LIKE LOWER(${'%' + query + '%'})`,
+            sql`${customerProfiles.mobileNumber} LIKE ${'%' + query + '%'}`
+          )
+        )
+        .limit(10); // Limit to 10 results for performance
+      
+      console.log(`📊 Found ${results.length} customers matching "${query}"`);
+      return results;
+    } catch (error) {
+      console.error(`❌ Error searching customers:`, error);
+      return [];
+    }
+  }
+
+  // Find customer by email or phone (for duplicate checking)
+  async findCustomerByEmailOrPhone(email: string, phone: string): Promise<CustomerProfile | null> {
+    try {
+      console.log(`🔍 Checking for existing customer: ${email} or ${phone}`);
+      
+      const result = await db.select()
+        .from(customerProfiles)
+        .where(
+          or(
+            eq(customerProfiles.email, email),
+            eq(customerProfiles.mobileNumber, phone)
+          )
+        )
+        .limit(1);
+      
+      return result[0] || null;
+    } catch (error) {
+      console.error(`❌ Error finding customer by email/phone:`, error);
+      return null;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();
