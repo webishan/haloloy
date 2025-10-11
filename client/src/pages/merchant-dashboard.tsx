@@ -39,6 +39,350 @@ import {
 import { ResponsiveContainer, LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
          BarChart as RechartsBar, Bar, PieChart as RechartsPie, Pie, Cell } from 'recharts';
 
+// Enhanced Transfer Points Form Component
+function EnhancedTransferPointsForm({ 
+  customers, 
+  sendPointsMutation, 
+  onClose, 
+  toast 
+}: { 
+  customers: any[]; 
+  sendPointsMutation: any; 
+  onClose: () => void; 
+  toast: any; 
+}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [points, setPoints] = useState('');
+  const [description, setDescription] = useState('');
+  const [createCustomerData, setCreateCustomerData] = useState({
+    fullName: '',
+    email: '',
+    mobileNumber: ''
+  });
+
+  const queryClient = useQueryClient();
+
+  // Search customers by phone or email
+  const searchCustomers = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await apiRequest('/api/customers/search', 'POST', { query: query.trim() });
+      const data = await response.json();
+      
+      if (data.success) {
+        setSearchResults(data.customers || []);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handle search input change
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setSelectedCustomer(null); // Always clear selected customer on search change
+    setShowCreateForm(false);
+    
+    if (value.trim()) {
+      searchCustomers(value);
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  // Handle customer selection
+  const handleCustomerSelect = (customer: any) => {
+    setSelectedCustomer(customer);
+    setSearchQuery(`${customer.fullName} - ${customer.email || customer.mobileNumber}`);
+    setSearchResults([]);
+    setShowCreateForm(false);
+  };
+
+  // Handle create new customer
+  const handleCreateCustomer = async () => {
+    if (!createCustomerData.fullName || !createCustomerData.email || !createCustomerData.mobileNumber) {
+      toast({
+        title: "Error",
+        description: "Please fill in all customer details.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+          const response = await apiRequest('/api/customers/create', 'POST', createCustomerData);
+          const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: "Customer created successfully!",
+        });
+        
+        // Set the newly created customer as selected
+        setSelectedCustomer(data.customer);
+        setSearchQuery(`${data.customer.fullName} - ${data.customer.email}`);
+        setShowCreateForm(false);
+        
+        // Refresh customer list
+        queryClient.invalidateQueries(['/api/merchant/scanned-customers']);
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to create customer.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Create customer error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create customer. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Handle point transfer
+  const handleTransferPoints = async () => {
+    if (!selectedCustomer) {
+      toast({
+        title: "Error",
+        description: "Please select or create a customer first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!points || parseInt(points) <= 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid number of points.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!description.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a description.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    sendPointsMutation.mutate({
+      customerId: selectedCustomer.id,
+      points: parseInt(points),
+      description: description.trim()
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Customer Search Section */}
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="customerSearch">Search Customer</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              id="customerSearch"
+              placeholder="Search by phone number or email..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-10"
+            />
+            {isSearching && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <RefreshCw className="w-4 h-4 text-gray-400 animate-spin" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div className="border rounded-lg max-h-48 overflow-y-auto">
+            {searchResults.map((customer) => (
+              <div
+                key={customer.id}
+                onClick={() => handleCustomerSelect(customer)}
+                className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{customer.fullName}</p>
+                    <p className="text-sm text-gray-500">
+                      {customer.email} • {customer.mobileNumber}
+                    </p>
+                    {customer.currentPointsBalance !== undefined && (
+                      <p className="text-xs text-green-600">
+                        {customer.currentPointsBalance} points
+                      </p>
+                    )}
+                  </div>
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* No Results - Show Create Button */}
+        {searchQuery.trim() && searchResults.length === 0 && !isSearching && (
+          <div className="text-center py-4 border-2 border-dashed border-gray-200 rounded-lg">
+            <UserPlus className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-500 mb-3">No customer found with "{searchQuery}"</p>
+            <Button
+              onClick={() => setShowCreateForm(true)}
+              variant="outline"
+              className="border-blue-300 text-blue-600 hover:bg-blue-50"
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Add New Customer
+            </Button>
+          </div>
+        )}
+
+        {/* Create Customer Form */}
+        {showCreateForm && (
+          <div className="border rounded-lg p-4 bg-blue-50">
+            <h3 className="font-medium text-blue-900 mb-3">Create New Customer</h3>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="fullName">Customer Name</Label>
+                <Input
+                  id="fullName"
+                  value={createCustomerData.fullName}
+                  onChange={(e) => setCreateCustomerData(prev => ({ ...prev, fullName: e.target.value }))}
+                  placeholder="Enter customer name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={createCustomerData.email}
+                  onChange={(e) => setCreateCustomerData(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="Enter email address"
+                />
+              </div>
+              <div>
+                <Label htmlFor="mobileNumber">Phone Number</Label>
+                <Input
+                  id="mobileNumber"
+                  value={createCustomerData.mobileNumber}
+                  onChange={(e) => setCreateCustomerData(prev => ({ ...prev, mobileNumber: e.target.value }))}
+                  placeholder="Enter phone number"
+                />
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  onClick={handleCreateCustomer}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Create Customer
+                </Button>
+                <Button
+                  onClick={() => setShowCreateForm(false)}
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Selected Customer Display */}
+        {selectedCustomer && (
+          <div className="border rounded-lg p-4 bg-green-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-green-900">Selected Customer</h3>
+                <p className="text-green-700">{selectedCustomer.fullName}</p>
+                <p className="text-sm text-green-600">
+                  {selectedCustomer.email} • {selectedCustomer.mobileNumber}
+                </p>
+                {selectedCustomer.currentPointsBalance !== undefined && (
+                  <p className="text-sm text-green-600">
+                    Current Balance: {selectedCustomer.currentPointsBalance} points
+                  </p>
+                )}
+              </div>
+              <CheckCircle className="w-6 h-6 text-green-500" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Point Transfer Section */}
+      {selectedCustomer && (
+        <div className="space-y-4">
+          <Separator />
+          <h3 className="font-medium">Transfer Points</h3>
+          
+          <div>
+            <Label htmlFor="points">Points to Transfer</Label>
+            <Input
+              id="points"
+              type="number"
+              value={points}
+              onChange={(e) => setPoints(e.target.value)}
+              placeholder="Enter number of points"
+              min="1"
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter transfer description"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        {selectedCustomer && (
+          <Button 
+            onClick={handleTransferPoints}
+            disabled={sendPointsMutation.isPending || !points || !description.trim()}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {sendPointsMutation.isPending ? 'Sending...' : 'Send Loyalty Points'}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // QR Code Scan Component
 function QRScanComponent({ onCustomerScanned, onError }: { 
   onCustomerScanned: (customer: any) => void; 
@@ -149,6 +493,35 @@ function QRScanComponent({ onCustomerScanned, onError }: {
     }
   };
 
+  // Check camera availability
+  const checkCameraAvailability = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return false;
+      }
+      
+      // Check if we're on HTTPS or localhost (required for camera access)
+      const isSecure = window.location.protocol === 'https:' || 
+                      window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1';
+      
+      if (!isSecure) {
+        console.log('⚠️ Camera access requires HTTPS or localhost');
+        return false;
+      }
+      
+      // Check if we can enumerate devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      
+      console.log('📱 Available video devices:', videoDevices.length);
+      return videoDevices.length > 0;
+    } catch (error) {
+      console.log('❌ Error checking camera availability:', error);
+      return false;
+    }
+  };
+
   // Camera functions
   const startCamera = async () => {
     try {
@@ -160,18 +533,62 @@ function QRScanComponent({ onCustomerScanned, onError }: {
         throw new Error('Camera not supported on this device');
       }
       
+      // Check camera availability first
+      const hasCamera = await checkCameraAvailability();
+      if (!hasCamera) {
+        throw new Error('No camera devices found on this device');
+      }
+      
       console.log('📱 Requesting camera access...');
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment', // Use back camera if available
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
+      
+      // Try different camera configurations for better mobile compatibility
+      let stream;
+      const constraints = [
+        // First try: Back camera with specific constraints
+        { 
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 }
+          } 
+        },
+        // Second try: Any camera with environment preference
+        { 
+          video: { 
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          } 
+        },
+        // Third try: Any available camera
+        { 
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          } 
+        },
+        // Fourth try: Basic video
+        { video: true }
+      ];
+      
+      for (let i = 0; i < constraints.length; i++) {
+        try {
+          console.log(`🔄 Trying camera constraint ${i + 1}:`, constraints[i]);
+          stream = await navigator.mediaDevices.getUserMedia(constraints[i]);
+          console.log(`✅ Camera constraint ${i + 1} succeeded`);
+          break;
+        } catch (error) {
+          console.log(`❌ Camera constraint ${i + 1} failed:`, error.name);
+          if (i === constraints.length - 1) {
+            throw error; // Re-throw the last error
+          }
+        }
+      }
       
       console.log('✅ Camera access granted');
       
       if (videoRef.current) {
+        console.log('📹 Setting video srcObject...');
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         setCameraActive(true);
@@ -181,24 +598,59 @@ function QRScanComponent({ onCustomerScanned, onError }: {
           console.log('🎬 Video metadata loaded, starting QR scanning');
           startQRScanning();
         };
+        
+        // Also listen for when video starts playing
+        videoRef.current.onplay = () => {
+          console.log('▶️ Video started playing');
+        };
+        
+        videoRef.current.oncanplay = () => {
+          console.log('🎯 Video can start playing');
+        };
+        
+        // Try to play the video explicitly (required on some mobile devices)
+        videoRef.current.play().then(() => {
+          console.log('🎬 Video play() succeeded');
+        }).catch((error) => {
+          console.error('❌ Video play() failed:', error);
+        });
+        
+        // Also try to start scanning after a short delay as backup
+        setTimeout(() => {
+          if (cameraActive && !scanIntervalRef.current) {
+            console.log('🔄 Backup: Starting QR scanning after timeout');
+            startQRScanning();
+          }
+        }, 1000);
+      } else {
+        console.error('❌ videoRef.current is null');
       }
     } catch (error: any) {
       console.error('❌ Camera error:', error);
       let errorMessage = 'Camera access denied or not available.';
       
       if (error.name === 'NotAllowedError') {
-        errorMessage = 'Camera permission denied. Please allow camera access and try again.';
+        errorMessage = 'Camera permission denied. Please allow camera access in your browser settings and try again.';
       } else if (error.name === 'NotFoundError') {
-        errorMessage = 'No camera found on this device.';
+        errorMessage = 'No camera found on this device. Please use the manual input option below.';
       } else if (error.name === 'NotSupportedError') {
-        errorMessage = 'Camera not supported on this device.';
+        errorMessage = 'Camera not supported on this device. Please use the manual input option below.';
       } else if (error.name === 'NotReadableError') {
-        errorMessage = 'Camera is already in use by another application.';
+        errorMessage = 'Camera is already in use by another application. Please close other camera apps and try again.';
       } else if (error.name === 'OverconstrainedError') {
-        errorMessage = 'Camera constraints cannot be satisfied.';
+        errorMessage = 'Camera constraints cannot be satisfied. Please use the manual input option below.';
+      } else if (error.name === 'SecurityError') {
+        errorMessage = 'Camera access blocked due to security restrictions. Please use HTTPS or localhost.';
+      } else if (error.name === 'AbortError') {
+        errorMessage = 'Camera access was interrupted. Please try again.';
+      } else if (error.message === 'No camera devices found on this device') {
+        errorMessage = 'No camera devices found on this device. Please use the manual input option below.';
+      } else if (error.message === 'Camera not supported on this device') {
+        errorMessage = 'Camera not supported on this device. Please use the manual input option below.';
       }
       
       setCameraError(errorMessage);
+      setCameraActive(false);
     }
   };
 
@@ -221,12 +673,15 @@ function QRScanComponent({ onCustomerScanned, onError }: {
     }
     
     console.log('🔍 Starting QR code scanning...');
+    console.log('📊 Camera state:', { cameraActive, videoRef: !!videoRef.current, canvasRef: !!canvasRef.current, isScanning });
     
     scanIntervalRef.current = setInterval(() => {
       if (videoRef.current && canvasRef.current && !isScanning && cameraActive) {
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
+        
+        console.log('🎥 Video dimensions:', { videoWidth: video.videoWidth, videoHeight: video.videoHeight, readyState: video.readyState });
         
         if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
           // Use a smaller canvas for better performance
@@ -304,17 +759,54 @@ function QRScanComponent({ onCustomerScanned, onError }: {
                   <QrCode className="w-4 h-4 mr-2" />
                   Start Camera
                 </Button>
+                
+                {/* Camera Error Display */}
+                {cameraError && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-red-800">{cameraError}</p>
+                        <div className="mt-2">
+                          <Button
+                            onClick={startCamera}
+                            variant="outline"
+                            size="sm"
+                            className="text-red-700 border-red-300 hover:bg-red-50"
+                          >
+                            Try Again
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Camera Status */}
+                <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>Camera Active - Scanning for QR codes...</span>
+                </div>
+                
                 <div className="relative bg-white rounded-xl shadow-lg overflow-hidden">
                   <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted
-                    className="w-full h-64 object-cover"
+                    className="w-full h-64 object-cover bg-gray-100"
+                    style={{ minHeight: '256px' }}
                   />
+                  {/* Fallback message if video is not visible */}
+                  <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+                    Camera Feed
+                  </div>
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-48 h-48 border-2 border-blue-500 rounded-lg bg-transparent">
                       <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
@@ -629,8 +1121,13 @@ export default function MerchantDashboard() {
 
   // Mutations
   const sendPointsMutation = useMutation({
-    mutationFn: (data: { customerId: string; points: number; description: string }) => {
-      return apiRequest('/api/merchant/rewards/send', 'POST', data);
+    mutationFn: async (data: { customerId: string; points: number; description: string }) => {
+      const response = await apiRequest('/api/merchant/transfer-points', 'POST', data);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to transfer points');
+      }
+      return result;
     },
     onMutate: async (variables) => {
       // Optimistically update customer points
@@ -994,7 +1491,7 @@ export default function MerchantDashboard() {
 
   // Merchant data from API
   const merchantData = {
-    loyaltyPoints: walletData?.rewardPointBalance || 0,
+    loyaltyPoints: dashboardData?.merchant?.loyaltyPointsBalance || 0,
     totalCashback: cashbackData?.totalCashback || 0,
     balance: walletData?.commerceWalletBalance || 0,
     incomeBalance: walletData?.incomeWalletBalance || 0,
@@ -3290,7 +3787,7 @@ export default function MerchantDashboard() {
         </div>
       </div>
 
-      {/* Send Points Dialog */}
+      {/* Enhanced Send Points Dialog */}
       <Dialog open={showSendPointsDialog} onOpenChange={(open) => {
         setShowSendPointsDialog(open);
         if (open) {
@@ -3302,7 +3799,7 @@ export default function MerchantDashboard() {
           }, 100);
         }
       }}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle>Send Loyalty Points to Customer</DialogTitle>
@@ -3324,90 +3821,13 @@ export default function MerchantDashboard() {
               </Button>
             </div>
           </DialogHeader>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target as HTMLFormElement);
-            const customerId = formData.get('customerId') as string;
-            const points = parseInt(formData.get('points') as string);
-            const description = formData.get('description') as string;
-            
-            // Validate customer selection
-            if (!customerId || customerId.trim() === '') {
-              toast({ 
-                title: "Error", 
-                description: "Please select a customer from the dropdown.", 
-                variant: "destructive" 
-              });
-              return;
-            }
-            
-            // Validate that customer exists in scanned customers
-            const selectedCustomer = customers.find((c: any) => c.id === customerId);
-            if (!selectedCustomer) {
-              toast({ 
-                title: "Error", 
-                description: "Selected customer not found. Please refresh and try again.", 
-                variant: "destructive" 
-              });
-              return;
-            }
-            
-            sendPointsMutation.mutate({
-              customerId,
-              points,
-              description
-            });
-          }} className="space-y-4">
-            <div>
-              <Label htmlFor="customerId">Customer</Label>
-              <Select name="customerId" required key={customers.length}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.length > 0 ? (
-                    customers.map((customer: any) => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.fullName} - {customer.accountNumber} ({customer.currentPointsBalance} points)
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="p-2 text-sm text-gray-500">
-                      No scanned customers found. Please scan a customer QR code first.
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
-              {customers.length === 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  💡 Tip: Use "Scan Customer QR" to add customers to your list
-                </p>
-              )}
-              {customers.length > 0 && (
-                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                  <p className="text-xs text-green-600 font-medium">
-                    ✅ {customers.length} customer(s) available for point transfer
-                  </p>
-                </div>
-              )}
-            </div>
-            <div>
-              <Label htmlFor="points">Points</Label>
-              <Input name="points" type="number" required min="1" />
-            </div>
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea name="description" required />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => setShowSendPointsDialog(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={sendPointsMutation.isPending}>
-                {sendPointsMutation.isPending ? 'Sending...' : 'Send Loyalty Points'}
-              </Button>
-            </div>
-          </form>
+          
+          <EnhancedTransferPointsForm 
+            customers={customers}
+            sendPointsMutation={sendPointsMutation}
+            onClose={() => setShowSendPointsDialog(false)}
+            toast={toast}
+          />
         </DialogContent>
       </Dialog>
 

@@ -26,6 +26,7 @@ import {
 } from "../shared/schema.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 const JWT_SECRET = process.env.JWT_SECRET || "komarce-secret-key";
 
@@ -1166,6 +1167,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Customer Search and Creation for Merchants
+  app.post("/api/customers/search", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
+    try {
+      const { query } = req.body;
+      
+      if (!query || query.trim().length < 2) {
+        return res.json({ success: true, customers: [] });
+      }
+
+      console.log(`🔍 Searching customers with query: "${query}"`);
+      
+      // Search customers by email or mobile number
+      const customers = await storage.searchCustomersByEmailOrPhone(query.trim());
+      
+      console.log(`📊 Found ${customers.length} customers matching "${query}"`);
+      
+      res.json({ 
+        success: true, 
+        customers: customers.map(customer => ({
+          id: customer.id,
+          fullName: customer.fullName,
+          email: customer.email,
+          mobileNumber: customer.mobileNumber,
+          currentPointsBalance: customer.currentPointsBalance || 0,
+          accountNumber: customer.uniqueAccountNumber
+        }))
+      });
+    } catch (error: any) {
+      console.error('❌ Customer search error:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to search customers',
+        error: error.message 
+      });
+    }
+  });
+
+  app.post("/api/customers/create", authenticateToken, authorizeRole(['merchant']), async (req, res) => {
+    try {
+      const { fullName, email, mobileNumber } = req.body;
+      
+      if (!fullName || !email || !mobileNumber) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Full name, email, and mobile number are required' 
+        });
+      }
+
+      console.log(`👤 Creating new customer: ${fullName} (${email}, ${mobileNumber})`);
+      
+      // Check if customer already exists
+      const existingCustomer = await storage.findCustomerByEmailOrPhone(email, mobileNumber);
+      if (existingCustomer) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Customer with this email or phone number already exists',
+          customer: existingCustomer
+        });
+      }
+
+      // Create new user account
+      const userId = crypto.randomUUID();
+      const hashedPassword = await bcrypt.hash('temp123', 10); // Temporary password
+      
+      const newUser = await storage.createUser({
+        id: userId,
+        email,
+        password: hashedPassword,
+        firstName: fullName.split(' ')[0] || fullName,
+        lastName: fullName.split(' ').slice(1).join(' ') || '',
+        phone: mobileNumber,
+        role: 'customer',
+        isActive: true
+      });
+
+      // Create customer profile
+      const customerProfile = await storage.createCustomerProfile({
+        userId: userId,
+        uniqueAccountNumber: `KOM${Date.now()}`,
+        mobileNumber,
+        email,
+        fullName,
+        profileComplete: true,
+        totalPointsEarned: 0,
+        currentPointsBalance: 0,
+        accumulatedPoints: 0,
+        globalSerialNumber: 0,
+        localSerialNumber: 0,
+        tier: 'bronze',
+        isActive: true
+      });
+
+      // Create customer wallet
+      await storage.createCustomerWallet({
+        customerId: customerProfile.id,
+        rewardPointBalance: 0,
+        totalRewardPointsEarned: 0,
+        totalRewardPointsSpent: 0,
+        totalRewardPointsTransferred: 0,
+        incomeBalance: "0.00",
+        totalIncomeEarned: "0.00",
+        totalIncomeSpent: "0.00",
+        totalIncomeTransferred: "0.00",
+        commerceBalance: "0.00",
+        totalCommerceAdded: "0.00",
+        totalCommerceSpent: "0.00",
+        totalCommerceWithdrawn: "0.00"
+      });
+
+      console.log(`✅ Created new customer: ${customerProfile.fullName} with ID: ${customerProfile.id}`);
+
+      res.json({ 
+        success: true, 
+        customer: {
+          id: customerProfile.id,
+          fullName: customerProfile.fullName,
+          email: customerProfile.email,
+          mobileNumber: customerProfile.mobileNumber,
+          currentPointsBalance: 0,
+          accountNumber: customerProfile.uniqueAccountNumber
+        }
+      });
+    } catch (error: any) {
+      console.error('❌ Customer creation error:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to create customer',
+        error: error.message 
+      });
     }
   });
 
