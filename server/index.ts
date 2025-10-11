@@ -152,6 +152,76 @@ app.use((req, res, next) => {
     console.log("❌ Error fixing merchant referral codes:", error);
   }
 
+  // Fix customer_serial_numbers table schema to allow multiple global numbers per customer
+  try {
+    console.log("🔄 Fixing customer_serial_numbers table schema...");
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+
+    // Drop the unique constraint on customer_id to allow multiple global numbers per customer
+    console.log("🔄 Dropping unique constraint on customer_id...");
+    await db.execute(sql`
+      ALTER TABLE customer_serial_numbers 
+      DROP CONSTRAINT IF EXISTS customer_serial_numbers_customer_id_unique;
+    `);
+    console.log("✅ Successfully removed unique constraint on customer_id");
+
+    // Add an index on customer_id for better query performance
+    console.log("🔄 Adding index on customer_id...");
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_customer_serial_numbers_customer_id 
+      ON customer_serial_numbers(customer_id);
+    `);
+    console.log("✅ Successfully added index on customer_id");
+
+    // Add an index on global_serial_number for better query performance
+    console.log("🔄 Adding index on global_serial_number...");
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_customer_serial_numbers_global_serial_number 
+      ON customer_serial_numbers(global_serial_number);
+    `);
+    console.log("✅ Successfully added index on global_serial_number");
+
+    console.log("🎉 Database schema migration completed successfully!");
+    console.log("✅ Customers can now earn multiple global numbers");
+
+    // Clean up any existing duplicate global numbers
+    console.log("🧹 Cleaning up duplicate global numbers...");
+    const duplicateCheck = await db.execute(sql`
+      SELECT customer_id, global_serial_number, COUNT(*) as count
+      FROM customer_serial_numbers 
+      GROUP BY customer_id, global_serial_number
+      HAVING COUNT(*) > 1
+      ORDER BY customer_id, global_serial_number
+    `);
+
+    if (duplicateCheck.length > 0) {
+      console.log(`🔍 Found ${duplicateCheck.length} duplicate combinations, cleaning up...`);
+      
+      for (const duplicate of duplicateCheck) {
+        // Keep the first occurrence, delete the rest
+        const recordsToDelete = await db.execute(sql`
+          SELECT id FROM customer_serial_numbers 
+          WHERE customer_id = ${duplicate.customer_id} 
+          AND global_serial_number = ${duplicate.global_serial_number}
+          ORDER BY assigned_at ASC
+          OFFSET 1
+        `);
+        
+        for (const record of recordsToDelete) {
+          await db.execute(sql`DELETE FROM customer_serial_numbers WHERE id = ${record.id}`);
+        }
+      }
+      
+      console.log("✅ Successfully cleaned up duplicate global numbers");
+    } else {
+      console.log("✅ No duplicate global numbers found");
+    }
+
+  } catch (error) {
+    console.log("⚠️  Error fixing customer_serial_numbers schema:", error);
+  }
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes

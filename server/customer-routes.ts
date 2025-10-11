@@ -214,25 +214,37 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email/phone number and password are required' });
     }
 
+    console.log(`🔍 Customer login attempt with identifier: ${identifier}`);
+
     let user = null;
     let profile = null;
 
     // Check if identifier is an email (contains @) or phone number
     if (identifier.includes('@')) {
       // Login with email
+      console.log(`🔍 Looking up user by email: ${identifier}`);
       user = await storage.getUserByEmail(identifier);
+      console.log(`🔍 Found user:`, user ? { id: user.id, email: user.email, role: user.role } : 'Not found');
+      
       if (user && user.role === 'customer') {
+        console.log(`🔍 Looking up customer profile for userId: ${user.id}`);
         profile = await storage.getCustomerProfile(user.id);
+        console.log(`🔍 Found customer profile:`, profile ? { id: profile.id, fullName: profile.fullName } : 'Not found');
       }
     } else {
       // Login with phone number
+      console.log(`🔍 Looking up customer profile by mobile: ${identifier}`);
       profile = await storage.getCustomerProfileByMobile(identifier);
+      console.log(`🔍 Found customer profile:`, profile ? { id: profile.id, fullName: profile.fullName, userId: profile.userId } : 'Not found');
+      
       if (profile) {
         user = await storage.getUser(profile.userId);
+        console.log(`🔍 Found user:`, user ? { id: user.id, email: user.email, role: user.role } : 'Not found');
       }
     }
 
     if (!user || !profile) {
+      console.log(`❌ Login failed: user=${!!user}, profile=${!!profile}`);
       return res.status(401).json({ error: 'Invalid email/phone number or password' });
     }
 
@@ -365,37 +377,8 @@ router.get('/profile', authenticateToken, async (req, res) => {
       profile = await storage.getCustomerProfile(req.user.userId);
     }
 
-    // Check if customer qualifies for global serial number (1500 points threshold)
-    if (!profile) {
-      return res.status(404).json({ error: 'Customer profile not found' });
-    }
-    
-    const totalPointsEarned = profile.totalPointsEarned || 0;
-    if (totalPointsEarned >= 1500 && !profile.globalSerialNumber) {
-      try {
-        // Use GlobalNumberSystem to ensure proper totalPointsEarned update
-        const { globalNumberSystem } = await import('./services/GlobalNumberSystem');
-        const result = await globalNumberSystem.checkAndAssignGlobalNumber(
-          req.user.userId,
-          totalPointsEarned,
-          false // These are earned points, not reward points
-        );
-        
-        if (result.globalNumberAssigned) {
-          console.log(`🎯 Global Number #${result.globalNumber} assigned to customer ${req.user.userId}`);
-          
-          // Get updated profile
-          profile = await storage.getCustomerProfile(req.user.userId);
-          console.log(`✅ Global serial number #${result.globalNumber} assigned to customer ${req.user.userId} (achievement order)`);
-          
-          // Log reward tier information
-          const rewardTier = getRewardTierBySerial(result.globalNumber || 0);
-          console.log(`🏆 Customer ${req.user.userId} assigned to ${rewardTier.name} tier (Reward: ${rewardTier.reward} points)`);
-        }
-      } catch (error) {
-        console.error('Error assigning global serial number:', error);
-      }
-    }
+    // Note: Global Number assignment is now handled by the GlobalNumberSystem service
+    // during point transfers, not in the profile endpoint to avoid duplicates
     
     res.json(profile);
   } catch (error) {
@@ -1072,9 +1055,12 @@ router.get('/global-numbers', authenticateToken, async (req, res) => {
     const customerId = await getCustomerId(req.user.userId);
     const globalNumbers = await storage.getCustomerGlobalNumbers(customerId);
     
+    // Extract just the global number values as an array of numbers
+    const globalNumberValues = globalNumbers.map(gn => gn.globalNumber).sort((a, b) => a - b);
+    
     res.json({
-      globalNumbers,
-      count: globalNumbers.length
+      globalNumbers: globalNumberValues,
+      count: globalNumberValues.length
     });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'An error occurred' });
@@ -2867,58 +2853,10 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 
     // Check if customer qualifies for global number (1500 points) using new system
     const accumulatedPoints = profile?.accumulatedPoints || 0;
-    const currentGlobalNumber = profile?.globalSerialNumber || 0;
+    // REMOVED: Global Number assignment logic from dashboard endpoint
+    // This was causing duplicate global number assignments every time the dashboard was accessed
+    // Global Numbers should only be assigned during point earning transactions, not during dashboard reads
     
-    if (accumulatedPoints >= 1500 && currentGlobalNumber === 0) {
-      try {
-        console.log(`🎯 Customer ${req.user.userId} has ${accumulatedPoints} accumulated points, checking Global Number eligibility...`);
-        
-        // Initialize Global Number system
-        await storage.initializeStepUpConfig();
-        
-        // Process Global Number eligibility using GlobalNumberSystem
-        const { globalNumberSystem } = await import('./services/GlobalNumberSystem');
-        const result = await globalNumberSystem.checkAndAssignGlobalNumber(
-          req.user.userId,
-          0, // Don't add points, just check eligibility
-          false
-        );
-        
-        if (result.globalNumberAssigned) {
-          console.log(`🎉 Global Number #${result.globalNumber} awarded to customer ${req.user.userId}`);
-        }
-        
-        // Get updated profile
-        const updatedProfile = await storage.getCustomerProfile(req.user.userId);
-        
-        // Use updated data
-        const dashboardData = {
-          profile: updatedProfile,
-          wallet,
-          serialNumber: { 
-            globalSerialNumber: updatedProfile?.globalSerialNumber || 0,
-            localSerialNumber: updatedProfile?.localSerialNumber || 0
-          },
-          statistics: {
-            totalEarned: transactions.filter(t => t.transactionType === 'earned' || t.transactionType === 'reward').reduce((sum, t) => sum + t.points, 0),
-            totalSpent: transactions.filter(t => t.transactionType === 'spent').reduce((sum, t) => sum + Math.abs(t.points), 0),
-            totalTransferred: transactions.filter(t => t.transactionType === 'transferred_out').reduce((sum, t) => sum + Math.abs(t.points), 0),
-            currentBalance: wallet?.rewardPointBalance || 0,
-            totalPurchases: purchases.length,
-            totalTransfers: transfers.length
-          },
-          recentTransactions: transactions.slice(0, 10),
-          recentPurchases: purchases.slice(0, 5),
-          globalSerialAssigned: result.globalNumberAssigned,
-          globalSerialNumber: updatedProfile?.globalSerialNumber || 0
-        };
-
-        return res.json(dashboardData);
-      } catch (error) {
-        console.error('Error processing Global Number eligibility:', error);
-      }
-    }
-
     // Calculate statistics
     const totalEarned = transactions
       .filter(t => t.transactionType === 'earned' || t.transactionType === 'reward')

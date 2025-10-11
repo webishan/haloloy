@@ -844,11 +844,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Customer not found in your scanned customers list" });
       }
 
-      // Get the main customer profile using the user ID from merchant customer relationship
-      console.log(`🔍 Looking for customer profile with user ID: ${merchantCustomer.customerId}`);
-      const customer = await storage.getCustomerProfile(merchantCustomer.customerId);
+      // Get the main customer profile using the customer ID from merchant customer relationship
+      console.log(`🔍 Looking for customer profile with customer ID: ${merchantCustomer.customerId}`);
+      const customer = await storage.getCustomerProfileById(merchantCustomer.customerId);
       if (!customer) {
-        console.log(`❌ Customer profile not found for user ID: ${merchantCustomer.customerId}`);
+        console.log(`❌ Customer profile not found for customer ID: ${merchantCustomer.customerId}`);
         return res.status(404).json({ message: "Customer profile not found" });
       }
       console.log(`✅ Found customer profile: ${customer.fullName}`);

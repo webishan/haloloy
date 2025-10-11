@@ -349,10 +349,7 @@ export default function CustomerDashboard() {
   const serialData = dashboardData.serialNumber || serialNumber;
   const walletInfo = dashboardData.wallet || walletData;
   
-  const totalEarnedFromTransactions = Array.isArray(transactions)
-    ? transactions.filter((t: any) => t.transactionType === 'earned' || t.transactionType === 'reward').reduce((s: number, t: any) => s + (t.points || 0), 0)
-    : 0;
-
+  // FIXED: Don't double-count points - use profile data as the source of truth
   const customerData = {
     fullName: profileData.fullName || 'John Doe',
     accountNumber: profileData.uniqueAccountNumber || 'KOM00000001',
@@ -361,7 +358,7 @@ export default function CustomerDashboard() {
     tier: profileData.tier || 'bronze',
     pointsBalance: profileData.currentPointsBalance ?? 0, // Read from profile for Global Number system
     accumulatedPoints: profileData.accumulatedPoints ?? profileData.currentPointsBalance ?? 0,
-    totalEarned: (profileData.totalPointsEarned ?? walletInfo.totalPointsEarned ?? 0) + totalEarnedFromTransactions,
+    totalEarned: profileData.totalPointsEarned ?? 0, // Use profile data as single source of truth
     totalSpent: walletInfo.totalPointsSpent || 0,
     totalTransferred: walletInfo.totalPointsTransferred || 0,
     globalSerialNumber: serialData.globalSerialNumber || profileData.globalSerialNumber || 0,
@@ -485,7 +482,9 @@ export default function CustomerDashboard() {
                 <p className="text-3xl font-bold text-yellow-700">
                   {Array.isArray(customerData.globalNumbers) && customerData.globalNumbers.length > 0
                     ? customerData.globalNumbers.map((num: any) => num.globalNumber || num).join(', ')
-                    : 'Not Assigned'}
+                    : (customerData.globalSerialNumber && customerData.globalSerialNumber > 0 
+                        ? customerData.globalSerialNumber 
+                        : 'Not Assigned')}
                 </p>
                 <p className="text-xs text-yellow-700 mt-1">
                   Points to next Global Number: {customerData.pointsToNextGlobalNumber.toLocaleString()} pts

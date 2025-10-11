@@ -984,9 +984,9 @@ export const customerPointTransactions = pgTable("customer_point_transactions", 
 // Customer Serial Number Tracking
 export const customerSerialNumbers = pgTable("customer_serial_numbers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  customerId: varchar("customer_id").notNull().unique(),
-  globalSerialNumber: integer("global_serial_number").notNull().unique(),
-  localSerialNumber: integer("local_serial_number"),
+  customerId: varchar("customer_id").notNull(), // Removed .unique() to allow multiple global numbers per customer
+  globalSerialNumber: integer("global_serial_number").notNull().unique(), // Keep unique for sequential global numbers
+  localSerialNumber: integer("local_serial_number"), // Track customer's personal serial number order (1st, 2nd, 3rd...)
   totalSerialCount: integer("total_serial_count").notNull(),
   pointsAtSerial: integer("points_at_serial").notNull().default(1500),
   isActive: boolean("is_active").notNull().default(true),

@@ -1323,6 +1323,7 @@ export function setupMerchantRoutes(app: Express) {
       }
 
       // Create user account
+      console.log(`🔍 Creating user account for customer: ${fullName}`);
       const newUser = await storage.createUser({
         username,
         email: email || `${username}@temp.komarce.com`,
@@ -1334,11 +1335,13 @@ export function setupMerchantRoutes(app: Express) {
         isActive: true,
         createdByMerchant: true
       });
+      console.log(`✅ Created user:`, { id: newUser.id, email: newUser.email, role: newUser.role });
 
       // Generate unique account number
       const accountNumber = `KOM${String(Date.now()).slice(-8)}`;
 
       // Create customer profile
+      console.log(`🔍 Creating customer profile for userId: ${newUser.id}`);
       const customerProfile = await storage.createCustomerProfile({
         userId: newUser.id,
         fullName,
@@ -1355,6 +1358,7 @@ export function setupMerchantRoutes(app: Express) {
         qrCode: `KOMARCE:CUSTOMER:${newUser.id}:${accountNumber}`,
         createdByMerchant: true
       });
+      console.log(`✅ Created customer profile:`, { id: customerProfile.id, fullName: customerProfile.fullName, userId: customerProfile.userId });
 
       // Create customer wallet
       await storage.createCustomerWallet({

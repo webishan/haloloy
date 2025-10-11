@@ -149,21 +149,15 @@ export class GlobalNumberSystem {
     }
     
     // Get next sequential global number (using existing serial number system)
+    // This method already handles creating the serial number record AND updating the customer profile
     const serial = await storage.assignSerialNumberToCustomer(profile.id);
     const nextGlobalNumber = serial.globalSerialNumber;
     
-    // Create GlobalNumber record for API endpoint
-    await storage.createGlobalNumber({
-      globalNumber: nextGlobalNumber,
-      customerId: profile.id,
-      pointsAccumulated: 1500, // Each global number represents 1500 points earned
-      isActive: true
-    });
+    // Note: assignSerialNumberToCustomer already creates the serial number record
+    // We don't need to create a separate GlobalNumber record as it would be duplicate
     
-    // Update customer's latest global number
-    await storage.updateCustomerProfile(customerUserId, {
-      globalSerialNumber: nextGlobalNumber
-    });
+    // Note: assignSerialNumberToCustomer already updates the customer profile with globalSerialNumber
+    // No need to update again here
     
     console.log(`🎯 Sequential Global Number #${nextGlobalNumber} assigned to customer ${customerUserId}`);
     return nextGlobalNumber;
