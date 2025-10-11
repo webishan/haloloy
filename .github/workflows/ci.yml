@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        project: [client, server]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.project }}
+        run: |
+          if [ -f "package.json" ]; then
+            npm ci || npm install
+          fi
+
+      - name: Lint project (if configured)
+        working-directory: ${{ matrix.project }}
+        run: |
+          if npm run | grep -q "lint"; then
+            npm run lint
+          else
+            echo "No lint script found for ${{ matrix.project }}"
+          fi
+
+      - name: Type check / Build project
+        working-directory: ${{ matrix.project }}
+        run: |
+          if npm run | grep -q "build"; then
+            npm run build
+          else
+            echo "No build script found for ${{ matrix.project }}"
+          fi
+
+      - name: Run tests (if available)
+        working-directory: ${{ matrix.project }}
+        run: |
+          if npm run | grep -q "test"; then
+            npm test
+          else
+            echo "No tests found for ${{ matrix.project }}"
+          fi
