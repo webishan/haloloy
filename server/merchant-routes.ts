@@ -184,6 +184,125 @@ export function setupMerchantRoutes(app: Express) {
     }
   });
 
+  // Manual fix endpoint to create missing customer profiles
+  app.post('/api/merchant/fix-customer-profiles', authenticateToken, authorizeRole(['merchant']), async (req, res) => {
+    try {
+      const merchantId = req.user.userId;
+      console.log(`🔧 Manual fix: Creating missing customer profiles for merchant: ${merchantId}`);
+      
+      // Get merchant's scanned customers
+      const merchantCustomers = await storage.getMerchantCustomers(merchantId);
+      console.log(`📊 Found ${merchantCustomers.length} merchant customers to check`);
+      
+      const fixedCustomers = [];
+      for (const mc of merchantCustomers) {
+        // Check if customer profile exists
+        const existingProfile = await storage.getCustomerProfileById(mc.customerId);
+        if (!existingProfile) {
+          console.log(`🔧 Creating missing profile for customer: ${mc.customerName}`);
+          // This will trigger the auto-creation logic
+          const newProfile = await storage.getCustomerProfileById(mc.customerId);
+          if (newProfile) {
+            fixedCustomers.push({
+              id: mc.customerId,
+              name: mc.customerName,
+              status: 'created'
+            });
+          }
+        } else {
+          fixedCustomers.push({
+            id: mc.customerId,
+            name: mc.customerName,
+            status: 'already_exists'
+          });
+        }
+      }
+      
+      res.json({
+        success: true,
+        message: `Fixed ${fixedCustomers.length} customer profiles`,
+        customers: fixedCustomers
+      });
+    } catch (error) {
+      console.error('Fix customer profiles error:', error);
+      res.status(500).json({ message: 'Failed to fix customer profiles' });
+    }
+  });
+
+  // Quick fix for specific customer "tondra koheli"
+  app.post('/api/merchant/fix-tondra-customer', authenticateToken, authorizeRole(['merchant']), async (req, res) => {
+    try {
+      const customerId = '2f458412-be35-43b3-9928-30f79372de6f'; // tondra koheli's ID
+      console.log(`🔧 Quick fix: Creating customer profile for tondra koheli (${customerId})`);
+      
+      // Check if customer profile already exists
+      const existingProfile = await storage.getCustomerProfileById(customerId);
+      if (existingProfile) {
+        return res.json({
+          success: true,
+          message: 'Customer profile already exists',
+          customer: existingProfile
+        });
+      }
+      
+      // Get user info
+      const user = await storage.getUserById(customerId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      // Create customer profile
+      const profile = await storage.createCustomerProfile({
+        userId: user.id,
+        uniqueAccountNumber: `CUST${Date.now()}`,
+        mobileNumber: user.phone || `+880${Math.floor(Math.random() * 1000000000)}`,
+        email: user.email,
+        fullName: user.firstName + ' ' + user.lastName,
+        profileComplete: true,
+        totalPointsEarned: 0,
+        currentPointsBalance: 0,
+        accumulatedPoints: 0,
+        globalSerialNumber: 0,
+        localSerialNumber: 0,
+        tier: 'bronze',
+        isActive: true
+      });
+      
+      // Create customer wallet
+      await storage.createCustomerWallet({
+        customerId: profile.id,
+        rewardPointBalance: 0,
+        totalRewardPointsEarned: 0,
+        totalRewardPointsSpent: 0,
+        totalRewardPointsTransferred: 0,
+        incomeBalance: "0.00",
+        totalIncomeEarned: "0.00",
+        totalIncomeSpent: "0.00",
+        totalIncomeTransferred: "0.00",
+        commerceBalance: "0.00",
+        totalCommerceAdded: "0.00",
+        totalCommerceSpent: "0.00",
+        totalCommerceWithdrawn: "0.00"
+      });
+      
+      console.log(`✅ Created customer profile for tondra koheli: ${profile.id}`);
+      
+      res.json({
+        success: true,
+        message: 'Customer profile created successfully',
+        customer: {
+          name: profile.fullName,
+          id: profile.id,
+          userId: profile.userId
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('❌ Error creating customer profile:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Get merchant's scanned customers (for point transfers)
   app.get('/api/merchant/scanned-customers', authenticateToken, authorizeRole(['merchant']), async (req, res) => {
     try {
@@ -199,6 +318,7 @@ export function setupMerchantRoutes(app: Express) {
       const customers = [];
       for (const mc of merchantCustomers) {
         // Get the actual customer profile to get current points balance
+        // This will trigger the auto-creation of missing customer profiles
         const customerProfile = await storage.getCustomerProfileById(mc.customerId);
         
         console.log(`🔍 Customer ${mc.customerName}:`);

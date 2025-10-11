@@ -114,10 +114,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create customer wallet
         await storage.createCustomerWallet({
           customerId: profile.id,
-          pointsBalance: 0,
-          totalPointsEarned: 0,
-          totalPointsSpent: 0,
-          totalPointsTransferred: 0
+          rewardPointBalance: 0,
+          totalRewardPointsEarned: 0,
+          totalRewardPointsSpent: 0,
+          totalRewardPointsTransferred: 0,
+          incomeBalance: "0.00",
+          totalIncomeEarned: "0.00",
+          totalIncomeSpent: "0.00",
+          totalIncomeTransferred: "0.00",
+          commerceBalance: "0.00",
+          totalCommerceAdded: "0.00",
+          totalCommerceSpent: "0.00",
+          totalCommerceWithdrawn: "0.00"
         });
 
         // Generate QR code
