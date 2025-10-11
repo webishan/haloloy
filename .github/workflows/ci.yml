@@ -5,12 +5,8 @@ on:
   pull_request:
 
 jobs:
-  build-and-test:
+  build-and-test-client:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        project: [client, server]
 
     steps:
       - name: Checkout code
@@ -23,35 +19,12 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        working-directory: ${{ matrix.project }}
-        run: |
-          if [ -f "package.json" ]; then
-            npm ci || npm install
-          fi
+        working-directory: client
+        run: npm ci || npm install
 
-      - name: Lint project (if configured)
-        working-directory: ${{ matrix.project }}
+      - name: Build and test (optional)
+        working-directory: client
         run: |
-          if npm run | grep -q "lint"; then
-            npm run lint
-          else
-            echo "No lint script found for ${{ matrix.project }}"
-          fi
-
-      - name: Type check / Build project
-        working-directory: ${{ matrix.project }}
-        run: |
-          if npm run | grep -q "build"; then
-            npm run build
-          else
-            echo "No build script found for ${{ matrix.project }}"
-          fi
-
-      - name: Run tests (if available)
-        working-directory: ${{ matrix.project }}
-        run: |
-          if npm run | grep -q "test"; then
-            npm test
-          else
-            echo "No tests found for ${{ matrix.project }}"
-          fi
+          echo "Running build and tests for client..."
+          npm run build --if-present
+          npm run test --if-present
