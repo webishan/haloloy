@@ -60,13 +60,9 @@ export class GlobalNumberSystem {
 
     // If these are reward points and policy says they don't trigger Global Numbers, skip
     if (isRewardPoints && !this.REWARD_POINTS_TRIGGER_GLOBAL_NUMBERS) {
-      // Just add to balance without triggering Global Number
-      await storage.updateCustomerProfile(customerUserId, {
-        currentPointsBalance: newPointsTotal,
-        totalPointsEarned: profile.totalPointsEarned + earnedPoints
-      });
-      
-      console.log(`✅ Reward points added to balance: ${earnedPoints} (no global number triggered)`);
+      // DON'T add points here - they should already be added by the calling function
+      // This prevents double addition of points
+      console.log(`✅ Reward points already added by calling function: ${earnedPoints} (no global number triggered)`);
       return {
         globalNumberAssigned: false,
         pointsReset: false,
@@ -99,7 +95,8 @@ export class GlobalNumberSystem {
     // Only remaining points less than 1500 are kept
     await storage.updateCustomerProfile(customerUserId, {
       currentPointsBalance: remainingPoints, // RESET: Only leftover points < 1500
-      totalPointsEarned: profile.totalPointsEarned + earnedPoints,
+      // DON'T add earnedPoints here - they should already be added by the calling function
+      // totalPointsEarned: profile.totalPointsEarned + earnedPoints,
       globalRewardNumbers: (profile.globalRewardNumbers || 0) + globalNumbersAssigned.length,
       globalSerialNumber: globalNumbersAssigned[globalNumbersAssigned.length - 1] // Store the latest Global Number
     });
@@ -109,7 +106,8 @@ export class GlobalNumberSystem {
     if (wallet) {
       await storage.updateCustomerWallet(profile.id, {
         rewardPointBalance: remainingPoints, // Reset to remaining points only
-        totalRewardPointsEarned: wallet.totalRewardPointsEarned + earnedPoints,
+        // DON'T add earnedPoints here - they should already be added by the calling function
+        // totalRewardPointsEarned: wallet.totalRewardPointsEarned + earnedPoints,
         lastTransactionAt: new Date()
       });
     }

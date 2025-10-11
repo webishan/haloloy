@@ -46,6 +46,7 @@ import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { eq, and, or, desc, max, asc, sql, gt } from "drizzle-orm";
+import { DatabaseStorage } from "./database-storage";
 
 export interface IStorage {
   // User management
@@ -650,7 +651,7 @@ export interface IStorage {
   getMerchantsByRank(rank: string): Promise<Merchant[]>;
 }
 
-export class MemStorage implements IStorage {
+export class DatabaseStorage implements IStorage {
   private users: Map<string, User> = new Map();
   private customers: Map<string, Customer> = new Map();
   private merchants: Map<string, Merchant> = new Map();
@@ -3552,7 +3553,10 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    // FIXED: Only use database storage - removed in-memory storage
+    
+    // Insert into database
+    await db.insert(customerProfiles).values(newProfile);
+    
     return newProfile;
   }
 
@@ -3580,7 +3584,81 @@ export class MemStorage implements IStorage {
   async getCustomerProfileById(customerId: string): Promise<CustomerProfile | undefined> {
     // FIXED: Use database instead of in-memory storage
     const result = await db.select().from(customerProfiles).where(eq(customerProfiles.id, customerId)).limit(1);
-    const profile = result[0];
+    let profile = result[0];
+    
+    // If profile not found, check if this is a merchant-customer relationship without a profile
+    if (!profile) {
+      console.log(`🔍 Customer profile not found for ID: ${customerId}, checking merchant-customer relationship...`);
+      
+      // Check if this customerId exists in merchant_customers table
+      const merchantCustomerResult = await db.select()
+        .from(merchantCustomers)
+        .where(eq(merchantCustomers.customerId, customerId))
+        .limit(1);
+      
+      if (merchantCustomerResult.length > 0) {
+        const merchantCustomer = merchantCustomerResult[0];
+        console.log(`🔍 Found merchant-customer relationship for: ${merchantCustomer.customerName}`);
+        
+        // Create a user account for this customer
+        const username = `customer_${customerId.slice(-8)}`;
+        const email = merchantCustomer.customerEmail || `${username}@temp.komarce.com`;
+        const hashedPassword = await bcrypt.hash('temp123', 10);
+        
+        const newUser = await this.createUser({
+          username,
+          email,
+          password: hashedPassword,
+          firstName: merchantCustomer.customerName.split(' ')[0],
+          lastName: merchantCustomer.customerName.split(' ').slice(1).join(' ') || '',
+          role: 'customer',
+          country: 'BD',
+          isActive: true,
+          createdByMerchant: true
+        });
+        
+        // Generate unique account number
+        const uniqueAccountNumber = await this.generateUniqueAccountNumber();
+        
+        // Create customer profile
+        profile = await this.createCustomerProfile({
+          id: customerId, // Use the existing customerId from merchant-customer relationship
+          userId: newUser.id,
+          uniqueAccountNumber,
+          mobileNumber: merchantCustomer.customerMobile || `+880${Math.floor(Math.random() * 1000000000)}`,
+          email: merchantCustomer.customerEmail || email,
+          fullName: merchantCustomer.customerName,
+          profileComplete: false,
+          totalPointsEarned: 0,
+          currentPointsBalance: 0,
+          accumulatedPoints: 0,
+          globalSerialNumber: 0,
+          localSerialNumber: 0,
+          tier: 'bronze',
+          isActive: true,
+          qrCode: `KOMARCE:CUSTOMER:${newUser.id}:${uniqueAccountNumber}`
+        });
+        
+        // Create customer wallet
+        await this.createCustomerWallet({
+          customerId: profile.id,
+          rewardPointBalance: 0,
+          totalRewardPointsEarned: 0,
+          totalRewardPointsSpent: 0,
+          totalRewardPointsTransferred: 0,
+          incomeBalance: "0.00",
+          totalIncomeEarned: "0.00",
+          totalIncomeSpent: "0.00",
+          totalIncomeTransferred: "0.00",
+          commerceBalance: "0.00",
+          totalCommerceAdded: "0.00",
+          totalCommerceSpent: "0.00",
+          totalCommerceWithdrawn: "0.00"
+        });
+        
+        console.log(`✅ Created missing customer profile for: ${merchantCustomer.customerName}`);
+      }
+    }
     
     // Ensure accumulatedPoints field exists (for backward compatibility)
     if (profile && profile.accumulatedPoints === undefined) {
@@ -3685,7 +3763,10 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    // FIXED: Only use database storage - removed in-memory storage
+    
+    // Insert into database
+    await db.insert(customerWallets).values(newWallet);
+    
     return newWallet;
   }
 
@@ -6989,4 +7070,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

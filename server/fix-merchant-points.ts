@@ -1,47 +1,49 @@
-// Simple fix script that works with in-memory storage
-import { MemStorage } from './storage';
+// Fix script that works with database storage
+import { DatabaseStorage } from './database-storage';
+import { db } from './db';
+import { merchants, merchantWallets } from '@shared/schema';
+import { eq } from 'drizzle-orm';
 
 async function fixMerchantPoints() {
-  console.log('🔧 Fixing merchant loyalty points...');
+  console.log('🔧 Fixing merchant loyalty points in database...');
   
   // Create storage instance
-  const storage = new MemStorage();
+  const storage = new DatabaseStorage();
   
   try {
-    // Get all merchants from in-memory storage
-    const merchants = Array.from(storage['merchants'].values());
-    console.log(`📊 Found ${merchants.length} merchants`);
+    // Get all merchants from database
+    const merchantsList = await db.select().from(merchants);
+    console.log(`📊 Found ${merchantsList.length} merchants`);
     
     let fixedCount = 0;
     
-    for (const merchant of merchants) {
+    for (const merchant of merchantsList) {
       // Check if merchant has non-zero loyalty points
       if (merchant.loyaltyPointsBalance > 0 || merchant.availablePoints > 0) {
         console.log(`🔍 Fixing merchant: ${merchant.businessName}`);
         console.log(`   - Current loyaltyPointsBalance: ${merchant.loyaltyPointsBalance}`);
         console.log(`   - Current availablePoints: ${merchant.availablePoints}`);
         
-        // Reset to 0 directly in the Map
-        const updatedMerchant = {
-          ...merchant,
-          loyaltyPointsBalance: 0,
-          availablePoints: 0
-        };
-        storage['merchants'].set(merchant.id, updatedMerchant);
+        // Reset to 0 in database
+        await db.update(merchants)
+          .set({
+            loyaltyPointsBalance: 0,
+            availablePoints: 0,
+            updatedAt: new Date()
+          })
+          .where(eq(merchants.id, merchant.id));
         
         // Also update merchant wallet if it exists
         try {
-          const merchantWallets = storage['merchantWallets'];
-          if (merchantWallets && merchantWallets.has(merchant.id)) {
-            const wallet = merchantWallets.get(merchant.id);
-            if (wallet && wallet.rewardPointBalance > 0) {
-              const updatedWallet = {
-                ...wallet,
-                rewardPointBalance: 0
-              };
-              merchantWallets.set(merchant.id, updatedWallet);
-              console.log(`   - Updated merchant wallet rewardPointBalance to 0`);
-            }
+          const wallet = await db.select().from(merchantWallets).where(eq(merchantWallets.merchantId, merchant.id)).limit(1);
+          if (wallet.length > 0 && wallet[0].rewardPointBalance > 0) {
+            await db.update(merchantWallets)
+              .set({
+                rewardPointBalance: 0,
+                updatedAt: new Date()
+              })
+              .where(eq(merchantWallets.merchantId, merchant.id));
+            console.log(`   - Updated merchant wallet rewardPointBalance to 0`);
           }
         } catch (error) {
           console.log(`   - No merchant wallet found or error updating wallet: ${error}`);
@@ -56,7 +58,7 @@ async function fixMerchantPoints() {
     
     // Verify the fixes
     console.log('\n📋 Verification:');
-    const updatedMerchants = Array.from(storage['merchants'].values());
+    const updatedMerchants = await db.select().from(merchants);
     for (const merchant of updatedMerchants) {
       if (merchant.loyaltyPointsBalance > 0 || merchant.availablePoints > 0) {
         console.log(`❌ Merchant ${merchant.businessName} still has points: loyalty=${merchant.loyaltyPointsBalance}, available=${merchant.availablePoints}`);
